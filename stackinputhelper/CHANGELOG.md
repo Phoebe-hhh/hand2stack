@@ -4,7 +4,9 @@ All notable user-facing changes to STACK Input Helper are recorded here.
 
 ## 0.2.10-alpha - 2026-09-14
 
+- Add an on-screen handwriting canvas with Apple Pencil and mouse input, undo, clear, and stroke recognition.
 - Generate mobile-upload QR codes inside Moodle without sending session URLs to a third-party QR service.
+- Load the browser integration through Moodle's AMD API and restrict it to authenticated users with the plugin capability.
 - Dispose of document-level selection listeners whenever recognition results are replaced.
 - Preserve line selection, partial formula selection, drag selection, and STACK preview behavior across result refreshes.
 
