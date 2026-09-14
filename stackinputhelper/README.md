@@ -16,7 +16,7 @@ The current interaction is designed as a human-in-the-loop confirmation step. Th
 - Preserves surrounding Japanese/English text in the review display while converting only the selected mathematical answer to STACK syntax.
 - Converts Mathpix LaTeX output to STACK/Maxima-friendly syntax.
 - Inserts only the confirmed STACK expression into the answer field.
-- Supports QR-code mobile upload using a Moodle-managed temporary session.
+- Supports QR-code mobile upload using a Moodle-managed temporary session and Moodle's local QR generator.
 - Stores Mathpix App ID and App Key in Moodle admin settings, not in browser JavaScript.
 
 ## Recognition Review Workflow
@@ -120,6 +120,15 @@ Site administrators should confirm that Mathpix use complies with institutional 
 
 ## Development
 
+Install the pinned JavaScript build dependency, run regression tests, and rebuild the Moodle AMD asset:
+
+```bash
+cd stackinputhelper
+npm ci
+npm test
+npm run build
+```
+
 The conversion logic is implemented in:
 
 ```text
@@ -143,8 +152,8 @@ amd/build/main.min.js
 Update `version.php` and `CHANGELOG.md`, merge the change into the release branch, and push a matching version tag:
 
 ```bash
-git tag v0.2.9-alpha
-git push origin v0.2.9-alpha
+git tag v0.2.10-alpha
+git push origin v0.2.10-alpha
 ```
 
 The GitHub Actions workflow then checks PHP syntax and creates a GitHub Release containing:

@@ -1,4 +1,15 @@
-(function() {
+// This file is part of Moodle - http://moodle.org/.
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// @package local_stackinputhelper
+// @copyright 2026 Phoebe Huang
+// @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+
+define([], function() {
     const pluginUrl = (path) => {
         return window.location.origin + '/local/stackinputhelper/' + path;
     };
@@ -10,8 +21,9 @@
         return url;
     };
 
-    const config = Object.assign({
+    const defaultConfig = {
         recognizeUrl: '',
+        strokesUrl: '',
         convertUrl: '',
         sessionCreateUrl: '',
         sessionResultUrl: '',
@@ -23,11 +35,13 @@
         recognizefailed: 'Recognition failed.',
         recognizedresults: 'Recognized results',
         selectanswer: 'Select the answer to insert into STACK:',
-        selectpart: 'Select part:',
+        selectpart: 'Click a symbol, or drag across the formula to select a range.',
         recommendedanswer: 'Recommended answer',
         stackpreview: 'STACK input preview:',
         insertanswer: 'Insert answer',
         rawlatex: 'Raw LaTeX',
+        recognizedformat: 'Recognized format:',
+        asciimath: 'ASCII',
         lineprefix: 'Line',
         creatingmobilesession: 'Creating mobile upload session...',
         waitingmobileupload: 'Waiting for mobile upload...',
@@ -35,14 +49,15 @@
         mobileuploadexpired: 'This mobile upload session has expired.',
         mobileuploadtimeout: 'Timeout waiting for result. Please create a new session.',
         mobilesessionfailed: 'Failed to create mobile session:',
-        partialselectionfailed: 'Could not convert the selected text.'
-    }, window.STACKINPUTHELPER_CONFIG || {});
-
-    config.recognizeUrl = replaceLegacyNodeUrl(config.recognizeUrl || config.apiurl, pluginUrl('recognize.php'));
-    config.convertUrl = replaceLegacyNodeUrl(config.convertUrl, pluginUrl('convert.php'));
-    config.sessionCreateUrl = replaceLegacyNodeUrl(config.sessionCreateUrl, pluginUrl('session_create.php'));
-    config.sessionResultUrl = replaceLegacyNodeUrl(config.sessionResultUrl || config.sessionResultBaseUrl, pluginUrl('session_result.php'));
-    config.sesskey = config.sesskey || (window.M && M.cfg && M.cfg.sesskey) || '';
+        partialselectionfailed: 'Could not convert the selected text.',
+        handwritebtn: 'Handwrite math',
+        handwriteinstructions: 'Write with Apple Pencil or a mouse. Use a finger to scroll.',
+        undo: 'Undo',
+        clear: 'Clear',
+        recognizestrokes: 'Recognize handwriting',
+        nostrokes: 'Write an expression first.'
+    };
+    let config = {};
 
     const findAnswerBoxes = () => {
         const selectors = [
@@ -127,6 +142,22 @@
         return data.stack || '';
     };
 
+    const postStrokes = async (strokes) => {
+        const formData = new FormData();
+        formData.append('strokes', JSON.stringify(strokes));
+        formData.append('sesskey', config.sesskey);
+        const response = await fetch(config.strokesUrl, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || ('HTTP ' + response.status));
+        }
+        return data;
+    };
+
     const createTextarea = (value, readonly) => {
         const ta = document.createElement('textarea');
         ta.value = value || '';
@@ -165,14 +196,38 @@
         options.style.gap = '6px';
         options.style.marginBottom = '8px';
 
-        const rawDetails = document.createElement('details');
-        rawDetails.style.marginBottom = '8px';
-        const rawSummary = document.createElement('summary');
-        rawSummary.textContent = config.rawlatex || 'Raw LaTeX';
-        rawSummary.style.cursor = 'pointer';
+        const formatTitle = document.createElement('div');
+        formatTitle.textContent = config.recognizedformat || 'Recognized format:';
+        formatTitle.style.fontWeight = 'bold';
+
+        const formatTabs = document.createElement('div');
+        formatTabs.setAttribute('role', 'tablist');
+        formatTabs.style.display = 'flex';
+        formatTabs.style.gap = '4px';
+        formatTabs.style.marginTop = '4px';
+
+        const latexTab = document.createElement('button');
+        latexTab.type = 'button';
+        latexTab.textContent = config.rawlatex || 'LaTeX';
+        latexTab.setAttribute('role', 'tab');
+
+        const asciiTab = document.createElement('button');
+        asciiTab.type = 'button';
+        asciiTab.textContent = config.asciimath || 'ASCII';
+        asciiTab.setAttribute('role', 'tab');
+
+        [latexTab, asciiTab].forEach(tab => {
+            tab.style.padding = '4px 10px';
+            tab.style.border = '1px solid #b8c2cc';
+            tab.style.borderRadius = '4px 4px 0 0';
+            tab.style.cursor = 'pointer';
+        });
+        formatTabs.appendChild(asciiTab);
+        formatTabs.appendChild(latexTab);
+
         const rawTextarea = createTextarea('', true);
-        rawDetails.appendChild(rawSummary);
-        rawDetails.appendChild(rawTextarea);
+        rawTextarea.setAttribute('role', 'tabpanel');
+        rawTextarea.style.marginTop = '0';
 
         const stackTitle = document.createElement('label');
         stackTitle.textContent = config.stackpreview || 'STACK input preview:';
@@ -192,13 +247,17 @@
         panel.appendChild(title);
         panel.appendChild(instruction);
         panel.appendChild(options);
-        panel.appendChild(rawDetails);
+        panel.appendChild(formatTitle);
+        panel.appendChild(formatTabs);
+        panel.appendChild(rawTextarea);
         panel.appendChild(stackTitle);
         panel.appendChild(stackTextarea);
         panel.appendChild(applyBtn);
 
         panel._options = options;
         panel._rawTextarea = rawTextarea;
+        panel._latexTab = latexTab;
+        panel._asciiTab = asciiTab;
         panel._stackTextarea = stackTextarea;
         panel._applyBtn = applyBtn;
         panel._choiceName = choiceName;
@@ -279,19 +338,21 @@
 
     const typesetMath = (element) => {
         if (!window.MathJax || !element) {
-            return;
+            return Promise.resolve();
         }
 
         if (typeof window.MathJax.typesetPromise === 'function') {
-            window.MathJax.typesetPromise([element]).catch(error => {
+            return window.MathJax.typesetPromise([element]).catch(error => {
                 window.console.warn('[stackinputhelper] MathJax typeset failed:', error);
             });
-            return;
         }
 
         if (window.MathJax.Hub && typeof window.MathJax.Hub.Queue === 'function') {
-            window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, element]);
+            return new Promise(resolve => {
+                window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, element], resolve);
+            });
         }
+        return Promise.resolve();
     };
 
     const normalizeResultLines = (rawLatex, stackResult, lines) => {
@@ -344,8 +405,15 @@
                 const match = source.slice(i).match(/^\\[a-zA-Z]+/);
                 if (match) {
                     const command = match[0];
-                    if (command === '\\cdot' || command === '\\times') {
-                        chars.push('*');
+                    const symbols = {
+                        '\\cdot': '*', '\\times': '*', '\\prod': '∏', '\\sum': '∑',
+                        '\\int': '∫', '\\infty': '∞', '\\leq': '≤', '\\geq': '≥',
+                        '\\pi': 'π', '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ',
+                        '\\delta': 'δ', '\\theta': 'θ', '\\lambda': 'λ', '\\mu': 'μ',
+                        '\\sigma': 'σ', '\\phi': 'φ', '\\omega': 'ω'
+                    };
+                    if (symbols[command]) {
+                        chars.push(symbols[command]);
                         starts.push(i);
                         ends.push(i + command.length);
                     }
@@ -354,7 +422,7 @@
                 }
             }
 
-            if (char === '^') {
+            if (char === '^' || char === '_') {
                 const start = i;
                 if (source[i + 1] === '{') {
                     let depth = 1;
@@ -368,10 +436,12 @@
                         j++;
                     }
                     const exponent = source.slice(i + 2, j - 1).replace(/\s+/g, '');
+                    let sourceOffset = i + 2;
                     for (const expchar of exponent) {
                         chars.push(expchar);
-                        starts.push(start);
-                        ends.push(j);
+                        starts.push(sourceOffset);
+                        sourceOffset += expchar.length;
+                        ends.push(sourceOffset);
                     }
                     i = j - 1;
                     continue;
@@ -620,16 +690,229 @@
     };
 
     const convertSelectedLatex = async (panel, latex) => {
+        const requestId = (panel._selectionRequestId || 0) + 1;
+        panel._selectionRequestId = requestId;
         const fallback = clientSideStackFallback(latex);
         panel._stackTextarea.value = fallback || latex;
 
         try {
             const stack = await postLatex(latex);
-            panel._stackTextarea.value = stack || fallback || latex;
+            if (panel._selectionRequestId === requestId) {
+                panel._stackTextarea.value = stack || fallback || latex;
+            }
         } catch (error) {
             window.console.warn('[stackinputhelper] partial selection conversion failed:', error);
-            panel._stackTextarea.value = fallback || latex;
+            if (panel._selectionRequestId === requestId) {
+                panel._stackTextarea.value = fallback || latex;
+            }
         }
+    };
+
+    const interactiveMathLeaves = rendered => {
+        const selector = [
+            'mjx-mi', 'mjx-mn', 'mjx-mo', 'mjx-mtext', 'mjx-ms',
+            '.MathJax span.mi', '.MathJax span.mn', '.MathJax span.mo', '.MathJax span.mtext', '.MathJax span.ms',
+            'svg text', 'svg use'
+        ].join(', ');
+        return Array.from(rendered.querySelectorAll(selector)).filter(node => {
+            return !node.querySelector || !node.querySelector(selector);
+        });
+    };
+
+    const latexForLeafRange = (latex, leaves, start, end) => {
+        const mapped = latexDisplayMap(latex);
+        const before = Array.from(normalizeSelectableText(
+            leaves.slice(0, start).map(node => node.textContent || '').join('')
+        )).length;
+        const selected = normalizeSelectableText(leaves.slice(start, end + 1).map(node => node.textContent || '').join(''));
+        const selectedLength = Array.from(selected).length;
+        if (selected && mapped.starts[before] !== undefined && mapped.ends[before + selectedLength - 1] !== undefined) {
+            let fragment = mapped.source.slice(mapped.starts[before], mapped.ends[before + selectedLength - 1]).trim();
+            const openingBraces = (fragment.match(/\{/g) || []).length;
+            const closingBraces = (fragment.match(/\}/g) || []).length;
+            if (openingBraces > closingBraces) {
+                fragment += '}'.repeat(openingBraces - closingBraces);
+            }
+            return fragment;
+        }
+        return selectedLatexFromLine(selected, latex);
+    };
+
+    const setupInteractiveFormula = (panel, rendered) => {
+        const leaves = interactiveMathLeaves(rendered);
+        if (!leaves.length) {
+            return;
+        }
+        rendered.style.touchAction = 'none';
+        const documentListenerOptions = {
+            capture: true,
+            signal: panel._selectionAbortController.signal
+        };
+
+        const clearNativeSelection = () => {
+            const selection = window.getSelection ? window.getSelection() : null;
+            if (selection && typeof selection.removeAllRanges === 'function') {
+                selection.removeAllRanges();
+            }
+        };
+
+        leaves.forEach((leaf, index) => {
+            leaf.dataset.stackPartIndex = String(index);
+            leaf.style.cursor = 'pointer';
+        });
+
+        const applyFormulaSelection = (anchor, clicked, convert = true) => {
+            const start = Math.min(anchor, clicked);
+            const end = Math.max(anchor, clicked);
+
+            panel._options.querySelectorAll('[data-stack-part-index]').forEach(node => {
+                node.style.background = '';
+                node.style.borderRadius = '';
+            });
+            leaves.forEach((node, index) => {
+                if (index >= start && index <= end) {
+                    node.style.background = '#b9d7ff';
+                    node.style.borderRadius = '3px';
+                }
+            });
+
+            if (convert) {
+                const selectedLatex = latexForLeafRange(rendered.dataset.latex || '', leaves, start, end);
+                if (selectedLatex) {
+                    convertSelectedLatex(panel, selectedLatex);
+                }
+            }
+        };
+
+        const previewDraggedSelection = (start, end) => {
+            const selectedLatex = latexForLeafRange(rendered.dataset.latex || '', leaves, start, end);
+            if (!selectedLatex) {
+                return;
+            }
+            window.clearTimeout(panel._dragConversionTimer);
+            const requestId = (panel._selectionRequestId || 0) + 1;
+            panel._selectionRequestId = requestId;
+            const fallback = clientSideStackFallback(selectedLatex) || selectedLatex;
+            const isPartial = Math.min(start, end) > 0 || Math.max(start, end) < leaves.length - 1;
+            const option = rendered.closest('[data-result-line-index]');
+            const lineIndex = option ? Number(option.dataset.resultLineIndex) : -1;
+            const fullLineStack = option ? (option.dataset.stackValue || '') : '';
+            panel._stackTextarea.value = fallback;
+            panel._partialSelection = {lineIndex, value: fallback};
+            panel._dragConversionTimer = window.setTimeout(async () => {
+                try {
+                    const stack = await postLatex(selectedLatex);
+                    if (panel._selectionRequestId !== requestId) {
+                        return;
+                    }
+                    // A partial drag must never be silently promoted back to the
+                    // complete candidate line by a late conversion response.
+                    panel._stackTextarea.value = isPartial && stack === fullLineStack
+                        ? fallback : (stack || fallback);
+                    panel._partialSelection.value = panel._stackTextarea.value;
+                } catch (error) {
+                    window.console.warn('[stackinputhelper] partial selection conversion failed:', error);
+                    if (panel._selectionRequestId === requestId) {
+                        panel._stackTextarea.value = fallback;
+                    }
+                }
+            }, 150);
+        };
+
+        leaves.forEach((leaf, index) => {
+            leaf.addEventListener('pointerdown', event => {
+                if (event.button !== 0) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                window.clearTimeout(panel._dragConversionTimer);
+                panel._selectionRequestId = (panel._selectionRequestId || 0) + 1;
+                const option = rendered.closest('[data-result-line-index]');
+                if (option && panel._activateLine) {
+                    panel._activateLine(Number(option.dataset.resultLineIndex));
+                }
+                clearTokenSelections(panel);
+                clearNativeSelection();
+                rendered._stackDragStart = index;
+                rendered._stackDragEnd = index;
+                rendered._stackDidDrag = false;
+                rendered._stackPointerId = event.pointerId;
+                applyFormulaSelection(index, index, false);
+            });
+        });
+
+        document.addEventListener('pointermove', event => {
+            if (rendered._stackDragStart === undefined || event.pointerId !== rendered._stackPointerId) {
+                return;
+            }
+            event.preventDefault();
+            let closestIndex = rendered._stackDragEnd;
+            let closestDistance = Number.POSITIVE_INFINITY;
+            leaves.forEach((leaf, index) => {
+                const rect = leaf.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const distance = Math.abs(event.clientX - centerX) + Math.abs(event.clientY - centerY) * 0.25;
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = index;
+                }
+            });
+            rendered._stackDragEnd = closestIndex;
+            rendered._stackDidDrag = rendered._stackDidDrag || closestIndex !== rendered._stackDragStart;
+            applyFormulaSelection(rendered._stackDragStart, closestIndex, false);
+            if (rendered._stackDidDrag) {
+                rendered._stackSuppressClick = true;
+                panel._ignoreLineClickUntil = Date.now() + 500;
+                previewDraggedSelection(rendered._stackDragStart, closestIndex);
+            }
+        }, documentListenerOptions);
+
+        document.addEventListener('pointerup', event => {
+            if (rendered._stackDragStart === undefined || event.pointerId !== rendered._stackPointerId) {
+                return;
+            }
+            event.preventDefault();
+            const start = rendered._stackDragStart;
+            const end = rendered._stackDragEnd;
+            const didDrag = rendered._stackDidDrag;
+            rendered._stackDragStart = undefined;
+            rendered._stackDragEnd = undefined;
+            rendered._stackPointerId = undefined;
+            rendered._stackSelectionAnchor = start;
+            clearNativeSelection();
+            if (didDrag) {
+                rendered._stackSuppressClick = true;
+                previewDraggedSelection(start, end);
+            }
+        }, documentListenerOptions);
+
+        document.addEventListener('pointercancel', () => {
+            rendered._stackDragStart = undefined;
+            rendered._stackDragEnd = undefined;
+            rendered._stackPointerId = undefined;
+        }, documentListenerOptions);
+
+        rendered.addEventListener('click', event => {
+            const leaf = event.target.closest('[data-stack-part-index]');
+            if (!leaf || !rendered.contains(leaf)) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            clearNativeSelection();
+            if (rendered._stackSuppressClick) {
+                rendered._stackSuppressClick = false;
+                return;
+            }
+
+            const clicked = Number(leaf.dataset.stackPartIndex);
+            const anchor = event.shiftKey && rendered._stackSelectionAnchor !== undefined
+                ? rendered._stackSelectionAnchor : clicked;
+            rendered._stackSelectionAnchor = anchor;
+            applyFormulaSelection(anchor, clicked, true);
+        });
     };
 
     const selectTokenRange = (row, start, end) => {
@@ -655,6 +938,13 @@
             row._selectionStart = null;
             row._selectionEnd = null;
             row._dragging = false;
+        });
+    };
+
+    const clearFormulaSelections = panel => {
+        panel._options.querySelectorAll('[data-stack-part-index]').forEach(node => {
+            node.style.background = '';
+            node.style.borderRadius = '';
         });
     };
 
@@ -690,6 +980,11 @@
             tokenEl.addEventListener('mousedown', event => {
                 event.preventDefault();
                 event.stopPropagation();
+                const option = row.closest('[data-result-line-index]');
+                if (option && panel._activateLine) {
+                    panel._activateLine(Number(option.dataset.resultLineIndex));
+                }
+                clearFormulaSelections(panel);
                 clearTokenSelections(panel, row);
                 row._dragging = true;
                 selectTokenRange(row, index, index);
@@ -717,7 +1012,7 @@
             if (selected) {
                 convertSelectedLatex(panel, selected);
             }
-        });
+        }, {signal: panel._selectionAbortController.signal});
 
         return row;
     };
@@ -752,31 +1047,11 @@
                 rendered.style.fontSize = '20px';
                 rendered.style.lineHeight = '1.25';
                 rendered.setAttribute('aria-label', part.latex);
+                rendered.dataset.latex = part.latex;
                 displayRow.appendChild(rendered);
 
-                const tokenSelector = createTokenSelector(panel, part.latex);
-                if (tokenSelector) {
-                    tokenSelector.style.marginLeft = '0';
-                    const selectionBox = document.createElement('span');
-                    selectionBox.dataset.tokenSelectionBox = '1';
-                    selectionBox.style.display = 'flex';
-                    selectionBox.style.flexWrap = 'wrap';
-                    selectionBox.style.alignItems = 'center';
-                    selectionBox.style.gap = '4px';
-                    selectionBox.style.padding = '2px 6px';
-                    selectionBox.style.border = '1px solid #d9e2ec';
-                    selectionBox.style.borderRadius = '4px';
-                    selectionBox.style.background = '#f8fafc';
-
-                    const hint = document.createElement('span');
-                    hint.textContent = config.selectpart || 'Select part:';
-                    hint.style.fontFamily = 'sans-serif';
-                    hint.style.fontSize = '12px';
-                    hint.style.color = '#52606d';
-                    selectionBox.appendChild(hint);
-                    selectionBox.appendChild(tokenSelector);
-                    container.appendChild(selectionBox);
-                }
+                rendered.dataset.interactiveFormula = '1';
+                rendered.title = config.selectpart || 'Click a symbol, or drag across the formula to select a range.';
                 return;
             }
 
@@ -790,7 +1065,13 @@
         return container;
     };
 
-    const updateResultPanel = (panel, rawLatex, stackResult, answerBox, lines) => {
+    const updateResultPanel = (panel, rawLatex, rawAscii, stackResult, answerBox, lines) => {
+        window.clearTimeout(panel._dragConversionTimer);
+        panel._selectionRequestId = (panel._selectionRequestId || 0) + 1;
+        if (panel._selectionAbortController) {
+            panel._selectionAbortController.abort();
+        }
+        panel._selectionAbortController = new AbortController();
         const resultLines = normalizeResultLines(rawLatex, stackResult, lines);
         let defaultIndex = Math.max(0, resultLines.length - 1);
         for (let i = resultLines.length - 1; i >= 0; i--) {
@@ -800,10 +1081,27 @@
             }
         }
         panel.style.display = 'block';
-        panel._rawTextarea.value = rawLatex || '';
+        const formats = {
+            latex: rawLatex || '',
+            ascii: rawAscii || ''
+        };
+        const selectFormat = format => {
+            const isAscii = format === 'ascii' && formats.ascii;
+            panel._rawTextarea.value = isAscii ? formats.ascii : formats.latex;
+            panel._latexTab.setAttribute('aria-selected', isAscii ? 'false' : 'true');
+            panel._asciiTab.setAttribute('aria-selected', isAscii ? 'true' : 'false');
+            panel._latexTab.style.background = isAscii ? '#fff' : '#e8f1ff';
+            panel._asciiTab.style.background = isAscii ? '#e8f1ff' : '#fff';
+        };
+        panel._asciiTab.disabled = !formats.ascii;
+        panel._asciiTab.title = formats.ascii ? '' : (config.asciiunavailable || 'ASCII was not returned for this image.');
+        panel._latexTab.onclick = () => selectFormat('latex');
+        panel._asciiTab.onclick = () => selectFormat('ascii');
+        selectFormat(formats.ascii ? 'ascii' : 'latex');
         panel._options.innerHTML = '';
         panel._tokenRows = [];
         panel._selectionBoxes = [];
+        panel._optionWrappers = [];
 
         const showSelectionBoxes = selectedIndex => {
             panel._selectionBoxes.forEach((boxes, index) => {
@@ -813,11 +1111,40 @@
             });
         };
 
+        const showSelectedLine = selectedIndex => {
+            panel._optionWrappers.forEach((option, index) => {
+                const selected = index === selectedIndex;
+                option.style.border = selected ? '1px solid #8ab4f8' : '1px solid #e2e2e2';
+                option.style.background = selected ? '#f3f8ff' : '#fff';
+            });
+        };
+
+        const selectLine = (index, line) => {
+            window.clearTimeout(panel._dragConversionTimer);
+            panel._partialSelection = null;
+            panel._selectionRequestId = (panel._selectionRequestId || 0) + 1;
+            clearTokenSelections(panel);
+            clearFormulaSelections(panel);
+            showSelectionBoxes(index);
+            showSelectedLine(index);
+            panel._stackTextarea.value = line.stack || line.math || '';
+        };
+
+        panel._activateLine = index => {
+            const input = panel._options.querySelector('input[type="radio"][value="' + index + '"]');
+            if (input) {
+                input.checked = true;
+            }
+            showSelectionBoxes(index);
+            showSelectedLine(index);
+        };
+
         resultLines.forEach((line, index) => {
             const isDefault = index === defaultIndex;
             const optionId = 'local-stackinputhelper-line-' + Math.random().toString(36).slice(2);
-            const wrapper = document.createElement('label');
-            wrapper.setAttribute('for', optionId);
+            const wrapper = document.createElement('div');
+            wrapper.dataset.resultLineIndex = String(index);
+            wrapper.dataset.stackValue = line.stack || line.math || '';
             wrapper.style.display = 'grid';
             wrapper.style.gridTemplateColumns = 'auto 1fr';
             wrapper.style.columnGap = '8px';
@@ -860,22 +1187,43 @@
             wrapper.appendChild(input);
             wrapper.appendChild(body);
             panel._options.appendChild(wrapper);
+            panel._optionWrappers.push(wrapper);
+
+            wrapper.addEventListener('pointerdown', event => {
+                if (!event.target.closest('[data-token-index], [data-stack-part-index]')) {
+                    panel._partialSelection = null;
+                }
+            }, true);
 
             wrapper.addEventListener('click', event => {
-                if (event.target.closest('[data-token-index]')) {
+                if ((panel._ignoreLineClickUntil || 0) > Date.now()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (panel._partialSelection && panel._partialSelection.lineIndex === index) {
+                        panel._stackTextarea.value = panel._partialSelection.value;
+                    }
+                    return;
+                }
+                if (panel._partialSelection && panel._partialSelection.lineIndex === index) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    panel._stackTextarea.value = panel._partialSelection.value;
+                    return;
+                }
+                if (event.target.closest('[data-token-index], [data-stack-part-index]')) {
                     return;
                 }
                 input.checked = true;
-                clearTokenSelections(panel);
-                showSelectionBoxes(index);
-                panel._stackTextarea.value = line.stack || line.math || '';
+                selectLine(index, line);
             });
 
             input.addEventListener('change', () => {
                 if (input.checked) {
-                    clearTokenSelections(panel);
-                    showSelectionBoxes(index);
-                    panel._stackTextarea.value = line.stack || line.math || '';
+                    if (panel._partialSelection && panel._partialSelection.lineIndex === index) {
+                        panel._stackTextarea.value = panel._partialSelection.value;
+                        return;
+                    }
+                    selectLine(index, line);
                 }
             });
         });
@@ -883,7 +1231,11 @@
         const selected = resultLines[defaultIndex];
         panel._stackTextarea.value = selected ? (selected.stack || selected.math || '') : (stackResult || '');
         panel._applyBtn.onclick = () => setAnswerValue(answerBox, panel._stackTextarea.value || '');
-        typesetMath(panel._options);
+        typesetMath(panel._options).then(() => {
+            panel._options.querySelectorAll('[data-interactive-formula]').forEach(rendered => {
+                setupInteractiveFormula(panel, rendered);
+            });
+        });
     };
 
     const createMobileSession = async () => {
@@ -918,13 +1270,114 @@
         return data;
     };
 
-    const buildQrUrl = (text) => {
-        return 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(text);
+    const buildQrDataUrl = (svg) => {
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(String(svg || ''));
     };
 
     const icons = {
         image: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"></rect><circle cx="8.5" cy="8.5" r="1.5" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M21 15l-5-5L5 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
-        camera: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M14.5 4l1.5 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l1.5-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"></circle></svg>'
+        camera: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M14.5 4l1.5 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l1.5-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"></circle></svg>',
+        pen: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 20l4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20zM14 7l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>'
+    };
+
+    const createHandwritingPanel = (answerBox, resultPanel) => {
+        const panel = document.createElement('div');
+        panel.style.cssText = 'display:none;margin-top:8px;padding:10px;border:1px solid #9db7d5;background:#f8fbff;max-width:720px';
+
+        const instruction = document.createElement('div');
+        instruction.textContent = config.handwriteinstructions;
+        instruction.style.marginBottom = '8px';
+        const canvas = document.createElement('canvas');
+        canvas.width = 900;
+        canvas.height = 420;
+        canvas.style.cssText = 'display:block;width:100%;height:min(44vh,420px);min-height:260px;background:#fff;border:1px solid #8795a5;border-radius:4px;touch-action:pan-y;cursor:crosshair';
+        canvas.setAttribute('aria-label', config.handwritebtn);
+
+        const controls = document.createElement('div');
+        controls.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap';
+        const undo = document.createElement('button');
+        const clear = document.createElement('button');
+        const recognize = document.createElement('button');
+        const status = document.createElement('span');
+        [undo, clear, recognize].forEach(button => { button.type = 'button'; button.className = 'btn btn-secondary'; });
+        recognize.className = 'btn btn-primary';
+        undo.textContent = config.undo;
+        clear.textContent = config.clear;
+        recognize.textContent = config.recognizestrokes;
+        controls.append(undo, clear, recognize, status);
+        panel.append(instruction, canvas, controls);
+
+        const strokes = [];
+        let active = null;
+        const context = canvas.getContext('2d');
+        const pointFor = event => {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: Math.round((event.clientX - rect.left) * canvas.width / rect.width),
+                y: Math.round((event.clientY - rect.top) * canvas.height / rect.height)
+            };
+        };
+        const redraw = () => {
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.strokeStyle = '#111827';
+            context.lineWidth = 4;
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            strokes.forEach(stroke => {
+                if (!stroke.x.length) return;
+                context.beginPath();
+                context.moveTo(stroke.x[0], stroke.y[0]);
+                for (let i = 1; i < stroke.x.length; i++) context.lineTo(stroke.x[i], stroke.y[i]);
+                context.stroke();
+            });
+        };
+        const addSamples = event => {
+            const samples = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [event];
+            samples.forEach(sample => {
+                const point = pointFor(sample);
+                active.x.push(point.x);
+                active.y.push(point.y);
+            });
+            redraw();
+        };
+        canvas.addEventListener('pointerdown', event => {
+            if (event.pointerType === 'touch' || event.button !== 0) return;
+            event.preventDefault();
+            canvas.setPointerCapture(event.pointerId);
+            active = {x: [], y: []};
+            strokes.push(active);
+            addSamples(event);
+        });
+        canvas.addEventListener('pointermove', event => {
+            if (!active || event.pointerType === 'touch') return;
+            event.preventDefault();
+            addSamples(event);
+        });
+        const endStroke = event => {
+            if (!active) return;
+            if (event.pointerType !== 'touch') addSamples(event);
+            active = null;
+        };
+        canvas.addEventListener('pointerup', endStroke);
+        canvas.addEventListener('pointercancel', () => { active = null; });
+        undo.addEventListener('click', () => { strokes.pop(); redraw(); status.textContent = ''; });
+        clear.addEventListener('click', () => { strokes.length = 0; redraw(); status.textContent = ''; });
+        recognize.addEventListener('click', async () => {
+            if (!strokes.length) { status.textContent = config.nostrokes; return; }
+            recognize.disabled = true;
+            status.textContent = config.uploading;
+            try {
+                const result = await postStrokes({x: strokes.map(s => s.x), y: strokes.map(s => s.y)});
+                const stackResult = result.stack || result.text || '';
+                updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult, answerBox, result.lines || []);
+                status.textContent = '';
+            } catch (error) {
+                status.textContent = (config.recognizefailed || 'Recognition failed.') + ' ' + error.message;
+            } finally {
+                recognize.disabled = false;
+            }
+        });
+        return panel;
     };
 
     const setIconButtonLabel = (button, label) => {
@@ -962,6 +1415,7 @@
 
         const fileInput = createHiddenFileInput();
         const resultPanel = createResultPanel();
+        const handwritingPanel = createHandwritingPanel(answerBox, resultPanel);
         const mobilePanel = createMobilePanel();
         let mobilePollTimer = null;
         let lastMobileResultVersion = '';
@@ -970,8 +1424,37 @@
         const mobileLabel = config.mobilebtn || 'Mobile Math Upload';
         const uploadBtn = createIconButton(uploadLabel, icons.image, '#f5f5f5');
         const mobileBtn = createIconButton(mobileLabel, icons.camera, '#eef6ff');
+        const handwriteBtn = createIconButton(config.handwritebtn, icons.pen, '#f2f7ef');
+        let inputMode = '';
+
+        const selectInputMode = mode => {
+            inputMode = mode;
+            handwritingPanel.style.display = mode === 'handwrite' ? 'block' : 'none';
+            mobilePanel.style.display = mode === 'mobile' ? 'block' : 'none';
+
+            if (mode !== 'mobile' && mobilePollTimer) {
+                window.clearInterval(mobilePollTimer);
+                mobilePollTimer = null;
+            }
+
+            [
+                [uploadBtn, 'image', '#f5f5f5'],
+                [handwriteBtn, 'handwrite', '#f2f7ef'],
+                [mobileBtn, 'mobile', '#eef6ff']
+            ].forEach(([button, buttonMode, background]) => {
+                const selected = mode === buttonMode;
+                button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+                button.style.background = selected ? '#d9e9ff' : background;
+                button.style.borderColor = selected ? '#3978c5' : '#999';
+            });
+        };
+
+        handwriteBtn.addEventListener('click', () => {
+            selectInputMode('handwrite');
+        });
 
         uploadBtn.addEventListener('click', () => {
+            selectInputMode('image');
             fileInput.value = '';
             fileInput.click();
         });
@@ -993,7 +1476,7 @@
                     throw new Error('Empty STACK result');
                 }
 
-                updateResultPanel(resultPanel, result.raw_latex || '', stackResult, answerBox, result.lines || []);
+                updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult, answerBox, result.lines || []);
             } catch (error) {
                 window.console.error('[stackinputhelper] recognition failed:', error);
                 window.alert((config.recognizefailed || 'Recognition failed.') + '\n' + error.message);
@@ -1004,6 +1487,7 @@
         });
 
         mobileBtn.addEventListener('click', async () => {
+            selectInputMode('mobile');
             try {
                 if (mobilePollTimer) {
                     window.clearInterval(mobilePollTimer);
@@ -1015,12 +1499,20 @@
                 setIconButtonLabel(mobileBtn, config.creatingmobilesession || 'Creating mobile upload session...');
 
                 const data = await createMobileSession();
+                if (inputMode !== 'mobile') {
+                    mobileBtn.disabled = false;
+                    setIconButtonLabel(mobileBtn, mobileLabel);
+                    return;
+                }
                 const sessionId = data.session_id;
 
                 mobilePanel.style.display = 'block';
                 mobilePanel._link.href = data.mobile_url;
                 mobilePanel._link.textContent = data.mobile_url;
-                mobilePanel._qrImg.src = buildQrUrl(data.mobile_url);
+                if (!data.qr_svg) {
+                    throw new Error('Moodle did not return a QR code.');
+                }
+                mobilePanel._qrImg.src = buildQrDataUrl(data.qr_svg);
                 if (data.mobile_url_warning) {
                     mobilePanel._warning.textContent = data.mobile_url_warning;
                     mobilePanel._warning.style.display = 'block';
@@ -1050,7 +1542,7 @@
                             if (resultVersion !== lastMobileResultVersion) {
                                 lastMobileResultVersion = resultVersion;
                                 mobilePanel._status.textContent = config.mobileuploadreceived || 'Successfully received mobile result. You can upload another photo with the same QR code.';
-                                updateResultPanel(resultPanel, result.raw_latex || '', stackResult, answerBox, result.lines || []);
+                                updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult, answerBox, result.lines || []);
                             }
                         } else if (result.expired) {
                             window.clearInterval(mobilePollTimer);
@@ -1070,6 +1562,11 @@
                     }
                 }, 2000);
             } catch (error) {
+                if (inputMode !== 'mobile') {
+                    mobileBtn.disabled = false;
+                    setIconButtonLabel(mobileBtn, mobileLabel);
+                    return;
+                }
                 window.console.error('[stackinputhelper] mobile session failed:', error);
                 window.alert((config.mobilesessionfailed || 'Failed to create mobile session:') + ' ' + error.message);
                 mobileBtn.disabled = false;
@@ -1078,12 +1575,15 @@
         });
 
         answerBox.insertAdjacentElement('afterend', uploadBtn);
+        uploadBtn.insertAdjacentElement('afterend', handwriteBtn);
         if (config.enablemobile) {
-            uploadBtn.insertAdjacentElement('afterend', mobileBtn);
+            handwriteBtn.insertAdjacentElement('afterend', mobileBtn);
             mobileBtn.insertAdjacentElement('afterend', mobilePanel);
-            mobilePanel.insertAdjacentElement('afterend', resultPanel);
+            mobilePanel.insertAdjacentElement('afterend', handwritingPanel);
+            handwritingPanel.insertAdjacentElement('afterend', resultPanel);
         } else {
-            uploadBtn.insertAdjacentElement('afterend', resultPanel);
+            handwriteBtn.insertAdjacentElement('afterend', handwritingPanel);
+            handwritingPanel.insertAdjacentElement('afterend', resultPanel);
         }
     };
 
@@ -1096,9 +1596,19 @@
         boxes.forEach(attachButton);
     };
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', run);
-    } else {
+    const init = suppliedConfig => {
+        config = Object.assign({}, defaultConfig, suppliedConfig || {});
+        config.recognizeUrl = replaceLegacyNodeUrl(config.recognizeUrl || config.apiurl, pluginUrl('recognize.php'));
+        config.strokesUrl = replaceLegacyNodeUrl(config.strokesUrl, pluginUrl('strokes.php'));
+        config.convertUrl = replaceLegacyNodeUrl(config.convertUrl, pluginUrl('convert.php'));
+        config.sessionCreateUrl = replaceLegacyNodeUrl(config.sessionCreateUrl, pluginUrl('session_create.php'));
+        config.sessionResultUrl = replaceLegacyNodeUrl(
+            config.sessionResultUrl || config.sessionResultBaseUrl,
+            pluginUrl('session_result.php')
+        );
+        config.sesskey = config.sesskey || (window.M && M.cfg && M.cfg.sesskey) || '';
         run();
-    }
-})();
+    };
+
+    return {init};
+});

@@ -1,4 +1,18 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+/**
+ * classes privacy provider.php for STACK Input Helper.
+ *
+ * @package    local_stackinputhelper
+ * @copyright  2026 Phoebe Huang
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 namespace local_stackinputhelper\privacy;
 
 defined('MOODLE_INTERNAL') || die();
@@ -9,11 +23,13 @@ class provider implements
     public static function get_metadata(\core_privacy\local\metadata\collection $collection): \core_privacy\local\metadata\collection {
         $collection->add_external_location_link('mathpix', [
             'image' => 'privacy:metadata:mathpix:image',
+            'strokes' => 'privacy:metadata:mathpix:strokes',
         ], 'privacy:metadata:mathpix');
 
         $collection->add_database_table('local_stackinputhelper_sess', [
             'userid' => 'privacy:metadata:session:userid',
             'rawlatex' => 'privacy:metadata:session:rawlatex',
+            'rawascii' => 'privacy:metadata:session:rawascii',
             'stack' => 'privacy:metadata:session:stack',
             'resulttext' => 'privacy:metadata:session:resulttext',
             'timecreated' => 'privacy:metadata:session:timecreated',

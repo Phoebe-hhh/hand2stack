@@ -7,16 +7,21 @@
 // (at your option) any later version.
 
 /**
- * version.php for STACK Input Helper.
+ * Capability definitions for STACK Input Helper.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_stackinputhelper';
-$plugin->version   = 2026091400;
-$plugin->requires  = 2022041900;
-$plugin->maturity  = MATURITY_ALPHA;
-$plugin->release = '0.2.10-alpha';
+$capabilities = [
+    'local/stackinputhelper:use' => [
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_SYSTEM,
+        'archetypes' => [
+            'user' => CAP_ALLOW,
+        ],
+    ],
+];

@@ -1,4 +1,18 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+/**
+ * lang en local stackinputhelper.php for STACK Input Helper.
+ *
+ * @package    local_stackinputhelper
+ * @copyright  2026 Phoebe Huang
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 $string['pluginname'] = 'STACK Input Helper';
 
@@ -46,11 +60,14 @@ $string['takephoto'] = 'Take photo';
 $string['usethisphoto'] = 'Use this photo';
 $string['recognizedresults'] = 'Recognized results';
 $string['selectanswer'] = 'Select the answer to insert into STACK:';
-$string['selectpart'] = 'Select part:';
+$string['selectpart'] = 'Click a symbol, or drag across the formula to select a range.';
 $string['recommendedanswer'] = 'Recommended answer';
 $string['stackpreview'] = 'STACK input preview:';
 $string['insertanswer'] = 'Insert answer';
-$string['rawlatex'] = 'Raw LaTeX';
+$string['rawlatex'] = 'LaTeX';
+$string['recognizedformat'] = 'Recognized format:';
+$string['asciimath'] = 'ASCII';
+$string['asciiunavailable'] = 'ASCII was not returned for this image.';
 $string['lineprefix'] = 'Line';
 $string['creatingmobilesession'] = 'Creating mobile upload session...';
 $string['waitingmobileupload'] = 'Waiting for mobile upload...';
@@ -59,12 +76,21 @@ $string['mobileuploadexpired'] = 'This mobile upload session has expired.';
 $string['mobileuploadtimeout'] = 'Timeout waiting for result. Please create a new session.';
 $string['mobilesessionfailed'] = 'Failed to create mobile session:';
 $string['partialselectionfailed'] = 'Could not convert the selected text.';
+$string['handwritebtn'] = 'Handwrite math';
+$string['handwriteinstructions'] = 'Write with Apple Pencil or a mouse. Use a finger to scroll.';
+$string['undo'] = 'Undo';
+$string['clear'] = 'Clear';
+$string['recognizestrokes'] = 'Recognize handwriting';
+$string['nostrokes'] = 'Write an expression first.';
+$string['invalidstrokes'] = 'The handwriting stroke data is invalid.';
 $string['emptylatex'] = 'The selected expression is empty.';
-$string['privacy:metadata:mathpix'] = 'Uploaded images are sent to Mathpix for mathematical expression recognition.';
+$string['privacy:metadata:mathpix'] = 'Uploaded images and handwriting strokes are sent to Mathpix for mathematical expression recognition.';
 $string['privacy:metadata:mathpix:image'] = 'The mathematical expression image uploaded by the user.';
+$string['privacy:metadata:mathpix:strokes'] = 'The handwriting coordinates captured from the user\'s pen or mouse.';
 $string['privacy:metadata:session'] = 'Temporary mobile upload sessions and recognition results.';
 $string['privacy:metadata:session:userid'] = 'The user who created the mobile upload session.';
 $string['privacy:metadata:session:rawlatex'] = 'The raw LaTeX returned by Mathpix.';
+$string['privacy:metadata:session:rawascii'] = 'The AsciiMath returned by Mathpix.';
 $string['privacy:metadata:session:stack'] = 'The STACK expression generated from the raw LaTeX.';
 $string['privacy:metadata:session:resulttext'] = 'The recognized result returned to the Moodle page.';
 $string['privacy:metadata:session:timecreated'] = 'The time when the mobile upload session was created.';

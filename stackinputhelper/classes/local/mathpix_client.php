@@ -1,10 +1,25 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+/**
+ * classes local mathpix client.php for STACK Input Helper.
+ *
+ * @package    local_stackinputhelper
+ * @copyright  2026 Phoebe Huang
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 namespace local_stackinputhelper\local;
 
 defined('MOODLE_INTERNAL') || die();
 
 final class mathpix_client {
     private const ENDPOINT = 'https://api.mathpix.com/v3/text';
+    private const STROKES_ENDPOINT = 'https://api.mathpix.com/v3/strokes';
 
     public static function recognize(string $filepath, string $filename, string $mimetype): array {
         $appid = trim((string)get_config('local_stackinputhelper', 'mathpixappid'));
@@ -25,7 +40,11 @@ final class mathpix_client {
         $options = [
             'math_inline_delimiters' => ['$', '$'],
             'rm_spaces' => true,
-            'formats' => ['text', 'latex_styled'],
+            'formats' => ['text', 'data'],
+            'data_options' => [
+                'include_latex' => true,
+                'include_asciimath' => true,
+            ],
         ];
 
         $postfields = [
@@ -55,6 +74,86 @@ final class mathpix_client {
             throw new \moodle_exception('mathpixrequestfailed', 'local_stackinputhelper', '', null, $error);
         }
 
+        return self::parse_response($body, $errno, $error, $status);
+    }
+
+    /** Recognize browser-captured digital ink without exposing Mathpix credentials. */
+    public static function recognize_strokes(array $x, array $y): array {
+        self::validate_strokes($x, $y);
+
+        $appid = trim((string)get_config('local_stackinputhelper', 'mathpixappid'));
+        $appkey = trim((string)get_config('local_stackinputhelper', 'mathpixappkey'));
+        if ($appid === '' || $appkey === '') {
+            throw new \moodle_exception('missingmathpixcredentials', 'local_stackinputhelper');
+        }
+        if (!function_exists('curl_init')) {
+            throw new \moodle_exception('curlrequired', 'local_stackinputhelper');
+        }
+
+        $payload = json_encode([
+            'strokes' => ['strokes' => ['x' => $x, 'y' => $y]],
+            'math_inline_delimiters' => ['$', '$'],
+            'rm_spaces' => true,
+            'formats' => ['text', 'data'],
+            'data_options' => [
+                'include_latex' => true,
+                'include_asciimath' => true,
+            ],
+        ]);
+        if ($payload === false || strlen($payload) > 512 * 1024) {
+            throw new \moodle_exception('invalidstrokes', 'local_stackinputhelper');
+        }
+
+        $curl = curl_init(self::STROKES_ENDPOINT);
+        curl_setopt_array($curl, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'app_id: ' . $appid,
+                'app_key: ' . $appkey,
+                'Content-Type: application/json',
+            ],
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_TIMEOUT => 40,
+        ]);
+        $body = curl_exec($curl);
+        $errno = curl_errno($curl);
+        $error = curl_error($curl);
+        $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+
+        return self::parse_response($body, $errno, $error, $status);
+    }
+
+    private static function validate_strokes(array $x, array $y): void {
+        if (!$x || count($x) !== count($y) || count($x) > 1000) {
+            throw new \moodle_exception('invalidstrokes', 'local_stackinputhelper');
+        }
+        $pointcount = 0;
+        foreach ($x as $index => $xstroke) {
+            $ystroke = $y[$index] ?? null;
+            if (!is_array($xstroke) || !is_array($ystroke) || !$xstroke || count($xstroke) !== count($ystroke)) {
+                throw new \moodle_exception('invalidstrokes', 'local_stackinputhelper');
+            }
+            $pointcount += count($xstroke);
+            if ($pointcount > 50000) {
+                throw new \moodle_exception('invalidstrokes', 'local_stackinputhelper');
+            }
+            foreach ($xstroke as $pointindex => $xvalue) {
+                $yvalue = $ystroke[$pointindex];
+                if (!is_numeric($xvalue) || !is_numeric($yvalue)
+                        || abs((float)$xvalue) > 100000 || abs((float)$yvalue) > 100000) {
+                    throw new \moodle_exception('invalidstrokes', 'local_stackinputhelper');
+                }
+            }
+        }
+    }
+
+    private static function parse_response($body, int $errno, string $error, int $status): array {
+        if ($body === false || $errno !== 0) {
+            throw new \moodle_exception('mathpixrequestfailed', 'local_stackinputhelper', '', null, $error);
+        }
+
         $data = json_decode($body, true);
         if (!is_array($data)) {
             throw new \moodle_exception('mathpixinvalidresponse', 'local_stackinputhelper');
@@ -66,6 +165,7 @@ final class mathpix_client {
         }
 
         $rawlatex = self::extract_latex($data);
+        $rawascii = self::extract_data_value($data, 'asciimath');
         $lines = self::build_lines($rawlatex);
         $stack = self::recommended_stack($lines);
         if ($stack === '') {
@@ -74,6 +174,7 @@ final class mathpix_client {
 
         return [
             'raw_latex' => $rawlatex,
+            'raw_asciimath' => $rawascii,
             'stack' => $stack,
             'text' => $stack,
             'lines' => $lines,
@@ -284,9 +385,12 @@ final class mathpix_client {
     }
 
     private static function extract_latex(array $data): string {
-        $value = '';
+        $value = self::extract_data_value($data, 'latex');
 
         foreach (['latex_styled', 'latex_simplified', 'text'] as $key) {
+            if ($value !== '') {
+                break;
+            }
             if (!empty($data[$key]) && is_string($data[$key])) {
                 $value = $data[$key];
                 break;
@@ -302,5 +406,19 @@ final class mathpix_client {
         $value = preg_replace('/\s*\\\\\)$/', '', $value);
 
         return trim($value);
+    }
+
+    private static function extract_data_value(array $response, string $type): string {
+        if (empty($response['data']) || !is_array($response['data'])) {
+            return '';
+        }
+
+        foreach ($response['data'] as $item) {
+            if (is_array($item) && ($item['type'] ?? '') === $type && is_string($item['value'] ?? null)) {
+                return trim($item['value']);
+            }
+        }
+
+        return '';
     }
 }

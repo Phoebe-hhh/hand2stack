@@ -2,6 +2,12 @@
 
 All notable user-facing changes to STACK Input Helper are recorded here.
 
+## 0.2.10-alpha - 2026-09-14
+
+- Generate mobile-upload QR codes inside Moodle without sending session URLs to a third-party QR service.
+- Dispose of document-level selection listeners whenever recognition results are replaced.
+- Preserve line selection, partial formula selection, drag selection, and STACK preview behavior across result refreshes.
+
 ## 0.2.9-alpha - 2026-07-28
 
 - Added server-side upload validation using the actual file contents rather than browser-provided MIME types.

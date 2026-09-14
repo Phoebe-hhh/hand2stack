@@ -19,6 +19,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: stackinputhelper/package-lock.json
+
+      - name: Test and build JavaScript
+        working-directory: stackinputhelper
+        run: |
+          npm ci
+          npm test
+          npm run build
+          git diff --exit-code -- amd/build/main.min.js
+
       - name: Validate PHP syntax
         run: find stackinputhelper -name '*.php' -print0 | xargs -0 -n1 php -l
 

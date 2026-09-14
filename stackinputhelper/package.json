@@ -1,0 +1,13 @@
+{
+  "name": "moodle-local_stackinputhelper",
+  "private": true,
+  "version": "0.2.10-alpha",
+  "scripts": {
+    "build": "terser amd/src/main.js --compress --mangle --comments '/^!|@license|@copyright/' -o amd/build/main.min.js",
+    "test": "node --test tests/js/*.test.js",
+    "check": "npm test && node --check amd/src/main.js && node --check amd/build/main.min.js"
+  },
+  "devDependencies": {
+    "terser": "5.44.0"
+  }
+}

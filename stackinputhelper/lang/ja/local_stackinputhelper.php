@@ -1,4 +1,18 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+/**
+ * lang ja local stackinputhelper.php for STACK Input Helper.
+ *
+ * @package    local_stackinputhelper
+ * @copyright  2026 Phoebe Huang
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 $string['pluginname'] = 'STACK Input Helper';
 $string['mathpixappid'] = 'Mathpix App ID';
 $string['mathpixappid_desc'] = 'Moodleプラグインのバックエンドで使用するMathpix App IDです。';
@@ -39,11 +53,14 @@ $string['takephoto'] = '写真を撮る';
 $string['usethisphoto'] = 'この写真を使用';
 $string['recognizedresults'] = '認識結果';
 $string['selectanswer'] = 'STACKに入力する答案を選択してください:';
-$string['selectpart'] = '部分選択:';
+$string['selectpart'] = '記号をクリックするか、数式上をドラッグして範囲選択します。';
 $string['recommendedanswer'] = '推奨答案';
 $string['stackpreview'] = 'STACK入力プレビュー:';
 $string['insertanswer'] = '答案を挿入';
-$string['rawlatex'] = '元のLaTeX';
+$string['rawlatex'] = 'LaTeX';
+$string['recognizedformat'] = '認識形式:';
+$string['asciimath'] = 'ASCII';
+$string['asciiunavailable'] = 'この画像ではASCII形式が返されませんでした。';
 $string['lineprefix'] = '行';
 $string['creatingmobilesession'] = 'モバイルアップロードセッションを作成しています...';
 $string['waitingmobileupload'] = 'モバイルからのアップロードを待っています...';
@@ -52,12 +69,21 @@ $string['mobileuploadexpired'] = 'このモバイルアップロードセッシ�
 $string['mobileuploadtimeout'] = '結果待ちがタイムアウトしました。新しいセッションを作成してください。';
 $string['mobilesessionfailed'] = 'モバイルセッションの作成に失敗しました:';
 $string['partialselectionfailed'] = '選択したテキストを変換できませんでした。';
+$string['handwritebtn'] = '数式を手書き';
+$string['handwriteinstructions'] = 'Apple Pencilまたはマウスで書いてください。指ではページをスクロールできます。';
+$string['undo'] = '元に戻す';
+$string['clear'] = '消去';
+$string['recognizestrokes'] = '手書きを認識';
+$string['nostrokes'] = '先に数式を書いてください。';
+$string['invalidstrokes'] = '手書きストロークデータが無効です。';
 $string['emptylatex'] = '選択された数式が空です。';
-$string['privacy:metadata:mathpix'] = 'アップロードされた画像は数式認識のためMathpixへ送信されます。';
+$string['privacy:metadata:mathpix'] = 'アップロードされた画像と手書きストロークは数式認識のためMathpixへ送信されます。';
 $string['privacy:metadata:mathpix:image'] = 'ユーザがアップロードした数式画像です。';
+$string['privacy:metadata:mathpix:strokes'] = 'ユーザのペンまたはマウスから取得した手書き座標です。';
 $string['privacy:metadata:session'] = '一時的なモバイルアップロードセッションと認識結果です。';
 $string['privacy:metadata:session:userid'] = 'モバイルアップロードセッションを作成したユーザです。';
 $string['privacy:metadata:session:rawlatex'] = 'Mathpixから返された生のLaTeXです。';
+$string['privacy:metadata:session:rawascii'] = 'Mathpixから返されたAsciiMathです。';
 $string['privacy:metadata:session:stack'] = '生のLaTeXから生成されたSTACK式です。';
 $string['privacy:metadata:session:resulttext'] = 'Moodleページに返される認識結果です。';
 $string['privacy:metadata:session:timecreated'] = 'モバイルアップロードセッションの作成時刻です。';

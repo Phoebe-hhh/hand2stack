@@ -1,4 +1,18 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+/**
+ * db upgrade.php for STACK Input Helper.
+ *
+ * @package    local_stackinputhelper
+ * @copyright  2026 Phoebe Huang
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 defined('MOODLE_INTERNAL') || die();
 
 function xmldb_local_stackinputhelper_upgrade($oldversion) {
@@ -30,6 +44,17 @@ function xmldb_local_stackinputhelper_upgrade($oldversion) {
         }
 
         upgrade_plugin_savepoint(true, 2026053100, 'local', 'stackinputhelper');
+    }
+
+    if ($oldversion < 2026091200) {
+        $table = new xmldb_table('local_stackinputhelper_sess');
+        $field = new xmldb_field('rawascii', XMLDB_TYPE_TEXT, null, null, null, null, null, 'rawlatex');
+
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_plugin_savepoint(true, 2026091200, 'local', 'stackinputhelper');
     }
 
     return true;

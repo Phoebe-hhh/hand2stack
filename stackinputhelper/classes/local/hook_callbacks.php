@@ -1,4 +1,18 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+/**
+ * classes local hook callbacks.php for STACK Input Helper.
+ *
+ * @package    local_stackinputhelper
+ * @copyright  2026 Phoebe Huang
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 namespace local_stackinputhelper\local;
 
 defined('MOODLE_INTERNAL') || die();
@@ -17,23 +31,25 @@ final class hook_callbacks {
             return;
         }
 
-        $path = $PAGE->url->get_path();
-
         $targets = [
             '/mod/quiz/attempt.php',
             '/question/preview.php',
         ];
-
-        if (!in_array($path, $targets, true)) {
+        if (!in_array($PAGE->url->get_path(), $targets, true)) {
             return;
         }
 
         if (!get_config('local_stackinputhelper', 'enabled')) {
             return;
         }
+        if (!isloggedin() || isguestuser()
+                || !has_capability('local/stackinputhelper:use', \context_system::instance())) {
+            return;
+        }
 
         $config = [
             'recognizeUrl' => (new \moodle_url('/local/stackinputhelper/recognize.php'))->out(false),
+            'strokesUrl' => (new \moodle_url('/local/stackinputhelper/strokes.php'))->out(false),
             'convertUrl' => (new \moodle_url('/local/stackinputhelper/convert.php'))->out(false),
             'sessionCreateUrl' => (new \moodle_url('/local/stackinputhelper/session_create.php'))->out(false),
             'sessionResultUrl' => (new \moodle_url('/local/stackinputhelper/session_result.php'))->out(false),
@@ -51,6 +67,9 @@ final class hook_callbacks {
             'stackpreview' => get_string('stackpreview', 'local_stackinputhelper'),
             'insertanswer' => get_string('insertanswer', 'local_stackinputhelper'),
             'rawlatex' => get_string('rawlatex', 'local_stackinputhelper'),
+            'recognizedformat' => get_string('recognizedformat', 'local_stackinputhelper'),
+            'asciimath' => get_string('asciimath', 'local_stackinputhelper'),
+            'asciiunavailable' => get_string('asciiunavailable', 'local_stackinputhelper'),
             'lineprefix' => get_string('lineprefix', 'local_stackinputhelper'),
             'creatingmobilesession' => get_string('creatingmobilesession', 'local_stackinputhelper'),
             'waitingmobileupload' => get_string('waitingmobileupload', 'local_stackinputhelper'),
@@ -59,19 +78,14 @@ final class hook_callbacks {
             'mobileuploadtimeout' => get_string('mobileuploadtimeout', 'local_stackinputhelper'),
             'mobilesessionfailed' => get_string('mobilesessionfailed', 'local_stackinputhelper'),
             'partialselectionfailed' => get_string('partialselectionfailed', 'local_stackinputhelper'),
+            'handwritebtn' => get_string('handwritebtn', 'local_stackinputhelper'),
+            'handwriteinstructions' => get_string('handwriteinstructions', 'local_stackinputhelper'),
+            'undo' => get_string('undo', 'local_stackinputhelper'),
+            'clear' => get_string('clear', 'local_stackinputhelper'),
+            'recognizestrokes' => get_string('recognizestrokes', 'local_stackinputhelper'),
+            'nostrokes' => get_string('nostrokes', 'local_stackinputhelper'),
         ];
 
-        $json = json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $version = '20260715_compact_math_2';
-
-        $html = '
-<script>
-window.STACKINPUTHELPER_CONFIG = ' . $json . ';
-console.log("[stackinputhelper] config injected", window.STACKINPUTHELPER_CONFIG);
-</script>
-<script src="/local/stackinputhelper/amd/build/main.min.js?v=' . $version . '"></script>
-';
-
-        $hook->add_html($html);
+        $PAGE->requires->js_call_amd('local_stackinputhelper/main', 'init', [$config]);
     }
 }

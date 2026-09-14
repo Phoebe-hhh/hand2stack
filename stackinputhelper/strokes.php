@@ -7,7 +7,7 @@
 // (at your option) any later version.
 
 /**
- * mobile upload.php for STACK Input Helper.
+ * strokes.php for STACK Input Helper.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang
@@ -24,37 +24,20 @@ require_capability('local/stackinputhelper:use', context_system::instance());
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-    global $DB, $USER;
-
-    $sessionid = required_param('session', PARAM_ALPHANUMEXT);
-    $record = $DB->get_record('local_stackinputhelper_sess', ['sessionid' => $sessionid], '*', MUST_EXIST);
-
-    if ((int)$record->userid !== (int)$USER->id) {
-        throw new moodle_exception('nopermissions', 'error', '', get_string('edit'));
+    if (!get_config('local_stackinputhelper', 'enabled')) {
+        throw new moodle_exception('pluginnotenabled', 'local_stackinputhelper');
     }
 
-    if ((int)$record->expiresat < time()) {
-        $record->status = 'expired';
-        $record->timemodified = time();
-        $DB->update_record('local_stackinputhelper_sess', $record);
-        throw new moodle_exception('sessionexpired', 'local_stackinputhelper');
+    $json = required_param('strokes', PARAM_RAW);
+    $strokes = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+    if (!is_array($strokes)) {
+        throw new moodle_exception('invalidstrokes', 'local_stackinputhelper');
     }
 
-    $upload = \local_stackinputhelper\local\image_upload_validator::validate($_FILES['image'] ?? []);
-
-    $result = \local_stackinputhelper\local\mathpix_client::recognize(
-        $upload['filepath'],
-        $upload['filename'],
-        $upload['mimetype']
+    $result = \local_stackinputhelper\local\mathpix_client::recognize_strokes(
+        $strokes['x'] ?? [],
+        $strokes['y'] ?? []
     );
-
-    $record->status = 'done';
-    $record->rawlatex = $result['raw_latex'];
-    $record->rawascii = $result['raw_asciimath'];
-    $record->stack = $result['stack'];
-    $record->resulttext = $result['text'];
-    $record->timemodified = time();
-    $DB->update_record('local_stackinputhelper_sess', $record);
 
     echo json_encode([
         'success' => true,
