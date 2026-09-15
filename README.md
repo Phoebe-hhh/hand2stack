@@ -1,72 +1,93 @@
 # STACK Input Helper
 
-Alpha Moodle local plugin for testing image-based mathematical input support in Moodle + STACK.
+A Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-The current demo uses a human-in-the-loop workflow: Mathpix recognizes the whole image, the plugin displays the recognized result by line, the last line is recommended by default, and the student confirms or edits the expression before it is inserted into the STACK answer field.
+> **Current pilot release:** [v0.2.11-alpha](https://github.com/Phoebe-hhh/moodle-stack-input-helper/releases/tag/v0.2.11-alpha)
 
-This repository contains:
+## Download
 
-- `stackinputhelper/`: Moodle local plugin for STACK input assistance
+Moodle administrators should download the prepared plugin package from the release assets:
 
-Current target use:
+**[Download stackinputhelper-v0.2.11-alpha.zip](https://github.com/Phoebe-hhh/moodle-stack-input-helper/releases/download/v0.2.11-alpha/stackinputhelper-v0.2.11-alpha.zip)**
 
-1. Local development and smoke testing.
-2. Trial deployment on the ILAS Nagoya University STACK testing course.
-3. Later cleanup and packaging as a formal Moodle plugin.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `stackinputhelper-v0.2.11-alpha.zip` and contains a single root folder named `stackinputhelper/`.
 
-## Current Demo Workflow
+## Features
 
-1. Upload a handwritten math image from the browser, or scan the QR code and upload from a phone.
-2. Moodle sends the image to Mathpix from the PHP backend.
-3. The recognized LaTeX is split into candidate lines.
-4. The UI shows the original math/text result for review.
-5. The last line is selected as the recommended answer by default.
-6. The student can choose another line, drag-select part of a line, or edit the STACK preview manually.
-7. Only the confirmed selection is converted to STACK/Maxima syntax and inserted into the answer box.
+- Write mathematics directly with Apple Pencil, touch, or a mouse.
+- Pen, whole-stroke eraser, undo, clear, and resizable writing area.
+- Upload an existing handwritten image.
+- Take a photo on a phone or tablet.
+- Scan a Moodle-generated QR code to upload from another device.
+- Review multiple recognized lines and select the intended answer.
+- Select part of a recognized formula or edit the STACK preview manually.
+- Keep Mathpix credentials on the Moodle server rather than in browser JavaScript.
+- Automatically remove expired mobile-upload sessions with a Moodle scheduled task.
 
-This is intended to reduce accidental submission of intermediate working when a student photographs a multi-line solution.
+## Requirements
 
-## Moodle Plugin Backend
+- Moodle 4.4 or later.
+- STACK question type installed and configured.
+- PHP cURL, Fileinfo, and GD extensions.
+- Moodle cron running every minute.
+- Outbound HTTPS access to `api.mathpix.com`.
+- Mathpix App ID and App Key.
 
-The Moodle plugin now calls Mathpix directly from PHP. A separate Node.js service is no longer required for normal Moodle deployment.
+## Installation
 
-For lab deployment:
+1. Download the prepared ZIP above.
+2. In Moodle, open **Site administration → Plugins → Install plugins**.
+3. Upload the ZIP and complete the validation and installation steps.
+4. Visit **Site administration → Notifications** if Moodle requests a database upgrade.
+5. Open **Site administration → Plugins → Local plugins → STACK Input Helper**.
+6. Enable the plugin and enter the Mathpix App ID and App Key.
+7. Leave **Mobile public base URL** empty for normal installations.
+8. Purge Moodle caches.
+9. Open a STACK question preview or quiz attempt and test handwriting, recognition, and answer insertion.
 
-1. Create or use a zip whose root folder is exactly `stackinputhelper/`.
-2. Install it from `Site administration > Plugins > Install plugins`, or copy `stackinputhelper/` to `moodle/local/stackinputhelper`.
-3. Visit `Site administration > Notifications` and complete the database upgrade.
-4. Configure `Mathpix App ID` and `Mathpix App Key` under `Site administration > Plugins > Local plugins > STACK Input Helper`.
-5. Open a STACK question page and test image upload.
+Moodle installations in a subdirectory are supported automatically. For example, a site at `https://stack.example.edu/projects` generates plugin and mobile-upload URLs below that same `/projects` path. **Mobile public base URL** is only an override for unusual reverse-proxy or split-network configurations.
 
-Do not upload GitHub's full repository download zip directly to Moodle, because Moodle should receive only the `stackinputhelper/` plugin folder.
-
-Do not commit `.env`, `node_modules/`, uploaded images, or Moodle cache files.
-
-## Moodle Plugin
-
-Copy the plugin folder into Moodle:
+For a manual installation, extract the package as:
 
 ```text
 moodle/local/stackinputhelper
 ```
 
-Then visit Moodle as an administrator and complete plugin installation from:
+Then visit **Site administration → Notifications**. When upgrading manually, back up and replace the existing plugin folder; do not copy `node_modules` to the server.
 
-```text
-Site administration > Notifications
+## Student Workflow
+
+1. Choose image upload, handwriting, or mobile upload beside a STACK answer field.
+2. Submit the image or handwritten strokes for recognition.
+3. Review the recognized result and select the relevant line or symbols.
+4. Correct the generated STACK expression if necessary.
+5. Insert the confirmed expression into the answer field.
+
+The plugin does not submit the quiz answer automatically.
+
+## Privacy
+
+Uploaded images and handwriting coordinates are sent to Mathpix for recognition. Uploaded image files are not permanently stored by this plugin. Temporary mobile-upload sessions expire and are removed by a scheduled task. Administrators should confirm that external recognition complies with institutional policies.
+
+## Repository Layout
+
+- [`stackinputhelper/`](stackinputhelper/) — the Moodle plugin source and detailed documentation.
+- [`.github/workflows/release.yml`](.github/workflows/release.yml) — tests, builds, and publishes tagged releases.
+- [`scripts/build-release.sh`](scripts/build-release.sh) — creates the correctly structured Moodle installation ZIP for GitHub Actions.
+
+The `scripts/` directory is release infrastructure, not an additional server component. Moodle administrators only need the ZIP from the release page.
+
+## Development
+
+```bash
+cd stackinputhelper
+npm ci
+npm test
+npm run build
 ```
 
-Configure Mathpix credentials in:
+See the [plugin README](stackinputhelper/README.md) for development details, configuration notes, and the release process.
 
-```text
-Site administration > Plugins > Local plugins > STACK Input Helper
-```
+## Status
 
-## Development Checks
-
-For Moodle-side development and smoke testing, check:
-
-- `stackinputhelper/classes/local/stack_converter.php`
-- `stackinputhelper/classes/local/mathpix_client.php`
-- `stackinputhelper/amd/src/main.js`
-- `stackinputhelper/amd/build/main.min.js`
+Version `0.2.11-alpha` is intended for controlled pilot testing. The current automated test suite covers release packaging invariants, handwriting controls, mobile input behavior, endpoint safety, and session cleanup.
