@@ -38,9 +38,5 @@ try {
         'stack' => \local_stackinputhelper\local\stack_converter::normalize_selection($latex),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $error) {
-    http_response_code(400);
-    echo json_encode([
-        'success' => false,
-        'error' => $error->getMessage(),
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    \local_stackinputhelper\local\api_response::send_error($error);
 }

@@ -21,13 +21,9 @@ final class hook_callbacks {
     public static function before_standard_top_of_body_html_generation(
         \core\hook\output\before_standard_top_of_body_html_generation $hook
     ): void {
-        global $PAGE;
+        global $PAGE, $SCRIPT;
 
         if (during_initial_install()) {
-            return;
-        }
-
-        if (empty($PAGE->url)) {
             return;
         }
 
@@ -35,7 +31,10 @@ final class hook_callbacks {
             '/mod/quiz/attempt.php',
             '/question/preview.php',
         ];
-        if (!in_array($PAGE->url->get_path(), $targets, true)) {
+        $path = $SCRIPT ?: (!empty($PAGE->url)
+            ? $PAGE->url->get_path()
+            : parse_url($_SERVER['SCRIPT_NAME'] ?? '', PHP_URL_PATH));
+        if (!in_array($path, $targets, true)) {
             return;
         }
 
@@ -57,6 +56,7 @@ final class hook_callbacks {
             'enablemobile' => (bool)get_config('local_stackinputhelper', 'enablemobile'),
             'uploadbtn' => get_string('uploadbtn', 'local_stackinputhelper'),
             'mobilebtn' => get_string('mobileuploadbtn', 'local_stackinputhelper'),
+            'camerabtn' => get_string('camerabtn', 'local_stackinputhelper'),
             'uploading' => get_string('uploading', 'local_stackinputhelper'),
             'nofieldfound' => get_string('nofieldfound', 'local_stackinputhelper'),
             'recognizefailed' => get_string('recognizefailed', 'local_stackinputhelper'),
@@ -80,6 +80,9 @@ final class hook_callbacks {
             'partialselectionfailed' => get_string('partialselectionfailed', 'local_stackinputhelper'),
             'handwritebtn' => get_string('handwritebtn', 'local_stackinputhelper'),
             'handwriteinstructions' => get_string('handwriteinstructions', 'local_stackinputhelper'),
+            'resizehandwriting' => get_string('resizehandwriting', 'local_stackinputhelper'),
+            'draw' => get_string('draw', 'local_stackinputhelper'),
+            'eraser' => get_string('eraser', 'local_stackinputhelper'),
             'undo' => get_string('undo', 'local_stackinputhelper'),
             'clear' => get_string('clear', 'local_stackinputhelper'),
             'recognizestrokes' => get_string('recognizestrokes', 'local_stackinputhelper'),

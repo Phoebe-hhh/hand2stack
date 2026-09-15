@@ -11,7 +11,10 @@
 
 define([], function() {
     const pluginUrl = (path) => {
-        return window.location.origin + '/local/stackinputhelper/' + path;
+        const moodleRoot = window.M && M.cfg && M.cfg.wwwroot
+            ? String(M.cfg.wwwroot).replace(/\/$/, '')
+            : window.location.origin;
+        return moodleRoot + '/local/stackinputhelper/' + path;
     };
 
     const replaceLegacyNodeUrl = (url, fallback) => {
@@ -31,6 +34,7 @@ define([], function() {
         enablemobile: true,
         uploadbtn: 'Upload math image',
         mobilebtn: 'Mobile Math Upload',
+        camerabtn: 'Take a photo',
         uploading: 'Recognizing...',
         recognizefailed: 'Recognition failed.',
         recognizedresults: 'Recognized results',
@@ -51,13 +55,21 @@ define([], function() {
         mobilesessionfailed: 'Failed to create mobile session:',
         partialselectionfailed: 'Could not convert the selected text.',
         handwritebtn: 'Handwrite math',
-        handwriteinstructions: 'Write with Apple Pencil or a mouse. Use a finger to scroll.',
+        handwriteinstructions: 'Write with Apple Pencil, your finger, or a mouse. To scroll, drag outside the writing area.',
+        resizehandwriting: 'Drag to resize the writing area',
+        draw: 'Pen',
+        eraser: 'Eraser',
         undo: 'Undo',
         clear: 'Clear',
         recognizestrokes: 'Recognize handwriting',
         nostrokes: 'Write an expression first.'
     };
     let config = {};
+    const isIPadWebKit = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    const isMobileOrTablet = isIPadWebKit
+        || /Android|Mobile|Tablet/i.test(navigator.userAgent)
+        || Boolean(navigator.userAgentData && navigator.userAgentData.mobile);
 
     const findAnswerBoxes = () => {
         const selectors = [
@@ -78,11 +90,11 @@ define([], function() {
         return boxes;
     };
 
-    const createHiddenFileInput = () => {
+    const createHiddenFileInput = (capture = false) => {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = 'image/*';
-        fileInput.setAttribute('capture', 'environment');
+        if (capture) fileInput.setAttribute('capture', 'environment');
         fileInput.style.display = 'none';
         document.body.appendChild(fileInput);
         return fileInput;
@@ -1282,7 +1294,7 @@ define([], function() {
 
     const createHandwritingPanel = (answerBox, resultPanel) => {
         const panel = document.createElement('div');
-        panel.style.cssText = 'display:none;margin-top:8px;padding:10px;border:1px solid #9db7d5;background:#f8fbff;max-width:720px';
+        panel.style.cssText = 'display:none;margin-top:8px;padding:10px;border:1px solid #9db7d5;background:#f8fbff;max-width:900px';
 
         const instruction = document.createElement('div');
         instruction.textContent = config.handwriteinstructions;
@@ -1290,78 +1302,290 @@ define([], function() {
         const canvas = document.createElement('canvas');
         canvas.width = 900;
         canvas.height = 420;
-        canvas.style.cssText = 'display:block;width:100%;height:min(44vh,420px);min-height:260px;background:#fff;border:1px solid #8795a5;border-radius:4px;touch-action:pan-y;cursor:crosshair';
+        canvas.style.cssText = 'display:block;width:100%;height:min(44vh,420px);min-height:260px;background:#fff;border:1px solid #8795a5;border-radius:4px;touch-action:none;overscroll-behavior:contain;cursor:crosshair';
         canvas.setAttribute('aria-label', config.handwritebtn);
+
+        const resizeHandle = document.createElement('button');
+        resizeHandle.type = 'button';
+        resizeHandle.textContent = '↕ ' + (config.resizehandwriting || 'Drag to resize the writing area');
+        resizeHandle.setAttribute('aria-label', config.resizehandwriting || 'Drag to resize the writing area');
+        resizeHandle.style.cssText = 'display:block;width:100%;height:30px;margin:4px 0 0;padding:2px 8px;border:1px solid #9aa7b4;border-radius:4px;background:#edf2f7;color:#334155;cursor:ns-resize;touch-action:none;user-select:none';
+
+        let resizePointerId = null;
+        let resizeStartY = 0;
+        let resizeStartHeight = 0;
+        resizeHandle.addEventListener('pointerdown', event => {
+            if (event.pointerType === 'mouse' && event.button !== 0) return;
+            event.preventDefault();
+            resizePointerId = event.pointerId;
+            resizeStartY = event.clientY;
+            resizeStartHeight = canvas.getBoundingClientRect().height;
+        });
+        document.addEventListener('pointermove', event => {
+            if (resizePointerId === null || event.pointerId !== resizePointerId) return;
+            event.preventDefault();
+            const nextHeight = Math.max(260, Math.min(1200, resizeStartHeight + event.clientY - resizeStartY));
+            canvas.style.height = Math.round(nextHeight) + 'px';
+            const renderedWidth = canvas.getBoundingClientRect().width;
+            if (renderedWidth > 0) {
+                canvas.height = Math.round(nextHeight * canvas.width / renderedWidth);
+                redraw();
+            }
+        }, {passive: false});
+        const finishResize = event => {
+            if (resizePointerId === null || event.pointerId !== resizePointerId) return;
+            resizePointerId = null;
+        };
+        document.addEventListener('pointerup', finishResize);
+        document.addEventListener('pointercancel', finishResize);
 
         const controls = document.createElement('div');
         controls.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap';
+        const draw = document.createElement('button');
+        const eraser = document.createElement('button');
         const undo = document.createElement('button');
         const clear = document.createElement('button');
         const recognize = document.createElement('button');
         const status = document.createElement('span');
-        [undo, clear, recognize].forEach(button => { button.type = 'button'; button.className = 'btn btn-secondary'; });
+        [draw, eraser, undo, clear, recognize].forEach(button => {
+            button.type = 'button';
+            button.className = 'btn btn-secondary';
+        });
         recognize.className = 'btn btn-primary';
+        draw.textContent = config.draw || 'Pen';
+        eraser.textContent = config.eraser || 'Eraser';
         undo.textContent = config.undo;
         clear.textContent = config.clear;
         recognize.textContent = config.recognizestrokes;
-        controls.append(undo, clear, recognize, status);
-        panel.append(instruction, canvas, controls);
+        controls.append(draw, eraser, undo, clear, recognize, status);
+        panel.append(instruction, canvas, resizeHandle, controls);
 
         const strokes = [];
+        const history = [];
         let active = null;
+        let tool = 'draw';
+        let canvasRect = null;
+        let drawFrame = null;
+        const dirtyStrokes = new Set();
         const context = canvas.getContext('2d');
+        const cloneStrokes = () => strokes.map(stroke => ({
+            x: stroke.x.slice(), y: stroke.y.slice(), drawn: stroke.x.length
+        }));
+        const saveHistory = () => history.push(cloneStrokes());
+        const setTool = nextTool => {
+            tool = nextTool;
+            const drawing = tool === 'draw';
+            draw.setAttribute('aria-pressed', drawing ? 'true' : 'false');
+            eraser.setAttribute('aria-pressed', drawing ? 'false' : 'true');
+            draw.className = drawing ? 'btn btn-primary' : 'btn btn-secondary';
+            eraser.className = drawing ? 'btn btn-secondary' : 'btn btn-primary';
+            canvas.style.cursor = drawing ? 'crosshair' : 'cell';
+        };
+        const configureContext = () => {
+            context.strokeStyle = '#111827';
+            context.lineWidth = 4;
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+        };
         const pointFor = event => {
-            const rect = canvas.getBoundingClientRect();
+            const rect = canvasRect || canvas.getBoundingClientRect();
             return {
                 x: Math.round((event.clientX - rect.left) * canvas.width / rect.width),
                 y: Math.round((event.clientY - rect.top) * canvas.height / rect.height)
             };
         };
-        const redraw = () => {
-            context.clearRect(0, 0, canvas.width, canvas.height);
-            context.strokeStyle = '#111827';
-            context.lineWidth = 4;
-            context.lineCap = 'round';
-            context.lineJoin = 'round';
-            strokes.forEach(stroke => {
-                if (!stroke.x.length) return;
-                context.beginPath();
+        const drawNewSegments = stroke => {
+            const length = stroke.x.length;
+            if (!length || stroke.drawn >= length) return;
+
+            configureContext();
+            context.beginPath();
+            if (stroke.drawn === 0) {
                 context.moveTo(stroke.x[0], stroke.y[0]);
-                for (let i = 1; i < stroke.x.length; i++) context.lineTo(stroke.x[i], stroke.y[i]);
-                context.stroke();
+                if (length === 1) context.lineTo(stroke.x[0] + 0.01, stroke.y[0] + 0.01);
+            } else {
+                const previous = stroke.drawn - 1;
+                context.moveTo(stroke.x[previous], stroke.y[previous]);
+            }
+            for (let i = Math.max(1, stroke.drawn); i < length; i++) {
+                context.lineTo(stroke.x[i], stroke.y[i]);
+            }
+            context.stroke();
+            stroke.drawn = length;
+        };
+        const flushDrawing = () => {
+            drawFrame = null;
+            dirtyStrokes.forEach(drawNewSegments);
+            dirtyStrokes.clear();
+        };
+        const scheduleDrawing = stroke => {
+            dirtyStrokes.add(stroke);
+            if (drawFrame === null) drawFrame = window.requestAnimationFrame(flushDrawing);
+        };
+        const redraw = () => {
+            if (drawFrame !== null) {
+                window.cancelAnimationFrame(drawFrame);
+                drawFrame = null;
+            }
+            dirtyStrokes.clear();
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            strokes.forEach(stroke => {
+                stroke.drawn = 0;
+                drawNewSegments(stroke);
             });
         };
-        const addSamples = event => {
+        const distanceToSegment = (point, start, end) => {
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            if (dx === 0 && dy === 0) return Math.hypot(point.x - start.x, point.y - start.y);
+            const ratio = Math.max(0, Math.min(1,
+                ((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy)
+            ));
+            return Math.hypot(point.x - (start.x + ratio * dx), point.y - (start.y + ratio * dy));
+        };
+        const eraseAt = point => {
+            let changed = false;
+            for (let strokeIndex = strokes.length - 1; strokeIndex >= 0; strokeIndex--) {
+                const stroke = strokes[strokeIndex];
+                for (let i = 0; i < stroke.x.length; i++) {
+                    const start = {x: stroke.x[i], y: stroke.y[i]};
+                    const end = i + 1 < stroke.x.length ? {x: stroke.x[i + 1], y: stroke.y[i + 1]} : start;
+                    if (distanceToSegment(point, start, end) <= 24) {
+                        strokes.splice(strokeIndex, 1);
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+            if (changed) redraw();
+            return changed;
+        };
+        const addSamples = (event, stroke = active) => {
+            if (!stroke) return;
             const samples = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [event];
             samples.forEach(sample => {
                 const point = pointFor(sample);
-                active.x.push(point.x);
-                active.y.push(point.y);
+                if (stroke.erasing) {
+                    stroke.changed = eraseAt(point) || stroke.changed;
+                    return;
+                }
+                const last = stroke.x.length - 1;
+                if (last < 0 || stroke.x[last] !== point.x || stroke.y[last] !== point.y) {
+                    stroke.x.push(point.x);
+                    stroke.y.push(point.y);
+                }
             });
-            redraw();
+            if (!stroke.erasing) scheduleDrawing(stroke);
         };
-        canvas.addEventListener('pointerdown', event => {
-            if (event.pointerType === 'touch' || event.button !== 0) return;
-            event.preventDefault();
-            canvas.setPointerCapture(event.pointerId);
-            active = {x: [], y: []};
+        const flushPendingDrawing = () => {
+            if (drawFrame === null) return;
+            window.cancelAnimationFrame(drawFrame);
+            flushDrawing();
+        };
+        const syncEmptyCanvasBackingStore = () => {
+            if (strokes.length) return;
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
+            const expectedHeight = Math.round(rect.height * canvas.width / rect.width);
+            if (canvas.height !== expectedHeight) canvas.height = expectedHeight;
+        };
+        const startStroke = (pointerId, event) => {
+            syncEmptyCanvasBackingStore();
+            canvasRect = canvas.getBoundingClientRect();
+            saveHistory();
+            if (tool === 'eraser') {
+                active = {pointerId, erasing: true, changed: false};
+                addSamples(event);
+                return;
+            }
+            active = {x: [], y: [], drawn: 0, pointerId};
             strokes.push(active);
             addSamples(event);
+        };
+        const finishStroke = (pointerId, event = null) => {
+            if (!active || pointerId !== active.pointerId) return;
+            if (event) addSamples(event, active);
+            flushPendingDrawing();
+            if (active.erasing && !active.changed) history.pop();
+            active = null;
+            canvasRect = null;
+        };
+        canvas.addEventListener('pointerdown', event => {
+            if ((isIPadWebKit && (event.pointerType === 'touch' || event.pointerType === 'pen'))
+                    || (event.pointerType === 'mouse' && event.button !== 0)) return;
+            event.preventDefault();
+            startStroke(event.pointerId, event);
         });
         canvas.addEventListener('pointermove', event => {
-            if (!active || event.pointerType === 'touch') return;
+            if (!active || (isIPadWebKit && (event.pointerType === 'touch' || event.pointerType === 'pen'))
+                    || event.pointerId !== active.pointerId) return;
             event.preventDefault();
             addSamples(event);
         });
         const endStroke = event => {
-            if (!active) return;
-            if (event.pointerType !== 'touch') addSamples(event);
-            active = null;
+            if (isIPadWebKit && (event.pointerType === 'touch' || event.pointerType === 'pen')) return;
+            finishStroke(event.pointerId, event);
         };
         canvas.addEventListener('pointerup', endStroke);
-        canvas.addEventListener('pointercancel', () => { active = null; });
-        undo.addEventListener('click', () => { strokes.pop(); redraw(); status.textContent = ''; });
-        clear.addEventListener('click', () => { strokes.length = 0; redraw(); status.textContent = ''; });
+        canvas.addEventListener('pointercancel', event => {
+            if (!active || event.pointerId !== active.pointerId) return;
+            if (active.erasing && !active.changed) history.pop();
+            active = null;
+            canvasRect = null;
+        });
+        // On iPad/iPhone WebKit, handle both Pencil and finger input through
+        // Touch Events. This avoids the Pencil gaps seen through Pointer Events
+        // while still allowing ordinary finger handwriting.
+        const drawingTouch = (event, identifier = null) => Array.from(event.changedTouches || []).find(touch =>
+            identifier === null || touch.identifier === identifier);
+        canvas.addEventListener('touchstart', event => {
+            if (!isIPadWebKit) return;
+            const touch = drawingTouch(event);
+            if (!touch) return;
+            event.preventDefault();
+            startStroke('touch-' + touch.identifier, touch);
+        }, {passive: false});
+        canvas.addEventListener('touchmove', event => {
+            if (!isIPadWebKit || !active || typeof active.pointerId !== 'string') return;
+            const identifier = Number(active.pointerId.slice(6));
+            const touch = drawingTouch(event, identifier);
+            if (!touch) return;
+            event.preventDefault();
+            addSamples(touch);
+        }, {passive: false});
+        const endTouchStroke = event => {
+            if (!isIPadWebKit || !active || typeof active.pointerId !== 'string') return;
+            const identifier = Number(active.pointerId.slice(6));
+            const touch = drawingTouch(event, identifier);
+            if (!touch) return;
+            event.preventDefault();
+            finishStroke(active.pointerId, touch);
+        };
+        canvas.addEventListener('touchend', endTouchStroke, {passive: false});
+        canvas.addEventListener('touchcancel', event => {
+            if (!isIPadWebKit || !active || typeof active.pointerId !== 'string') return;
+            const identifier = Number(active.pointerId.slice(6));
+            if (!drawingTouch(event, identifier)) return;
+            if (active.erasing && !active.changed) history.pop();
+            active = null;
+            canvasRect = null;
+        }, {passive: false});
+        draw.addEventListener('click', () => setTool('draw'));
+        eraser.addEventListener('click', () => setTool('eraser'));
+        undo.addEventListener('click', () => {
+            if (!history.length) return;
+            strokes.splice(0, strokes.length, ...history.pop());
+            redraw();
+            status.textContent = '';
+        });
+        clear.addEventListener('click', () => {
+            if (!strokes.length) return;
+            saveHistory();
+            strokes.length = 0;
+            redraw();
+            status.textContent = '';
+        });
+        setTool('draw');
         recognize.addEventListener('click', async () => {
             if (!strokes.length) { status.textContent = config.nostrokes; return; }
             recognize.disabled = true;
@@ -1413,7 +1637,8 @@ define([], function() {
 
         answerBox.dataset.stackinputhelperBound = '1';
 
-        const fileInput = createHiddenFileInput();
+        const fileInput = createHiddenFileInput(false);
+        const cameraInput = isMobileOrTablet ? createHiddenFileInput(true) : null;
         const resultPanel = createResultPanel();
         const handwritingPanel = createHandwritingPanel(answerBox, resultPanel);
         const mobilePanel = createMobilePanel();
@@ -1421,7 +1646,9 @@ define([], function() {
         let lastMobileResultVersion = '';
 
         const uploadLabel = config.uploadbtn || 'Upload math image';
-        const mobileLabel = config.mobilebtn || 'Mobile Math Upload';
+        const mobileLabel = isMobileOrTablet
+            ? (config.camerabtn || 'Take a photo')
+            : (config.mobilebtn || 'Mobile Math Upload');
         const uploadBtn = createIconButton(uploadLabel, icons.image, '#f5f5f5');
         const mobileBtn = createIconButton(mobileLabel, icons.camera, '#eef6ff');
         const handwriteBtn = createIconButton(config.handwritebtn, icons.pen, '#f2f7ef');
@@ -1440,7 +1667,7 @@ define([], function() {
             [
                 [uploadBtn, 'image', '#f5f5f5'],
                 [handwriteBtn, 'handwrite', '#f2f7ef'],
-                [mobileBtn, 'mobile', '#eef6ff']
+                [mobileBtn, isMobileOrTablet ? 'camera' : 'mobile', '#eef6ff']
             ].forEach(([button, buttonMode, background]) => {
                 const selected = mode === buttonMode;
                 button.setAttribute('aria-pressed', selected ? 'true' : 'false');
@@ -1459,14 +1686,11 @@ define([], function() {
             fileInput.click();
         });
 
-        fileInput.addEventListener('change', async () => {
-            const file = fileInput.files && fileInput.files[0];
-            if (!file) {
-                return;
-            }
+        const recognizeImageFile = async (file, button, idleLabel) => {
+            if (!file) return;
 
-            uploadBtn.disabled = true;
-            setIconButtonLabel(uploadBtn, config.uploading || 'Recognizing...');
+            button.disabled = true;
+            setIconButtonLabel(button, config.uploading || 'Recognizing...');
 
             try {
                 const result = await postImage(config.recognizeUrl, file);
@@ -1481,12 +1705,28 @@ define([], function() {
                 window.console.error('[stackinputhelper] recognition failed:', error);
                 window.alert((config.recognizefailed || 'Recognition failed.') + '\n' + error.message);
             } finally {
-                uploadBtn.disabled = false;
-                setIconButtonLabel(uploadBtn, uploadLabel);
+                button.disabled = false;
+                setIconButtonLabel(button, idleLabel);
             }
+        };
+
+        fileInput.addEventListener('change', () => {
+            recognizeImageFile(fileInput.files && fileInput.files[0], uploadBtn, uploadLabel);
         });
 
+        if (cameraInput) {
+            cameraInput.addEventListener('change', () => {
+                recognizeImageFile(cameraInput.files && cameraInput.files[0], mobileBtn, mobileLabel);
+            });
+        }
+
         mobileBtn.addEventListener('click', async () => {
+            if (cameraInput) {
+                selectInputMode('camera');
+                cameraInput.value = '';
+                cameraInput.click();
+                return;
+            }
             selectInputMode('mobile');
             try {
                 if (mobilePollTimer) {

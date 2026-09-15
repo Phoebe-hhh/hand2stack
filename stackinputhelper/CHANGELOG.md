@@ -1,12 +1,18 @@
 # Changelog
 
+## 0.2.11-alpha
+
+- Synchronize the tested mobile, handwriting, eraser, and resizable-canvas implementation into the release source.
+- Support Moodle installations hosted in a subdirectory by deriving fallback endpoints from `$CFG->wwwroot`.
+- Add scheduled cleanup for expired mobile-upload sessions.
+- Hide internal exception details from API clients while retaining server-side logging.
+- Require Moodle 4.4 or later for the output hook API.
+
 All notable user-facing changes to STACK Input Helper are recorded here.
 
 ## 0.2.10-alpha - 2026-09-14
 
-- Add an on-screen handwriting canvas with Apple Pencil and mouse input, undo, clear, and stroke recognition.
 - Generate mobile-upload QR codes inside Moodle without sending session URLs to a third-party QR service.
-- Load the browser integration through Moodle's AMD API and restrict it to authenticated users with the plugin capability.
 - Dispose of document-level selection listeners whenever recognition results are replaced.
 - Preserve line selection, partial formula selection, drag selection, and STACK preview behavior across result refreshes.
 
