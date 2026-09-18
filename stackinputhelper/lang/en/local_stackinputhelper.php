@@ -7,17 +7,17 @@
 // (at your option) any later version.
 
 /**
- * lang en local stackinputhelper.php for STACK Input Helper.
+ * lang en local stackinputhelper.php for Hand2STACK.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-$string['pluginname'] = 'STACK Input Helper';
+$string['pluginname'] = 'Hand2STACK';
 
-$string['enabled'] = 'Enable STACK Input Helper';
-$string['enabled_desc'] = 'Enable or disable the STACK input helper plugin.';
+$string['enabled'] = 'Enable Hand2STACK';
+$string['enabled_desc'] = 'Enable or disable the Hand2STACK plugin.';
 
 $string['mathpixappid'] = 'Mathpix App ID';
 $string['mathpixappid_desc'] = 'The Mathpix application ID used by the Moodle plugin backend.';
@@ -40,7 +40,7 @@ $string['uploading'] = 'Recognizing...';
 $string['nofieldfound'] = 'No visible answer input found on this page.';
 $string['recognizefailed'] = 'Recognition failed.';
 $string['requestfailed'] = 'The request could not be completed. Please try again or contact the administrator.';
-$string['taskcleanupexpiredsessions'] = 'Delete expired STACK Input Helper sessions';
+$string['taskcleanupexpiredsessions'] = 'Delete expired Hand2STACK sessions';
 $string['invalidfiletype'] = 'Invalid file type. Please upload a JPG, PNG, or WebP image.';
 $string['filetoolarge'] = 'The uploaded image is too large.';
 $string['emptyuploadedfile'] = 'The uploaded image is empty.';
@@ -53,7 +53,7 @@ $string['invaliduploadedfile'] = 'The uploaded file is invalid.';
 $string['curlrequired'] = 'The PHP cURL extension is required.';
 $string['mathpixrequestfailed'] = 'The Mathpix request failed.';
 $string['mathpixinvalidresponse'] = 'Mathpix returned an invalid response.';
-$string['pluginnotenabled'] = 'STACK Input Helper is disabled.';
+$string['pluginnotenabled'] = 'Hand2STACK is disabled.';
 $string['mobilenotenabled'] = 'Mobile upload is disabled.';
 $string['sessionexpired'] = 'This mobile upload session has expired.';
 $string['mobileuploadinstructions'] = 'Take a photo of a mathematical expression. The result will be sent back to the Moodle page that created this session.';

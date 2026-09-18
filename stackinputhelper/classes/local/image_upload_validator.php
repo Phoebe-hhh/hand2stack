@@ -7,7 +7,7 @@
 // (at your option) any later version.
 
 /**
- * classes local image upload validator.php for STACK Input Helper.
+ * classes local image upload validator.php for Hand2STACK.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang

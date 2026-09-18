@@ -7,7 +7,7 @@
 // (at your option) any later version.
 
 /**
- * lib.php for STACK Input Helper.
+ * lib.php for Hand2STACK.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang

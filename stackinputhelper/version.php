@@ -7,7 +7,7 @@
 // (at your option) any later version.
 
 /**
- * version.php for STACK Input Helper.
+ * version.php for Hand2STACK.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang
@@ -16,7 +16,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_stackinputhelper';
-$plugin->version   = 2026091500;
+$plugin->version   = 2026091800;
 $plugin->requires  = 2024042200;
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release = '0.2.11-alpha';
+$plugin->release = '0.2.12-alpha';

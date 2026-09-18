@@ -36,7 +36,7 @@ git archive \
 
 previous_tag="$(git tag --list 'v*' --sort=-version:refname | awk -v current="$tag" '$0 != current {print; exit}')"
 {
-  echo "# STACK Input Helper ${tag}"
+  echo "# Hand2STACK ${tag}"
   echo
   echo "Generated from commit \`${commit}\`."
   echo

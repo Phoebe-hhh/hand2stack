@@ -7,7 +7,7 @@
 // (at your option) any later version.
 
 /**
- * classes local hook callbacks.php for STACK Input Helper.
+ * classes local hook callbacks.php for Hand2STACK.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang

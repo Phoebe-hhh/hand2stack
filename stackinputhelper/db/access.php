@@ -7,7 +7,7 @@
 // (at your option) any later version.
 
 /**
- * Capability definitions for STACK Input Helper.
+ * Capability definitions for Hand2STACK.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang

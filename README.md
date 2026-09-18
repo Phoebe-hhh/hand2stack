@@ -1,14 +1,16 @@
-# STACK Input Helper
+# Hand2STACK
 
-A Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
+**Multimodal Input for STACK**
 
-> **Current pilot release:** [v0.2.11-alpha](https://github.com/Phoebe-hhh/moodle-stack-input-helper/releases/tag/v0.2.11-alpha)
+Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
+
+> **Current pilot release:** [v0.2.11-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.2.11-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download stackinputhelper-v0.2.11-alpha.zip](https://github.com/Phoebe-hhh/moodle-stack-input-helper/releases/download/v0.2.11-alpha/stackinputhelper-v0.2.11-alpha.zip)**
+**[Download stackinputhelper-v0.2.11-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.2.11-alpha/stackinputhelper-v0.2.11-alpha.zip)**
 
 Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `stackinputhelper-v0.2.11-alpha.zip` and contains a single root folder named `stackinputhelper/`.
 
@@ -39,7 +41,7 @@ Do not upload GitHub's automatically generated **Source code** archives to Moodl
 2. In Moodle, open **Site administration → Plugins → Install plugins**.
 3. Upload the ZIP and complete the validation and installation steps.
 4. Visit **Site administration → Notifications** if Moodle requests a database upgrade.
-5. Open **Site administration → Plugins → Local plugins → STACK Input Helper**.
+5. Open **Site administration → Plugins → Local plugins → Hand2STACK**.
 6. Enable the plugin and enter the Mathpix App ID and App Key.
 7. Leave **Mobile public base URL** empty for normal installations.
 8. Purge Moodle caches.

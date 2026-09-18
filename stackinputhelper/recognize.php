@@ -7,7 +7,7 @@
 // (at your option) any later version.
 
 /**
- * recognize.php for STACK Input Helper.
+ * recognize.php for Hand2STACK.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang

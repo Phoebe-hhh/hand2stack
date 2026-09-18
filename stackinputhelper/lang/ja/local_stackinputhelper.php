@@ -7,19 +7,19 @@
 // (at your option) any later version.
 
 /**
- * lang ja local stackinputhelper.php for STACK Input Helper.
+ * lang ja local stackinputhelper.php for Hand2STACK.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-$string['pluginname'] = 'STACK Input Helper';
+$string['pluginname'] = 'Hand2STACK';
 $string['mathpixappid'] = 'Mathpix App ID';
 $string['mathpixappid_desc'] = 'Moodleプラグインのバックエンドで使用するMathpix App IDです。';
 $string['mathpixappkey'] = 'Mathpix App Key';
 $string['mathpixappkey_desc'] = 'Mathpix App Keyです。この値はMoodle設定に保存され、ブラウザには送信されません。';
-$string['enabled'] = 'STACK Input Helperを有効にする';
-$string['enabled_desc'] = 'STACK Input Helperプラグインを有効または無効にします。';
+$string['enabled'] = 'Hand2STACKを有効にする';
+$string['enabled_desc'] = 'Hand2STACKプラグインを有効または無効にします。';
 $string['maxfilesize'] = '最大画像サイズ';
 $string['maxfilesize_desc'] = 'アップロードできる画像サイズの上限（MB）です。';
 $string['enablemobile'] = 'モバイルアップロードを有効にする';
@@ -33,7 +33,7 @@ $string['uploading'] = '認識中...';
 $string['nofieldfound'] = '表示中の解答入力欄が見つかりませんでした。';
 $string['recognizefailed'] = '認識に失敗しました。';
 $string['requestfailed'] = 'The request could not be completed. Please try again or contact the administrator.';
-$string['taskcleanupexpiredsessions'] = 'Delete expired STACK Input Helper sessions';
+$string['taskcleanupexpiredsessions'] = 'Delete expired Hand2STACK sessions';
 $string['invalidfiletype'] = 'JPG、PNG、またはWebP画像をアップロードしてください。';
 $string['filetoolarge'] = 'アップロードされた画像が大きすぎます。';
 $string['emptyuploadedfile'] = 'アップロードされた画像が空です。';
@@ -46,7 +46,7 @@ $string['invaliduploadedfile'] = 'アップロードされたファイルが無�
 $string['curlrequired'] = 'PHP cURL拡張が必要です。';
 $string['mathpixrequestfailed'] = 'Mathpixへのリクエストに失敗しました。';
 $string['mathpixinvalidresponse'] = 'Mathpixから無効なレスポンスが返されました。';
-$string['pluginnotenabled'] = 'STACK Input Helperは無効です。';
+$string['pluginnotenabled'] = 'Hand2STACKは無効です。';
 $string['mobilenotenabled'] = 'モバイルアップロードは無効です。';
 $string['sessionexpired'] = 'このモバイルアップロードセッションは期限切れです。';
 $string['mobileuploadinstructions'] = '数式の写真を撮影してください。認識結果は、このセッションを作成したMoodleページへ送信されます。';

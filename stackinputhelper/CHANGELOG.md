@@ -1,5 +1,13 @@
 # Changelog
 
+Hand2STACK was previously known as STACK Input Helper. The internal Moodle component name
+`local_stackinputhelper` remains unchanged so existing installations can upgrade safely.
+
+## 0.2.12-alpha - 2026-09-18
+
+- Rename the plugin to Hand2STACK.
+- Keep `local_stackinputhelper` as the internal Moodle component name for upgrade compatibility.
+
 ## 0.2.11-alpha
 
 - Synchronize the tested mobile, handwriting, eraser, and resizable-canvas implementation into the release source.
@@ -8,7 +16,7 @@
 - Hide internal exception details from API clients while retaining server-side logging.
 - Require Moodle 4.4 or later for the output hook API.
 
-All notable user-facing changes to STACK Input Helper are recorded here.
+All notable user-facing changes to Hand2STACK are recorded here.
 
 ## 0.2.10-alpha - 2026-09-14
 

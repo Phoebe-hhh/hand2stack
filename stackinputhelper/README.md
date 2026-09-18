@@ -1,6 +1,8 @@
-# STACK Input Helper
+# Hand2STACK
 
-STACK Input Helper is a Moodle local plugin that adds image-based mathematical expression input support for STACK questions.
+**Multimodal Input for STACK**
+
+Hand2STACK is a Moodle local plugin that adds multimodal mathematical expression input support for STACK questions.
 
 The plugin now calls Mathpix directly from Moodle PHP. A separate Node.js service, external recognizer API, port `3001`, `pm2`, or `systemd` process is not required for normal deployment.
 
@@ -20,7 +22,7 @@ Installation:
 1. Open the latest GitHub Release and download `stackinputhelper-vX.Y.Z.zip` from **Assets**. Do not use GitHub's automatically generated "Source code" archives.
 2. In Moodle, open `Site administration > Plugins > Install plugins` and upload the ZIP.
 3. Complete the installation from `Site administration > Notifications`.
-4. Open `Site administration > Plugins > Local plugins > STACK Input Helper`.
+4. Open `Site administration > Plugins > Local plugins > Hand2STACK`.
 5. Enable the plugin and enter the Mathpix App ID and App Key.
 6. Leave `Mobile public base URL` empty for normal deployments, including Moodle installations under paths such as `/projects`.
 7. Purge Moodle caches, then open a STACK question preview or quiz attempt and verify image upload, handwriting, recognition, and answer insertion.
@@ -92,7 +94,7 @@ Follow the Moodle plugin installation or upgrade prompts.
 Configure the plugin from:
 
 ```text
-Site administration > Plugins > Local plugins > STACK Input Helper
+Site administration > Plugins > Local plugins > Hand2STACK
 ```
 
 Required settings:
@@ -178,8 +180,8 @@ amd/build/main.min.js
 Update `version.php` and `CHANGELOG.md`, merge the change into the release branch, and push a matching version tag:
 
 ```bash
-git tag v0.2.11-alpha
-git push origin v0.2.11-alpha
+git tag v0.2.12-alpha
+git push origin v0.2.12-alpha
 ```
 
 The GitHub Actions workflow then checks PHP syntax and creates a GitHub Release containing:
@@ -195,5 +197,5 @@ The workflow refuses to publish if the tag does not match `$plugin->release` in 
 Current version:
 
 ```text
-0.2.11-alpha
+0.2.12-alpha
 ```

@@ -7,7 +7,7 @@
 // (at your option) any later version.
 
 /**
- * mobile.php for STACK Input Helper.
+ * mobile.php for Hand2STACK.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang

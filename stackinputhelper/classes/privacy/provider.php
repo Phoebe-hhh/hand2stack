@@ -7,7 +7,7 @@
 // (at your option) any later version.
 
 /**
- * classes privacy provider.php for STACK Input Helper.
+ * classes privacy provider.php for Hand2STACK.
  *
  * @package    local_stackinputhelper
  * @copyright  2026 Phoebe Huang
