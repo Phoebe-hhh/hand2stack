@@ -52,6 +52,14 @@ if ($hassiteconfig) {
             PARAM_INT
         ));
 
+        $settings->add(new admin_setting_configtext(
+            'local_stackinputhelper/ratelimit',
+            get_string('ratelimit', 'local_stackinputhelper'),
+            get_string('ratelimit_desc', 'local_stackinputhelper'),
+            20,
+            PARAM_INT
+        ));
+
         $settings->add(new admin_setting_configcheckbox(
             'local_stackinputhelper/enablemobile',
             get_string('enablemobile', 'local_stackinputhelper'),

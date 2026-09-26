@@ -28,6 +28,8 @@ try {
         throw new moodle_exception('pluginnotenabled', 'local_stackinputhelper');
     }
 
+    \local_stackinputhelper\local\request_limiter::enforce();
+
     $json = required_param('strokes', PARAM_RAW);
     $strokes = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
     if (!is_array($strokes)) {

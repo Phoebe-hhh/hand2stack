@@ -28,14 +28,37 @@ try {
         throw new moodle_exception('pluginnotenabled', 'local_stackinputhelper');
     }
 
-    $latex = required_param('latex', PARAM_RAW_TRIMMED);
-    if ($latex === '') {
+    $ascii = optional_param('ascii', '', PARAM_RAW_TRIMMED);
+    $latex = optional_param('latex', '', PARAM_RAW_TRIMMED);
+    if ($ascii === '' && $latex === '') {
         throw new moodle_exception('emptylatex', 'local_stackinputhelper');
+    }
+
+    $stack = $ascii !== ''
+        ? \local_stackinputhelper\local\stack_converter::normalize_ascii($ascii)
+        : \local_stackinputhelper\local\stack_converter::normalize_selection($latex);
+    if ($stack === '') {
+        throw new moodle_exception('invalidstackexpression', 'local_stackinputhelper');
+    }
+
+    $stackastfile = $CFG->dirroot . '/question/type/stack/stack/cas/ast.container.class.php';
+    if (!is_readable($stackastfile)) {
+        throw new moodle_exception('stackvalidationunavailable', 'local_stackinputhelper');
+    }
+    require_once($stackastfile);
+    $ast = \stack_ast_container::make_from_student_source(
+        $stack,
+        'local_stackinputhelper',
+        new \stack_cas_security()
+    );
+    if (!$ast->get_valid()) {
+        throw new moodle_exception('invalidstackexpression', 'local_stackinputhelper');
     }
 
     echo json_encode([
         'success' => true,
-        'stack' => \local_stackinputhelper\local\stack_converter::normalize_selection($latex),
+        'stack' => $stack,
+        'valid' => true,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $error) {
     \local_stackinputhelper\local\api_response::send_error($error);

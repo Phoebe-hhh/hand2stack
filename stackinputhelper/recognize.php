@@ -28,6 +28,8 @@ try {
         throw new moodle_exception('pluginnotenabled', 'local_stackinputhelper');
     }
 
+    \local_stackinputhelper\local\request_limiter::enforce();
+
     $upload = \local_stackinputhelper\local\image_upload_validator::validate($_FILES['image'] ?? []);
 
     $result = \local_stackinputhelper\local\mathpix_client::recognize(

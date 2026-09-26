@@ -181,4 +181,20 @@ final class stack_converter_test extends \advanced_testcase {
             ],
         ];
     }
+
+    /**
+     * @dataProvider edited_ascii_cases
+     */
+    public function test_normalize_edited_ascii(string $ascii, string $expected): void {
+        $this->assertSame($expected, stack_converter::normalize_ascii($ascii));
+    }
+
+    public static function edited_ascii_cases(): array {
+        return [
+            'adjacent groups' => ['(x+1)(x-1)', '(x+1)*(x-1)'],
+            'number before group' => ['2(x+1)', '2*(x+1)'],
+            'absolute value' => ['|x-1|', 'abs(x-1)'],
+            'unicode minus' => ['x=−1', 'x=-1'],
+        ];
+    }
 }

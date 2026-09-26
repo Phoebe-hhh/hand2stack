@@ -4,15 +4,15 @@
 
 Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-> **Current pilot release:** [v0.2.11-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.2.11-alpha)
+> **Current pilot release:** [v0.2.14-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.2.14-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download stackinputhelper-v0.2.11-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.2.11-alpha/stackinputhelper-v0.2.11-alpha.zip)**
+**[Download stackinputhelper-v0.2.14-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.2.14-alpha/stackinputhelper-v0.2.14-alpha.zip)**
 
-Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `stackinputhelper-v0.2.11-alpha.zip` and contains a single root folder named `stackinputhelper/`.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `stackinputhelper-v0.2.14-alpha.zip` and contains a single root folder named `stackinputhelper/`.
 
 ## Features
 
@@ -22,7 +22,11 @@ Do not upload GitHub's automatically generated **Source code** archives to Moodl
 - Take a photo on a phone or tablet.
 - Scan a Moodle-generated QR code to upload from another device.
 - Review multiple recognized lines and select the intended answer.
-- Select part of a recognized formula or edit the STACK preview manually.
+- Edit the selected ASCII result, inspect its synchronized LaTeX form, and restore the original OCR value.
+- Validate edited algebraic expressions with STACK's parser before insertion.
+- Preserve complete multiline working automatically in STACK 4.13+ free-text inputs.
+- Select part of a recognized formula and insert only the confirmed STACK expression.
+- Prevent stale recognition requests from replacing newer results and limit recognition requests per user.
 - Keep Mathpix credentials on the Moodle server rather than in browser JavaScript.
 - Automatically remove expired mobile-upload sessions with a Moodle scheduled task.
 
@@ -61,8 +65,8 @@ Then visit **Site administration → Notifications**. When upgrading manually, b
 
 1. Choose image upload, handwriting, or mobile upload beside a STACK answer field.
 2. Submit the image or handwritten strokes for recognition.
-3. Review the recognized result and select the relevant line or symbols.
-4. Correct the generated STACK expression if necessary.
+3. For an algebraic input, select the relevant line or symbols; for a free-text input, review the complete multiline working.
+4. Correct the selected recognized ASCII expression or free-text working if necessary.
 5. Insert the confirmed expression into the answer field.
 
 The plugin does not submit the quiz answer automatically.
@@ -92,4 +96,4 @@ See the [plugin README](stackinputhelper/README.md) for development details, con
 
 ## Status
 
-Version `0.2.11-alpha` is intended for controlled pilot testing. The current automated test suite covers release packaging invariants, handwriting controls, mobile input behavior, endpoint safety, and session cleanup.
+Version `0.2.14-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.

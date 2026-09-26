@@ -22,9 +22,19 @@ require_capability('local/stackinputhelper:use', context_system::instance());
 
 global $DB, $PAGE, $OUTPUT, $USER;
 
+if (!get_config('local_stackinputhelper', 'enabled')) {
+    throw new moodle_exception('pluginnotenabled', 'local_stackinputhelper');
+}
+if (!get_config('local_stackinputhelper', 'enablemobile')) {
+    throw new moodle_exception('mobilenotenabled', 'local_stackinputhelper');
+}
+
 $record = $DB->get_record('local_stackinputhelper_sess', ['sessionid' => $sessionid], '*', MUST_EXIST);
 if ((int)$record->userid !== (int)$USER->id) {
     throw new moodle_exception('nopermissions', 'error', '', get_string('view'));
+}
+if ((int)$record->expiresat < time()) {
+    throw new moodle_exception('sessionexpired', 'local_stackinputhelper');
 }
 
 $PAGE->set_url(new moodle_url('/local/stackinputhelper/mobile.php', ['session' => $sessionid]));

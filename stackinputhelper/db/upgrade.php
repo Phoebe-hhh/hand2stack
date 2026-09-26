@@ -61,5 +61,13 @@ function xmldb_local_stackinputhelper_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026091500, 'local', 'stackinputhelper');
     }
 
+    if ($oldversion < 2026092300) {
+        upgrade_plugin_savepoint(true, 2026092300, 'local', 'stackinputhelper');
+    }
+
+    if ($oldversion < 2026092400) {
+        upgrade_plugin_savepoint(true, 2026092400, 'local', 'stackinputhelper');
+    }
+
     return true;
 }

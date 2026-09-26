@@ -18,6 +18,17 @@ namespace local_stackinputhelper\local;
 defined('MOODLE_INTERNAL') || die();
 
 final class stack_converter {
+    /**
+     * Normalize user-edited ASCII/STACK-like input on the server.
+     *
+     * @param string $input Edited input.
+     * @return string STACK-compatible expression.
+     */
+    public static function normalize_ascii(string $input): string {
+        $input = str_replace(['−', '–', '—', '＝'], ['-', '-', '-', '='], trim($input));
+        return self::normalize($input);
+    }
+
     public static function extract_math(string $input): string {
         return self::extract_math_candidate($input);
     }

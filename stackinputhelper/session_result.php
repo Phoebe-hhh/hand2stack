@@ -25,6 +25,13 @@ header('Content-Type: application/json; charset=utf-8');
 try {
     global $DB, $USER;
 
+    if (!get_config('local_stackinputhelper', 'enabled')) {
+        throw new moodle_exception('pluginnotenabled', 'local_stackinputhelper');
+    }
+    if (!get_config('local_stackinputhelper', 'enablemobile')) {
+        throw new moodle_exception('mobilenotenabled', 'local_stackinputhelper');
+    }
+
     $sessionid = required_param('session', PARAM_ALPHANUMEXT);
     $record = $DB->get_record('local_stackinputhelper_sess', ['sessionid' => $sessionid], '*', MUST_EXIST);
 
@@ -32,7 +39,7 @@ try {
         throw new moodle_exception('nopermissions', 'error', '', get_string('view'));
     }
 
-    if ((int)$record->expiresat < time() && $record->status !== 'done') {
+    if ((int)$record->expiresat < time()) {
         $record->status = 'expired';
         $record->timemodified = time();
         $DB->update_record('local_stackinputhelper_sess', $record);

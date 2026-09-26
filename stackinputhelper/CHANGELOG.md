@@ -3,6 +3,24 @@
 Hand2STACK was previously known as STACK Input Helper. The internal Moodle component name
 `local_stackinputhelper` remains unchanged so existing installations can upgrade safely.
 
+## Unreleased
+
+## 0.2.14-alpha - 2026-09-26
+
+- Keep the handwriting canvas and recognition panel within the Moodle question width, and preserve stroke geometry when surrounding layout changes.
+- Validate edited ASCII on the server with STACK's parser before inserting it into the answer field.
+- Prevent stale image, handwriting, and mobile results from replacing a newer recognition result.
+- Serialize mobile polling, surface connection failures, and stop after repeated polling errors.
+- Add configurable per-user recognition rate limiting and safe, actionable API error messages.
+- Clean up document listeners, observers, polling timers, and hidden file inputs when a question is removed.
+- Reject expired mobile sessions before the user takes a photo and associate candidate labels with their radio controls.
+- Replace the combined OCR format dump with matching per-line ASCII editors and read-only LaTeX rows.
+- Mark corrected OCR lines, support one-click restore, and debounce updates to the selected STACK preview without changing the selected line.
+- Use a compact width for ordinary single-line STACK answer fields.
+- Detect STACK free-text inputs and keep the complete multiline OCR working instead of selecting only one answer line.
+- Insert Mathpix AsciiMath as an editable displayed-math block, with a LaTeX fallback when ASCII is unavailable.
+- Preserve the existing line and partial-expression selection workflow for algebraic inputs.
+
 ## 0.2.12-alpha - 2026-09-18
 
 - Rename the plugin to Hand2STACK.
