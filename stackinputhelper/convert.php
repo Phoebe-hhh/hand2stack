@@ -42,9 +42,11 @@ try {
     }
 
     $stackastfile = $CFG->dirroot . '/question/type/stack/stack/cas/ast.container.class.php';
-    if (!is_readable($stackastfile)) {
+    $stackcaserrorfile = $CFG->dirroot . '/question/type/stack/stack/cas/caserror.class.php';
+    if (!is_readable($stackastfile) || !is_readable($stackcaserrorfile)) {
         throw new moodle_exception('stackvalidationunavailable', 'local_stackinputhelper');
     }
+    require_once($stackcaserrorfile);
     require_once($stackastfile);
     $ast = \stack_ast_container::make_from_student_source(
         $stack,

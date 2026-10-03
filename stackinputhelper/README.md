@@ -6,7 +6,7 @@ Hand2STACK is a Moodle local plugin that adds multimodal mathematical expression
 
 The plugin now calls Mathpix directly from Moodle PHP. A separate Node.js service, external recognizer API, port `3001`, `pm2`, or `systemd` process is not required for normal deployment.
 
-The current interaction is designed as a human-in-the-loop confirmation step. The plugin recognizes the full image, displays candidate lines, recommends the final line by default, and lets the student confirm or refine the answer before insertion.
+The current interaction is designed as a human-in-the-loop confirmation step. The plugin recognizes the full image, structures mathematical candidate lines without treating any candidate as the answer, and lets the student choose or refine what to insert. Free-text STACK extractors continue to receive the complete working.
 
 ## Quick Installation for Moodle Administrators
 
@@ -37,7 +37,9 @@ If Moodle reports that the destination directory already exists and ZIP upgrades
 - Sends uploaded images from Moodle PHP to Mathpix.
 - Displays multi-line recognition results instead of immediately submitting a single OCR result.
 - Detects STACK free-text inputs and preserves all recognized lines as editable displayed AsciiMath.
-- Selects the final recognized line as the recommended answer by default.
+- Keeps the Free-text review compact by showing the original work and one complete editable transcription, without a redundant candidate list.
+- Classifies recognized lines as text, equation, expression, approximation, or condition without inferring which is the answer.
+- Preserves approximate values as normalized candidates with an `approximate` relation instead of discarding them.
 - Lets users choose a different line, drag-select part of a line, or edit the selected recognized ASCII expression.
 - Lets users correct each recognized ASCII line directly, marks changed lines, and restores the original OCR value on request.
 - Shows recognized LaTeX as matching read-only rows instead of one combined debug-style value.
@@ -60,7 +62,7 @@ x + 1 = 0
 x = -1
 ```
 
-the plugin displays each recognized line separately and marks the final line as the recommended answer. The student can select another line if needed. The selected line is then converted to STACK syntax in the editable preview before insertion.
+the plugin displays each recognized line separately and waits for the student to select one. The selected line is then converted to STACK syntax in the editable preview before insertion. A candidate is never treated as an answer merely because it is the last line.
 
 For a STACK 4.13 or later free-text input, the workflow changes automatically: the plugin keeps the complete multiline Mathpix ASCII result, wraps it as a displayed AsciiMath block, and presents one editable working preview. Applying the preview inserts the whole mathematical process; no answer-line selector is shown. Algebraic inputs continue to use the line-selection workflow above.
 

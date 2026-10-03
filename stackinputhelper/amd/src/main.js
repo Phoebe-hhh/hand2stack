@@ -41,12 +41,28 @@ define([], function() {
         selectanswer: 'Select the answer to insert into STACK:',
         recognizedworking: 'Recognized mathematical working. Review or edit it before inserting:',
         selectpart: 'Click a symbol, or drag across the formula to select a range.',
-        recommendedanswer: 'Recommended',
+        recommendedanswer: 'Suggested',
+        approximation: 'Approximation',
+        detectedcandidates: 'Detected mathematical candidates (not automatically treated as answers)',
         edited: 'Edited',
         restoreocr: 'Restore OCR result',
         stackpreview: 'STACK input preview:',
         convertedstack: 'Converted for STACK:',
         freetextpreview: 'Free-text working preview:',
+        originalwork: 'Original work',
+        confirmrecognition: 'Review recognized content',
+        freetextworkflow: 'Photo / iPad handwriting → Free text',
+        recognizedfullanswer: 'Complete recognized answer · editable',
+        freetexthelp: 'Edit text directly; formulas use ASCII math markers. Paragraphs and line breaks are preserved.',
+        editedhighlighthelp: 'Blue text shows your changes.',
+        directsubmithelp: 'Edits here are used directly as your Free-text answer.',
+        appendhint: 'Keep the existing answer and add this section.',
+        appendfreetext: 'Append to Free text',
+        insertfreetext: 'Insert at cursor',
+        zoomin: 'Zoom in',
+        zoomout: 'Zoom out',
+        resetzoom: 'Reset zoom',
+        dragimage: 'Drag to inspect the enlarged image',
         insertanswer: 'Insert answer',
         rawlatex: 'Raw LaTeX',
         recognizedformat: 'Recognized format:',
@@ -118,7 +134,129 @@ define([], function() {
         return Boolean(input && String(input.dataset.stackInputType || '').toLowerCase() === 'freetext');
     };
 
-    const formatFreeTextWorking = (rawAscii, rawLatex, stackResult, lines) => {
+    // Capture each answer box's own Syntax hint once, at bind time. STACK
+    // renders the hint as either the `placeholder` or, only while the box is
+    // blank, the `value`. A page reloaded with a saved answer has that answer
+    // in `value`, so a value is accepted as a hint only when it looks like a
+    // label ("f(2)=" / "f(2):"), never a saved answer such as "1+2*sqrt(2)".
+    const captureAnswerAnchor = box => {
+        if (isFreeTextInput(box) || box.dataset.stackinputhelperAnchor) {
+            return;
+        }
+        const value = String(box.value || '').trim();
+        const hint = String(box.getAttribute('placeholder') || '').trim()
+            || (/[=:]$/.test(value) ? value : '');
+        if (hint) {
+            box.dataset.stackinputhelperAnchor = hint;
+        }
+    };
+
+    // Other STACK inputs that live in the same question as a free-text box,
+    // so one photo of the full working can also fill in their small answer
+    // boxes (e.g. f(2)= / g(1)= inputs alongside a "show your work" box).
+    const findSiblingAnswerBoxes = answerBox => {
+        const question = answerBox.closest('.que');
+        if (!question) {
+            return [];
+        }
+        return findAnswerBoxes().filter(box => box !== answerBox
+            && question.contains(box)
+            && !isFreeTextInput(box));
+    };
+
+    const normalizeAnchorText = value => {
+        return String(value || '')
+            .replace(/\\\(|\\\)|\$/g, '')
+            .replace(/\s+/g, '')
+            .replace(/[=:]+$/, '');
+    };
+
+    const matchableLineText = line => {
+        return String((line && (line.math || line.raw || line.latex)) || '');
+    };
+
+    // Find the anchor (e.g. "g(1)") at the start of a recognized line and
+    // return just the value after it. The value stops at the next relation
+    // marker, so a restated decimal is dropped. Recognized lines are LaTeX,
+    // e.g. "g(1)=2+\frac{1}{\sqrt{2}} \approx 2.71" -> "2+\frac{1}{\sqrt{2}}".
+    // Whitespace inside the value is kept: collapsing it would turn
+    // "\cdot x" into the unknown command "\cdotx".
+    const extractAnchoredValue = (anchor, lineText) => {
+        const normalizedAnchor = normalizeAnchorText(anchor);
+        if (!normalizedAnchor) {
+            return null;
+        }
+        const anchorPattern = Array.from(normalizedAnchor)
+            .map(char => char.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&'))
+            .join('\\s*');
+        const text = String(lineText || '').replace(/\\(?:left|right)(?![a-zA-Z])/g, '');
+        const head = text.match(new RegExp('^\\s*' + anchorPattern + '\\s*(?:~~|≈|\\\\approx|\\\\simeq|=)\\s*', 'i'));
+        if (!head) {
+            return null;
+        }
+        let rest = text.slice(head[0].length);
+        // "<=", ">=", "!=" and "#=" are part of the value, not a new relation.
+        const next = /(^|[^<>!#:])(?:~~|≈|\\approx|\\simeq|=)/.exec(rest);
+        if (next) {
+            rest = rest.slice(0, next.index + next[1].length);
+        }
+        rest = rest.trim();
+        return rest || null;
+    };
+
+    const flashAutofilledBox = box => {
+        const previousOutline = box.style.outline;
+        box.style.outline = '2px solid #3978c5';
+        window.setTimeout(() => {
+            box.style.outline = previousOutline;
+        }, 2000);
+    };
+
+    // Generic across questions: it never hardcodes which answers a question
+    // needs, it only matches whatever Syntax hints the teacher already set.
+    const applyMatchedAnswers = async (sourceBox, lines, isCurrent = () => true) => {
+        if (!isFreeTextInput(sourceBox) || !Array.isArray(lines) || !lines.length) {
+            return;
+        }
+        const siblings = findSiblingAnswerBoxes(sourceBox)
+            .filter(box => box.dataset.stackinputhelperAnchor);
+
+        for (const box of siblings) {
+            if (!isCurrent()) return;
+            const anchor = box.dataset.stackinputhelperAnchor;
+            const valueBeforeValidation = box.value;
+            let fragment = null;
+            // Scan from the end: when a label is restated after an earlier
+            // derivation step (e.g. "g(1)=..." mid-working, then "g(1)~~..."
+            // as the final answer), the later line is the intended answer.
+            for (let i = lines.length - 1; i >= 0; i--) {
+                fragment = extractAnchoredValue(anchor, matchableLineText(lines[i]));
+                if (fragment) {
+                    break;
+                }
+            }
+            if (!fragment) {
+                continue;
+            }
+            try {
+                const cleanStack = await postLatex(fragment);
+                // Recognition and STACK validation are asynchronous. Never let
+                // an older result, or a result validated while the learner was
+                // typing, replace the current answer.
+                if (!isCurrent()) return;
+                if (cleanStack && box.value === valueBeforeValidation) {
+                    setAnswerValue(box, cleanStack);
+                    flashAutofilledBox(box);
+                }
+            } catch (error) {
+                window.console.warn('[stackinputhelper] anchor match could not be validated:', anchor, error);
+            }
+        }
+    };
+
+    const formatFreeTextWorking = (recognizedText, rawAscii, rawLatex, stackResult, lines) => {
+        const mixedText = String(recognizedText || '').replace(/\r\n?/g, '\n').trim();
+        if (mixedText) return mixedText;
         let working = String(rawAscii || '').replace(/\r\n?/g, '\n').trim();
         if (!working && Array.isArray(lines)) {
             working = lines.map(line => String(line.stack || line.math || line.text || '').trim())
@@ -248,6 +386,103 @@ define([], function() {
         return ta;
     };
 
+    const createChangeHighlighter = textarea => {
+        const wrapper = document.createElement('div');
+        const backdrop = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.background = '#fff';
+        wrapper.style.marginTop = '4px';
+        wrapper.style.marginBottom = '8px';
+        backdrop.setAttribute('aria-hidden', 'true');
+        backdrop.style.cssText = [
+            'position:absolute', 'inset:0', 'overflow:hidden', 'pointer-events:none',
+            'z-index:2', 'white-space:pre-wrap', 'overflow-wrap:break-word',
+            'color:#1f2937', 'background:transparent'
+        ].join(';');
+        textarea.style.position = 'relative';
+        textarea.style.zIndex = '1';
+        textarea.style.margin = '0';
+        textarea.style.background = 'transparent';
+        wrapper.append(backdrop, textarea);
+
+        let previousValue = '';
+        let edited = [];
+        const render = () => {
+            backdrop.replaceChildren();
+            let start = 0;
+            for (let i = 0; i <= previousValue.length; i++) {
+                if (i < previousValue.length && edited[i] === edited[start]) continue;
+                const span = document.createElement('span');
+                span.textContent = previousValue.slice(start, i);
+                if (edited[start]) {
+                    span.style.color = '#0b63ce';
+                }
+                backdrop.appendChild(span);
+                start = i;
+            }
+            if (previousValue.endsWith('\n')) backdrop.appendChild(document.createTextNode('\n '));
+            backdrop.scrollTop = textarea.scrollTop;
+            backdrop.scrollLeft = textarea.scrollLeft;
+        };
+        const syncMetrics = () => {
+            const style = window.getComputedStyle(textarea);
+            ['padding', 'border', 'font', 'fontSize', 'fontFamily', 'fontWeight', 'lineHeight',
+                'letterSpacing', 'textAlign', 'boxSizing', 'borderRadius'].forEach(property => {
+                backdrop.style[property] = style[property];
+            });
+            backdrop.style.width = textarea.offsetWidth + 'px';
+            backdrop.style.height = textarea.offsetHeight + 'px';
+        };
+        const reset = value => {
+            previousValue = String(value || '');
+            edited = Array(previousValue.length).fill(false);
+            render();
+            window.requestAnimationFrame(syncMetrics);
+        };
+        const compare = (originalValue, currentValue) => {
+            const original = String(originalValue || '');
+            const current = String(currentValue || '');
+            let prefix = 0;
+            while (prefix < original.length && prefix < current.length
+                    && original[prefix] === current[prefix]) prefix++;
+            let originalSuffix = original.length;
+            let currentSuffix = current.length;
+            while (originalSuffix > prefix && currentSuffix > prefix
+                    && original[originalSuffix - 1] === current[currentSuffix - 1]) {
+                originalSuffix--;
+                currentSuffix--;
+            }
+            previousValue = current;
+            edited = Array(current.length).fill(false);
+            for (let i = prefix; i < currentSuffix; i++) edited[i] = true;
+            render();
+            window.requestAnimationFrame(syncMetrics);
+        };
+        textarea.addEventListener('input', () => {
+            const nextValue = textarea.value;
+            let prefix = 0;
+            while (prefix < previousValue.length && prefix < nextValue.length
+                    && previousValue[prefix] === nextValue[prefix]) prefix++;
+            let oldSuffix = previousValue.length;
+            let newSuffix = nextValue.length;
+            while (oldSuffix > prefix && newSuffix > prefix
+                    && previousValue[oldSuffix - 1] === nextValue[newSuffix - 1]) {
+                oldSuffix--;
+                newSuffix--;
+            }
+            edited = edited.slice(0, prefix)
+                .concat(Array(newSuffix - prefix).fill(true), edited.slice(oldSuffix));
+            previousValue = nextValue;
+            render();
+        });
+        textarea.addEventListener('scroll', render);
+        if (typeof ResizeObserver !== 'undefined') {
+            const observer = new ResizeObserver(syncMetrics);
+            observer.observe(textarea);
+        }
+        return {wrapper, backdrop, reset, compare, syncMetrics};
+    };
+
     const createResultPanel = () => {
         const panel = document.createElement('div');
         const choiceName = 'local-stackinputhelper-line-choice-' + Math.random().toString(36).slice(2);
@@ -263,6 +498,22 @@ define([], function() {
         panel.style.maxWidth = '100%';
         panel.style.minWidth = '0';
         panel.style.boxSizing = 'border-box';
+
+        const freeTextHeader = document.createElement('div');
+        freeTextHeader.style.display = 'none';
+        freeTextHeader.style.justifyContent = 'space-between';
+        freeTextHeader.style.alignItems = 'center';
+        freeTextHeader.style.gap = '16px';
+        freeTextHeader.style.flexWrap = 'wrap';
+        freeTextHeader.style.marginBottom = '18px';
+        const freeTextHeading = document.createElement('strong');
+        freeTextHeading.textContent = config.confirmrecognition || 'Review recognized content';
+        freeTextHeading.style.fontSize = '18px';
+        const freeTextWorkflow = document.createElement('span');
+        freeTextWorkflow.textContent = config.freetextworkflow || 'Photo / iPad handwriting → Free text';
+        freeTextWorkflow.style.color = '#667085';
+        freeTextWorkflow.style.fontSize = '14px';
+        freeTextHeader.append(freeTextHeading, freeTextWorkflow);
 
         const title = document.createElement('div');
         title.textContent = config.recognizedresults || 'Recognized results';
@@ -323,6 +574,7 @@ define([], function() {
         stackTitle.style.display = 'block';
         stackTitle.style.fontWeight = 'bold';
         const stackTextarea = createTextarea('', false);
+        const changeHighlighter = createChangeHighlighter(stackTextarea);
         const stackTextareaId = 'local-stackinputhelper-stack-preview-' + Math.random().toString(36).slice(2);
         stackTextarea.id = stackTextareaId;
         stackTitle.setAttribute('for', stackTextareaId);
@@ -334,6 +586,50 @@ define([], function() {
         applyBtn.style.cursor = 'pointer';
         applyBtn.style.display = 'block';
         applyBtn.style.marginLeft = 'auto';
+
+        const insertBtn = document.createElement('button');
+        insertBtn.type = 'button';
+        insertBtn.textContent = config.insertfreetext || 'Insert at cursor';
+        insertBtn.style.padding = '4px 8px';
+        insertBtn.style.cursor = 'pointer';
+        insertBtn.style.display = 'none';
+
+        const actionButtons = document.createElement('div');
+        actionButtons.style.display = 'flex';
+        actionButtons.style.justifyContent = 'flex-end';
+        actionButtons.style.gap = '8px';
+        actionButtons.append(insertBtn, applyBtn);
+
+        const freeTextHelp = document.createElement('div');
+        freeTextHelp.textContent = (config.freetexthelp
+            || 'Edit text directly; formulas use ASCII math markers. Paragraphs and line breaks are preserved.')
+            + ' ' + (config.editedhighlighthelp || 'Blue text shows your changes.')
+            + ' ' + (config.directsubmithelp || 'Edits here are used directly as your Free-text answer.');
+        freeTextHelp.style.display = 'none';
+        freeTextHelp.style.color = '#667085';
+        freeTextHelp.style.fontSize = '13px';
+        freeTextHelp.style.marginTop = '8px';
+
+        const candidateSummary = document.createElement('div');
+        candidateSummary.style.display = 'none';
+        candidateSummary.style.marginBottom = '14px';
+        const candidateSummaryTitle = document.createElement('div');
+        candidateSummaryTitle.textContent = config.detectedcandidates
+            || 'Detected mathematical candidates (not automatically treated as answers)';
+        candidateSummaryTitle.style.fontWeight = 'bold';
+        candidateSummaryTitle.style.marginBottom = '6px';
+        const candidateSummaryList = document.createElement('div');
+        candidateSummaryList.style.display = 'grid';
+        candidateSummaryList.style.gap = '6px';
+        candidateSummary.append(candidateSummaryTitle, candidateSummaryList);
+
+        const appendHint = document.createElement('div');
+        appendHint.textContent = config.appendhint || 'Keep the existing answer and add this section.';
+        appendHint.style.display = 'none';
+        appendHint.style.color = '#667085';
+        appendHint.style.fontSize = '13px';
+        appendHint.style.marginRight = 'auto';
+        actionButtons.prepend(appendHint);
 
         const requestStatus = document.createElement('div');
         requestStatus.setAttribute('role', 'status');
@@ -353,7 +649,99 @@ define([], function() {
         const candidateColumn = document.createElement('section');
         candidateColumn.style.minWidth = '0';
         candidateColumn.style.overflow = 'hidden';
-        candidateColumn.append(title, instruction, options);
+        const sourceTitle = document.createElement('div');
+        sourceTitle.textContent = config.originalwork || 'Original work';
+        sourceTitle.style.fontWeight = 'bold';
+        sourceTitle.style.marginBottom = '8px';
+        sourceTitle.style.display = 'none';
+        const sourcePreview = document.createElement('img');
+        sourcePreview.alt = config.originalwork || 'Original work';
+        sourcePreview.draggable = false;
+        sourcePreview.style.display = 'block';
+        sourcePreview.style.width = '100%';
+        sourcePreview.style.height = '520px';
+        sourcePreview.style.objectFit = 'contain';
+        sourcePreview.style.background = '#fff';
+        sourcePreview.style.transformOrigin = 'center center';
+        sourcePreview.style.userSelect = 'none';
+        sourcePreview.style.transition = 'transform 120ms ease-out';
+
+        const sourceViewer = document.createElement('div');
+        sourceViewer.style.display = 'none';
+        sourceViewer.style.position = 'relative';
+        sourceViewer.style.overflow = 'hidden';
+        sourceViewer.style.background = '#fff';
+        sourceViewer.style.border = '1px solid #d8e1e8';
+        sourceViewer.style.borderRadius = '4px';
+        sourceViewer.style.touchAction = 'pan-y';
+        sourceViewer.appendChild(sourcePreview);
+
+        const zoomControls = document.createElement('div');
+        zoomControls.style.cssText = 'position:absolute;right:8px;top:8px;display:flex;gap:4px;z-index:1';
+        const makeZoomButton = (text, label) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = text;
+            button.title = label;
+            button.setAttribute('aria-label', label);
+            button.className = 'btn btn-light';
+            button.style.cssText = 'min-width:34px;height:34px;padding:2px 8px;border:1px solid #aeb8c2;box-shadow:0 1px 3px rgba(0,0,0,.12)';
+            return button;
+        };
+        const zoomOut = makeZoomButton('−', config.zoomout || 'Zoom out');
+        const zoomReset = makeZoomButton('100%', config.resetzoom || 'Reset zoom');
+        const zoomIn = makeZoomButton('+', config.zoomin || 'Zoom in');
+        zoomControls.append(zoomOut, zoomReset, zoomIn);
+        sourceViewer.appendChild(zoomControls);
+
+        let imageScale = 1;
+        let imageX = 0;
+        let imageY = 0;
+        let imageDrag = null;
+        const renderImageTransform = () => {
+            sourcePreview.style.transform = 'translate3d(' + imageX + 'px,' + imageY + 'px,0) scale(' + imageScale + ')';
+            sourceViewer.style.cursor = imageScale > 1 ? (imageDrag ? 'grabbing' : 'grab') : 'default';
+            sourceViewer.style.touchAction = imageScale > 1 ? 'none' : 'pan-y';
+            zoomOut.disabled = imageScale <= 1;
+            zoomIn.disabled = imageScale >= 4;
+            zoomReset.textContent = Math.round(imageScale * 100) + '%';
+        };
+        const setImageScale = scale => {
+            imageScale = Math.max(1, Math.min(4, Math.round(scale * 4) / 4));
+            if (imageScale === 1) {
+                imageX = 0;
+                imageY = 0;
+            }
+            renderImageTransform();
+        };
+        const resetImageView = () => setImageScale(1);
+        zoomOut.addEventListener('click', () => setImageScale(imageScale - 0.25));
+        zoomIn.addEventListener('click', () => setImageScale(imageScale + 0.25));
+        zoomReset.addEventListener('click', resetImageView);
+        sourceViewer.addEventListener('pointerdown', event => {
+            if (imageScale <= 1 || event.target.closest('button')) return;
+            event.preventDefault();
+            imageDrag = {id: event.pointerId, x: event.clientX, y: event.clientY, imageX, imageY};
+            renderImageTransform();
+        });
+        sourceViewer.addEventListener('pointermove', event => {
+            if (!imageDrag || imageDrag.id !== event.pointerId) return;
+            event.preventDefault();
+            imageX = imageDrag.imageX + event.clientX - imageDrag.x;
+            imageY = imageDrag.imageY + event.clientY - imageDrag.y;
+            renderImageTransform();
+        });
+        const stopImageDrag = event => {
+            if (!imageDrag || imageDrag.id !== event.pointerId) return;
+            imageDrag = null;
+            renderImageTransform();
+        };
+        sourceViewer.addEventListener('pointerup', stopImageDrag);
+        sourceViewer.addEventListener('pointercancel', stopImageDrag);
+        sourceViewer.addEventListener('pointerleave', stopImageDrag);
+        sourceViewer.title = config.dragimage || 'Drag to inspect the enlarged image';
+        renderImageTransform();
+        candidateColumn.append(title, instruction, options, sourceTitle, sourceViewer);
 
         const recognizedColumn = document.createElement('section');
         recognizedColumn.style.minWidth = '0';
@@ -372,13 +760,17 @@ define([], function() {
         convertedColumn.style.borderTop = '1px solid #e2e6ea';
         convertedColumn.style.marginTop = '10px';
         convertedColumn.style.display = 'none';
-        convertedColumn.append(stackTitle, stackTextarea);
-        recognizedColumn.append(editableHeader, formatRows, rawTextarea, convertedColumn, applyBtn, requestStatus);
+        convertedColumn.append(stackTitle, changeHighlighter.wrapper, freeTextHelp);
+        recognizedColumn.append(editableHeader, formatRows, rawTextarea, candidateSummary,
+            convertedColumn, actionButtons, requestStatus);
         reviewGrid.append(candidateColumn, recognizedColumn);
 
         const updateReviewLayout = () => {
             const width = panel.getBoundingClientRect().width;
-            reviewGrid.style.gridTemplateColumns = !isMobileOrTablet && width >= 820
+            const useColumns = panel._freeTextMode
+                ? !isMobileOrTablet
+                : (!isMobileOrTablet && width >= 820);
+            reviewGrid.style.gridTemplateColumns = useColumns
                 ? 'minmax(0, 1fr) minmax(0, 1fr)'
                 : 'minmax(0, 1fr)';
         };
@@ -388,9 +780,10 @@ define([], function() {
             panel._reviewResizeObserver = observer;
         }
 
-        panel.appendChild(reviewGrid);
+        panel.append(freeTextHeader, reviewGrid);
 
         panel._options = options;
+        panel._freeTextHeader = freeTextHeader;
         panel._instruction = instruction;
         panel._formatTitle = formatTitle;
         panel._formatTabs = formatTabs;
@@ -399,6 +792,10 @@ define([], function() {
         panel._stackTitle = stackTitle;
         panel._reviewGrid = reviewGrid;
         panel._candidateColumn = candidateColumn;
+        panel._sourceTitle = sourceTitle;
+        panel._sourceViewer = sourceViewer;
+        panel._sourcePreview = sourcePreview;
+        panel._resetImageView = resetImageView;
         panel._recognizedColumn = recognizedColumn;
         panel._editableHeader = editableHeader;
         panel._convertedColumn = convertedColumn;
@@ -406,7 +803,14 @@ define([], function() {
         panel._latexTab = latexTab;
         panel._asciiTab = asciiTab;
         panel._stackTextarea = stackTextarea;
+        panel._changeHighlighter = changeHighlighter;
+        panel._actionButtons = actionButtons;
         panel._applyBtn = applyBtn;
+        panel._insertBtn = insertBtn;
+        panel._freeTextHelp = freeTextHelp;
+        panel._candidateSummary = candidateSummary;
+        panel._candidateSummaryList = candidateSummaryList;
+        panel._appendHint = appendHint;
         panel._requestStatus = requestStatus;
         panel._choiceName = choiceName;
 
@@ -515,19 +919,47 @@ define([], function() {
     const asciiToLatexPreview = value => {
         let latex = String(value || '').trim();
         latex = latex.replace(/[−–—]/g, '-');
-        latex = latex.replace(/\babs\(([^()]*)\)/g, '\\left|$1\\right|');
+        // Display an expanded STACK interval in its original chained form.
+        // This keeps the left preview mathematical instead of typesetting
+        // the letters in "and" as variables.
+        latex = latex.replace(
+            /^(.+?)(<=|>=|<|>)(.+?)\s+and\s+\3(<=|>=|<|>)(.+)$/,
+            '$1$2$3$4$5'
+        );
+        let previousLatex = '';
+        while (previousLatex !== latex) {
+            previousLatex = latex;
+            latex = latex.replace(/\babs\(([^()]*)\)/g, '\\left|$1\\right|');
+            latex = latex.replace(/\bsqrt\(([^()]*)\)/g, '\\sqrt{$1}');
+        }
+        latex = latex.replace(
+            /\b(sin|cos|tan|cot|sec|csc|sinh|cosh|tanh|asin|acos|atan|log|ln|exp)\(([^()]*)\)/g,
+            '\\operatorname{$1}\\left($2\\right)'
+        );
         latex = latex.replace(/\(([^()]*)\)\s*\/\s*\(([^()]*)\)/g, '\\frac{$1}{$2}');
+        latex = latex.replace(/\^\s*\(([^()]*)\)/g, '^{$1}');
         latex = latex.replace(/\^\s*\(?\s*([+-]?[A-Za-z0-9]+)\s*\)?/g, '^{$1}');
+        latex = latex.replace(/([A-Za-z0-9.%]+)\s*\/\s*([A-Za-z0-9.%]+)/g, '\\frac{$1}{$2}');
         latex = latex.replace(/\*/g, '\\cdot ');
-        latex = latex.replace(/<=/g, '\\le ').replace(/>=/g, '\\ge ').replace(/!=/g, '\\ne ');
-        latex = latex.replace(/\bpi\b/gi, '\\pi ').replace(/\binfinity\b/gi, '\\infty ');
+        latex = latex.replace(/(?:~~|~=|≈)/g, '\\approx ');
+        latex = latex.replace(/<=/g, '\\le ').replace(/>=/g, '\\ge ')
+            .replace(/(?:!=|#)/g, '\\ne ');
+        latex = latex.replace(/->/g, '\\to ').replace(/(?:\+\/\-|±)/g, '\\pm ');
+        latex = latex.replace(/\band\b/gi, '\\mathrel{\\land}');
+        latex = latex.replace(/\bor\b/gi, '\\mathrel{\\lor}');
+        latex = latex.replace(/\bnot\b/gi, '\\neg ');
+        latex = latex.replace(/\bin\b/gi, '\\in ');
+        latex = latex.replace(/\bminf\b/gi, '-\\infty ');
+        latex = latex.replace(/\b(?:inf|infinity)\b/gi, '\\infty ');
+        latex = latex.replace(/%?\bpi\b/gi, '\\pi ');
+        latex = latex.replace(/%e\b/g, 'e').replace(/%i\b/g, 'i');
         return latex;
     };
 
     const normalizeResultLines = (rawLatex, stackResult, lines) => {
         if (Array.isArray(lines) && lines.length) {
-            const lastIndex = lines.length - 1;
             return lines.map((line, index) => ({
+                raw: String(line.raw || line.latex || line.ascii || '').trim(),
                 latex: String(line.latex || '').trim(),
                 originalLatex: String(line.latex || '').trim(),
                 display: String(line.display || line.latex || '').trim(),
@@ -536,8 +968,11 @@ define([], function() {
                 stack: String(line.stack || line.text || '').trim(),
                 ascii: String(line.ascii || line.stack || line.text || line.math || '').trim(),
                 originalAscii: String(line.ascii || line.stack || line.text || line.math || '').trim(),
+                normalized: String(line.normalized || line.stack || '').trim(),
+                type: String(line.type || 'expression'),
+                relation: line.relation ? String(line.relation) : null,
                 edited: false,
-                recommended: index === lastIndex
+                recommended: false
             })).filter(line => line.latex || line.stack);
         }
 
@@ -549,8 +984,10 @@ define([], function() {
             stack,
             ascii: stack,
             originalAscii: stack,
+            type: 'expression',
+            relation: null,
             edited: false,
-            recommended: true
+            recommended: false
         }] : [];
     };
 
@@ -1256,7 +1693,7 @@ define([], function() {
         return container;
     };
 
-    const updateResultPanel = (panel, rawLatex, rawAscii, stackResult, answerBox, lines) => {
+    const updateResultPanel = (panel, rawLatex, rawAscii, stackResult, answerBox, lines, recognizedText = '', sourceUrl = '') => {
         setRequestStatus(panel);
         window.clearTimeout(panel._dragConversionTimer);
         panel._selectionRequestId = (panel._selectionRequestId || 0) + 1;
@@ -1268,7 +1705,7 @@ define([], function() {
         panel._selectionAbortController = new AbortController();
         const freeTextMode = isFreeTextInput(answerBox);
         const layoutReference = panel._layoutReference;
-        if (layoutReference && layoutReference.offsetParent !== null) {
+        if (!freeTextMode && layoutReference && layoutReference.offsetParent !== null) {
             const referenceWidth = Math.floor(layoutReference.getBoundingClientRect().width);
             if (referenceWidth > 0) {
                 // Freeze both panels at the pre-recognition width. Result content
@@ -1280,6 +1717,12 @@ define([], function() {
             }
         }
         panel.style.display = 'block';
+        panel._freeTextMode = freeTextMode;
+        panel.style.padding = freeTextMode ? '20px' : '12px';
+        panel.style.borderRadius = freeTextMode ? '10px' : '6px';
+        panel.style.background = freeTextMode ? '#fff' : '#f8fbfd';
+        panel.style.width = freeTextMode ? '100%' : panel.style.width;
+        panel._freeTextHeader.style.display = freeTextMode ? 'flex' : 'none';
         panel._instruction.textContent = freeTextMode
             ? (config.recognizedworking || 'Recognized mathematical working. Review or edit it before inserting:')
             : (config.selectanswer || 'Select the answer to insert into STACK:');
@@ -1289,7 +1732,13 @@ define([], function() {
         panel._rawTextarea.style.display = freeTextMode ? 'none' : 'block';
         panel._formatRows.style.display = freeTextMode ? 'none' : 'grid';
         panel._editableHeader.style.display = freeTextMode ? 'none' : 'flex';
-        panel._candidateColumn.style.display = freeTextMode ? 'none' : 'block';
+        panel._candidateColumn.style.display = 'block';
+        panel._sourceTitle.style.display = freeTextMode ? 'block' : 'none';
+        panel._sourceViewer.style.display = freeTextMode && sourceUrl ? 'block' : 'none';
+        panel._sourcePreview.src = freeTextMode && sourceUrl ? sourceUrl : '';
+        if (freeTextMode && sourceUrl) panel._resetImageView();
+        panel._instruction.style.display = freeTextMode ? 'none' : 'block';
+        panel._candidateColumn.firstChild.style.display = freeTextMode ? 'none' : 'block';
         panel._recognizedColumn.style.display = 'block';
         panel._reviewGrid.style.display = 'grid';
         panel._reviewGrid.style.gridTemplateColumns = freeTextMode ? '1fr' : panel._reviewGrid.style.gridTemplateColumns;
@@ -1297,23 +1746,60 @@ define([], function() {
         panel._convertedColumn.style.borderTop = freeTextMode ? '0' : '1px solid #e2e6ea';
         panel._convertedColumn.style.marginTop = freeTextMode ? '0' : '10px';
         panel._convertedColumn.style.display = freeTextMode ? 'block' : 'none';
-        if (!freeTextMode) panel._updateReviewLayout();
+        if (!freeTextMode || sourceUrl) panel._updateReviewLayout();
         panel._stackTitle.textContent = freeTextMode
-            ? (config.freetextpreview || 'Free-text working preview:')
+            ? (config.recognizedfullanswer || 'Complete recognized answer · editable')
             : (config.convertedstack || 'Converted for STACK:');
-        panel._stackTextarea.rows = freeTextMode ? 8 : 1;
+        panel._stackTextarea.rows = freeTextMode ? 14 : 1;
         panel._stackTextarea.readOnly = !freeTextMode;
         panel._stackTextarea.style.resize = freeTextMode ? '' : 'none';
         panel._stackTextarea.style.height = freeTextMode ? '' : '38px';
         panel._stackTextarea.style.minHeight = freeTextMode ? '' : '38px';
-        panel._stackTextarea.style.background = freeTextMode ? '#fff' : '#f3f6f8';
+        panel._stackTextarea.style.background = freeTextMode ? 'transparent' : '#f3f6f8';
+        panel._stackTextarea.style.fontFamily = freeTextMode ? 'inherit' : 'monospace';
+        panel._stackTextarea.style.fontSize = freeTextMode ? '16px' : '13px';
+        panel._stackTextarea.style.lineHeight = freeTextMode ? '1.65' : '';
+        panel._stackTextarea.style.color = freeTextMode ? 'transparent' : '';
+        panel._stackTextarea.style.webkitTextFillColor = freeTextMode ? 'transparent' : '';
+        panel._stackTextarea.style.caretColor = freeTextMode ? '#111827' : '';
+        panel._changeHighlighter.backdrop.style.display = freeTextMode ? 'block' : 'none';
+        panel._freeTextHelp.style.display = freeTextMode ? 'block' : 'none';
+        panel._appendHint.style.display = 'none';
+        panel._actionButtons.style.display = freeTextMode ? 'none' : 'flex';
 
         if (freeTextMode) {
             panel._options.innerHTML = '';
-            panel._stackTextarea.value = formatFreeTextWorking(rawAscii, rawLatex, stackResult, lines);
-            panel._applyBtn.onclick = () => setAnswerValue(answerBox, panel._stackTextarea.value || '');
+            panel._candidateSummaryList.replaceChildren();
+            panel._candidateSummary.style.display = 'none';
+            panel._stackTextarea.value = formatFreeTextWorking(recognizedText, rawAscii, rawLatex, stackResult, lines);
+            panel._changeHighlighter.reset(panel._stackTextarea.value);
+            if (panel._answerBoxDisplay === undefined) {
+                panel._answerBoxDisplay = answerBox.style.display;
+            }
+            answerBox.style.display = 'none';
+            setAnswerValue(answerBox, panel._stackTextarea.value);
+            if (panel._freeTextSyncHandler) {
+                panel._stackTextarea.removeEventListener('input', panel._freeTextSyncHandler);
+            }
+            panel._freeTextSyncHandler = () => {
+                answerBox.value = panel._stackTextarea.value;
+                answerBox.dispatchEvent(new Event('input', {bubbles: true}));
+            };
+            panel._stackTextarea.addEventListener('input', panel._freeTextSyncHandler);
+            panel._stackTextarea.onblur = () => {
+                answerBox.dispatchEvent(new Event('change', {bubbles: true}));
+            };
             return;
         }
+        panel._candidateSummary.style.display = 'none';
+        if (panel._answerBoxDisplay !== undefined) {
+            answerBox.style.display = panel._answerBoxDisplay;
+        }
+        panel._applyBtn.textContent = config.insertanswer || 'Insert answer';
+        panel._applyBtn.className = '';
+        panel._applyBtn.style.padding = '4px 8px';
+        panel._applyBtn.style.marginTop = '';
+        panel._insertBtn.style.display = 'none';
 
         const resultLines = normalizeResultLines(rawLatex, stackResult, lines);
         let defaultIndex = Math.max(0, resultLines.length - 1);
@@ -1383,10 +1869,30 @@ define([], function() {
             field.style.maxHeight = '38px';
             field.style.border = '1px solid #b8c2cc';
             field.style.borderRadius = '3px';
-            field.style.background = line.edited && selectedFormat === 'ascii' ? '#fff8e5' : '#fff';
+            field.style.background = '#fff';
             const fieldId = 'local-stackinputhelper-format-line-' + Math.random().toString(36).slice(2);
             field.id = fieldId;
             label.setAttribute('for', fieldId);
+            const fieldHighlighter = createChangeHighlighter(field);
+            fieldHighlighter.wrapper.style.margin = '0';
+            fieldHighlighter.backdrop.style.whiteSpace = 'pre';
+            if (selectedFormat === 'ascii') {
+                // Moodle themes may apply an !important white input background.
+                // The real input must remain transparent so the coloured diff
+                // backdrop is visible underneath it.
+                field.style.setProperty('background-color', 'transparent', 'important');
+                field.style.setProperty('background-image', 'none', 'important');
+                field.style.setProperty('color', 'transparent', 'important');
+                field.style.setProperty('-webkit-text-fill-color', 'transparent', 'important');
+                field.style.caretColor = '#111827';
+                fieldHighlighter.compare(line.originalAscii, field.value);
+            } else {
+                // LaTeX is a read-only representation, not an edit diff.
+                fieldHighlighter.backdrop.style.display = 'none';
+                field.style.setProperty('background-color', '#fff', 'important');
+                field.style.setProperty('color', '#1f2937', 'important');
+                field.style.setProperty('-webkit-text-fill-color', '#1f2937', 'important');
+            }
 
             const action = document.createElement('span');
             action.style.display = 'flex';
@@ -1413,6 +1919,7 @@ define([], function() {
                 line._validatedStack = '';
                 field.value = line.ascii;
                 field.style.background = '#fff';
+                fieldHighlighter.reset(line.ascii);
                 window.clearTimeout(line._editTimer);
                 updateEditedControls();
                 refreshCandidateLine(index);
@@ -1431,7 +1938,7 @@ define([], function() {
                     line.edited = line.ascii !== line.originalAscii;
                     line._validatedAscii = '';
                     line._validatedStack = '';
-                    field.style.background = line.edited ? '#fff8e5' : '#fff';
+                    field.style.background = '#fff';
                     updateEditedControls();
                     updateSelectedPreview();
                     window.clearTimeout(line._editTimer);
@@ -1440,7 +1947,7 @@ define([], function() {
                     }, 250);
                 });
             }
-            row.append(selectionMarker, heading, field, action);
+            row.append(selectionMarker, heading, fieldHighlighter.wrapper, action);
             panel._formatRows.appendChild(row);
         };
         const selectFormat = format => {
@@ -1509,6 +2016,7 @@ define([], function() {
         };
 
         resultLines.forEach((line, index) => {
+            const hasMath = Boolean(line.stack || line.math);
             const isDefault = index === defaultIndex;
             const optionId = 'local-stackinputhelper-line-' + Math.random().toString(36).slice(2);
             const wrapper = document.createElement('div');
@@ -1524,7 +2032,7 @@ define([], function() {
             wrapper.style.border = isDefault ? '1px solid #8ab4f8' : '1px solid #e2e2e2';
             wrapper.style.borderRadius = '3px';
             wrapper.style.background = isDefault ? '#f3f8ff' : '#fff';
-            wrapper.style.cursor = 'pointer';
+            wrapper.style.cursor = hasMath ? 'pointer' : 'default';
             wrapper.style.userSelect = 'text';
 
             const input = document.createElement('input');
@@ -1534,6 +2042,7 @@ define([], function() {
             input.value = String(index);
             input.dataset.resultChoice = '1';
             input.checked = isDefault;
+            input.disabled = !hasMath;
             input.style.marginTop = '0';
 
             const body = document.createElement('label');
@@ -1552,8 +2061,10 @@ define([], function() {
 
             const lineContent = createLineContent(panel, line);
             const status = document.createElement('span');
-            status.textContent = isDefault && resultLines.length > 1
-                ? (config.recommendedanswer || 'Recommended')
+            status.textContent = !hasMath
+                ? 'text'
+                : isDefault && resultLines.length > 1
+                ? (config.recommendedanswer || 'Suggested')
                 : '';
             status.style.marginLeft = 'auto';
             status.style.paddingLeft = '10px';
@@ -1585,6 +2096,7 @@ define([], function() {
             }, true);
 
             wrapper.addEventListener('click', event => {
+                if (!hasMath) return;
                 if ((panel._ignoreLineClickUntil || 0) > Date.now()) {
                     event.preventDefault();
                     event.stopPropagation();
@@ -1627,16 +2139,27 @@ define([], function() {
             line._interactiveControllers = [];
             line._prefix.textContent = (config.lineprefix || 'Line') + ' ' + (index + 1);
             const statuses = [];
-            if (index === defaultIndex && resultLines.length > 1) statuses.push(config.recommendedanswer || 'Recommended');
+            if (index === defaultIndex && resultLines.length > 1) {
+                statuses.push(config.recommendedanswer || 'Suggested');
+            }
             if (line.edited) statuses.push(config.edited || 'Edited');
             line._status.textContent = statuses.join(' · ');
             line._lineContent.innerHTML = '';
-            const editedPreview = document.createElement('span');
-            editedPreview.textContent = '\\(' + (line.latex || asciiToLatexPreview(line.ascii)) + '\\)';
-            editedPreview.dataset.latex = line.latex || asciiToLatexPreview(line.ascii);
-            editedPreview.dataset.interactiveFormula = '1';
-            editedPreview.style.fontSize = '16px';
-            line._lineContent.appendChild(editedPreview);
+            // Keep the OCR prose styling, while synchronizing only its formula.
+            let formulaUpdated = false;
+            const synchronizedParts = line.displayParts.map(part => {
+                if (part.type !== 'math' || formulaUpdated || !line.edited) return part;
+                formulaUpdated = true;
+                return Object.assign({}, part, {latex: line.latex, text: line.latex});
+            });
+            const synchronizedLine = Object.assign({}, line, {
+                displayParts: synchronizedParts,
+                math: line.edited ? line.latex : line.math
+            });
+            const synchronizedContent = createLineContent(panel, synchronizedLine);
+            while (synchronizedContent.firstChild) {
+                line._lineContent.appendChild(synchronizedContent.firstChild);
+            }
             typesetMath(line._lineContent).then(() => {
                 line._lineContent.querySelectorAll('[data-interactive-formula]').forEach(rendered => {
                     setupInteractiveFormula(panel, rendered, line);
@@ -2080,7 +2603,12 @@ define([], function() {
                 const result = await postStrokes({x: strokes.map(s => s.x), y: strokes.map(s => s.y)});
                 if (!requestCoordinator.isCurrent(requestId)) return;
                 const stackResult = result.stack || result.text || '';
-                updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult, answerBox, result.lines || []);
+                updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
+                    answerBox, result.lines || [], result.freetext || result.raw_text || '', canvas.toDataURL('image/png'));
+                applyMatchedAnswers(answerBox, result.lines || [],
+                    () => requestCoordinator.isCurrent(requestId)).catch(error => {
+                    window.console.error('[stackinputhelper] applyMatchedAnswers failed:', error);
+                });
                 status.textContent = '';
             } catch (error) {
                 if (requestCoordinator.isCurrent(requestId)) {
@@ -2128,6 +2656,7 @@ define([], function() {
         }
 
         answerBox.dataset.stackinputhelperBound = '1';
+        captureAnswerAnchor(answerBox);
         if (answerBox.tagName === 'INPUT' && !isFreeTextInput(answerBox)) {
             answerBox.style.width = 'min(260px, 45vw)';
             answerBox.style.maxWidth = '100%';
@@ -2204,6 +2733,7 @@ define([], function() {
             if (!file) return;
 
             const requestId = requestCoordinator.begin();
+            const sourceUrl = URL.createObjectURL(file);
             button.disabled = true;
             setIconButtonLabel(button, config.uploading || 'Recognizing...');
             setRequestStatus(resultPanel);
@@ -2213,17 +2743,25 @@ define([], function() {
                 if (!requestCoordinator.isCurrent(requestId)) return;
                 const stackResult = result.stack || result.normalized || result.text || '';
 
-                if (!stackResult && !result.raw_asciimath && !result.raw_latex) {
+                if (!stackResult && !result.raw_asciimath && !result.raw_latex && !result.freetext && !result.raw_text) {
                     throw new Error('Empty STACK result');
                 }
 
-                updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult, answerBox, result.lines || []);
+                if (resultPanel._sourceObjectUrl) URL.revokeObjectURL(resultPanel._sourceObjectUrl);
+                resultPanel._sourceObjectUrl = sourceUrl;
+                updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
+                    answerBox, result.lines || [], result.freetext || result.raw_text || '', sourceUrl);
+                applyMatchedAnswers(answerBox, result.lines || [],
+                    () => requestCoordinator.isCurrent(requestId)).catch(error => {
+                    window.console.error('[stackinputhelper] applyMatchedAnswers failed:', error);
+                });
             } catch (error) {
                 if (!requestCoordinator.isCurrent(requestId)) return;
                 window.console.error('[stackinputhelper] recognition failed:', error);
                 resultPanel.style.display = 'block';
                 setRequestStatus(resultPanel, (config.recognizefailed || 'Recognition failed.') + ' ' + error.message, true);
             } finally {
+                if (resultPanel._sourceObjectUrl !== sourceUrl) URL.revokeObjectURL(sourceUrl);
                 button.disabled = false;
                 setIconButtonLabel(button, idleLabel);
             }
@@ -2310,7 +2848,12 @@ define([], function() {
                             if (resultVersion !== lastMobileResultVersion) {
                                 lastMobileResultVersion = resultVersion;
                                 mobilePanel._status.textContent = config.mobileuploadreceived || 'Successfully received mobile result. You can upload another photo with the same QR code.';
-                                updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult, answerBox, result.lines || []);
+                                updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
+                                    answerBox, result.lines || [], result.freetext || result.raw_text || '');
+                                applyMatchedAnswers(answerBox, result.lines || [],
+                                    () => requestCoordinator.isCurrent(requestId) && inputMode === 'mobile').catch(error => {
+                                    window.console.error('[stackinputhelper] applyMatchedAnswers failed:', error);
+                                });
                             }
                         } else if (result.expired) {
                             window.clearInterval(mobilePollTimer);
@@ -2371,6 +2914,7 @@ define([], function() {
             if (resultPanel._selectionAbortController) resultPanel._selectionAbortController.abort();
             (resultPanel._interactiveControllers || []).forEach(controller => controller.abort());
             if (resultPanel._reviewResizeObserver) resultPanel._reviewResizeObserver.disconnect();
+            if (resultPanel._sourceObjectUrl) URL.revokeObjectURL(resultPanel._sourceObjectUrl);
             fileInput.remove();
             if (cameraInput) cameraInput.remove();
             cleanupObserver.disconnect();
@@ -2379,6 +2923,11 @@ define([], function() {
     };
 
     const run = () => {
+        const mainContent = document.querySelector('.main-inner');
+        if (mainContent && (document.body.id === 'page-mod-quiz-attempt'
+                || document.body.id === 'page-question-preview')) {
+            mainContent.style.maxWidth = '1200px';
+        }
         const boxes = findAnswerBoxes();
         if (!boxes.length) {
             window.console.warn(config.nofieldfound || 'No visible STACK input found');

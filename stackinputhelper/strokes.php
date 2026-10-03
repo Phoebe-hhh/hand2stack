@@ -45,6 +45,8 @@ try {
         'success' => true,
         'raw_latex' => $result['raw_latex'],
         'raw_asciimath' => $result['raw_asciimath'],
+        'raw_text' => $result['raw_text'],
+        'freetext' => $result['freetext'],
         'stack' => $result['stack'],
         'text' => $result['text'],
         'lines' => $result['lines'],

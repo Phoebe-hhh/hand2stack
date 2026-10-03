@@ -183,6 +183,11 @@ final class stack_converter {
         $s = str_replace(['{', '}'], ['(', ')'], $s);
         $s = preg_replace('/\\\\([a-zA-Z]+)/', '$1', $s);
 
+        // Preserve logical words before whitespace-based implicit
+        // multiplication turns "x and x" into "x*and*x".
+        $s = preg_replace('/\band\b/i', '__LOGICAL_AND__', $s);
+        $s = preg_replace('/\bor\b/i', '__LOGICAL_OR__', $s);
+        $s = preg_replace('/\bin\b/i', '__RELATIONAL_IN__', $s);
         $s = preg_replace('/([a-zA-Z])\s+([a-zA-Z])/', '$1*$2', $s);
         $s = preg_replace('/(\d)\s+([a-zA-Z])/', '$1*$2', $s);
         $s = preg_replace('/\s+/', '', $s);
@@ -194,6 +199,11 @@ final class stack_converter {
         $s = preg_replace(
             '/__INTERVAL__([a-zA-Z])__([^_]+)__([^_]+)__/',
             '$2<=$1 and $1<=$3',
+            $s
+        );
+        $s = str_replace(
+            ['__LOGICAL_AND__', '__LOGICAL_OR__', '__RELATIONAL_IN__'],
+            [' and ', ' or ', ' in '],
             $s
         );
         $s = self::normalize_variable_products($s);
@@ -218,6 +228,7 @@ final class stack_converter {
         $s = preg_replace('/(^|[^%A-Za-z0-9_])i(?![A-Za-z0-9_])/', '$1%i', $s);
         $s = self::normalize_absolute($s);
         $s = preg_replace('/\b([a-df-zA-DF-Z])x(?=(\^|\+|\-|\*|\/|\)|$))/', '$1*x', $s);
+        $s = preg_replace('/^(.+?)\s+in\s+(\[[^\]]+\])$/', 'elementp($1,$2)', $s);
         $s = self::protect_functions($s);
         $s = self::beautify($s);
 
@@ -244,6 +255,17 @@ final class stack_converter {
             $s = preg_replace('/[xｘメ]\s*[ニ二]\s*[ー-]\s*(\d+(?:\.\d+)?)/u', 'x=-$1', $s);
             $s = preg_replace('/たす\s*$/u', 'です', $s);
         }
+
+        // Extract explicitly delimited maths before removing Mathpix's dollar
+        // markers. Doing this later lets trailing letters from prose (the r in
+        // "for" or y in "Finally") leak into the mathematical candidate.
+        if (preg_match('/\$([^$\n]+?)\$/u', $s, $match)) {
+            return trim($match[1]);
+        }
+        if (preg_match('/\\\\\((.+?)\\\\\)/u', $s, $match)
+                || preg_match('/\\\\\[(.+?)\\\\\]/u', $s, $match)) {
+            return trim($match[1]);
+        }
         $prosecheck = preg_replace(
             '/_\{\s*\\\\(?:text|mathrm)\s*\{\s*[^{}]*?\s*\}\s*\}/u',
             '_label',
@@ -251,10 +273,17 @@ final class stack_converter {
         );
         $hasprose = preg_match('/(?:\\\\text|(?<!\\\\)\btext|\\\\mathrm)\s*\{/u', $prosecheck) === 1
             || preg_match('/[\x{3040}-\x{30ff}\x{3400}-\x{9fff}]/u', $s) === 1
-            || preg_match('/\b(?:answer|solution|therefore|hence|thus|finally)\b/iu', $s) === 1;
+            || preg_match('/\b(?:answer|solution|therefore|hence|thus|finally|so)\b/iu', $s) === 1;
 
         $hasprose = $hasprose
             || preg_match('/\b(?:first|next)\b/iu', $s) === 1;
+
+        // Mathpix occasionally omits the closing delimiter at the end of a
+        // handwritten line. The opening delimiter still gives an exact prose
+        // boundary, so keep only its remainder.
+        if ($hasprose && preg_match('/\$([^$\n]+)$/u', $s, $match)) {
+            return trim($match[1]);
+        }
 
         // Mathpix uses dollar signs as inline-math delimiters. A handwritten
         // mixed text/formula line can contain only one of the pair, and a
@@ -274,14 +303,6 @@ final class stack_converter {
         $s = preg_replace('/(?<!\\\\)\btext\s*\{\s*[^{}]*?\s*\}/u', ' ', $s);
         $s = preg_replace('/\\\\mathrm\s*\{\s*[^{}]*?\s*\}/u', ' ', $s);
         $s = preg_replace('/\s+/', ' ', $s);
-
-        if (preg_match('/\$(.+?)\$/u', $s, $match)) {
-            return trim($match[1]);
-        }
-
-        if (preg_match('/\\\\\((.+?)\\\\\)/u', $s, $match) || preg_match('/\\\\\[(.+?)\\\\\]/u', $s, $match)) {
-            return trim($match[1]);
-        }
 
         // A bound such as k=1 is part of the surrounding operator, not a
         // standalone equation. Capture the whole sum/product before applying
@@ -707,10 +728,10 @@ final class stack_converter {
 
     private static function normalize_variable_products(string $input): string {
         $identifiers = ['mu', 'sigma', 'alpha', 'beta', 'gamma', 'delta', 'theta', 'lambda',
-            'omega', 'phi', 'psi', 'rho', 'tau', 'epsilon', 'inf', 'minf', 'and', 'not',
+            'omega', 'phi', 'psi', 'rho', 'tau', 'epsilon', 'inf', 'minf', 'and', 'or', 'not',
             'then', 'else', 'in', 'min', 'max', 'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
             'sinh', 'cosh', 'tanh', 'asin', 'acos', 'atan', 'log', 'ln', 'sqrt', 'exp',
-            'abs', 'limit', 'diff', 'int', 'sum', 'product', 'matrix', 'determinant',
+            'abs', 'limit', 'diff', 'int', 'sum', 'product', 'matrix', 'determinant', 'elementp',
             'binomial', 'pi'];
 
         return preg_replace_callback('/[A-Za-z]{2,}/', static function($m) use ($identifiers) {
@@ -736,7 +757,7 @@ final class stack_converter {
     }
 
     private static function expand_chained_inequality(string $input): string {
-        if ($input === '' || preg_match('/\band\b/', $input)) {
+        if ($input === '' || preg_match('/\b(?:and|or)\b/', $input)) {
             return $input;
         }
 
@@ -760,6 +781,8 @@ final class stack_converter {
         $functions = ['f', 'g', 'h', 'min', 'max', 'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
             'sinh', 'cosh', 'tanh', 'asin', 'acos', 'atan', 'log', 'ln', 'sqrt', 'exp',
             'abs', 'limit', 'diff', 'int', 'sum', 'product', 'matrix', 'determinant', 'binomial'];
+        $functions[] = 'not';
+        $functions[] = 'elementp';
 
         return preg_replace_callback('/([a-zA-Z]+)\(/', static function($m) use ($functions) {
             return in_array($m[1], $functions, true) ? $m[0] : $m[1] . '*(';

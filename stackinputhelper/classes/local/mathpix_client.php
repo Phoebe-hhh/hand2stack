@@ -166,7 +166,11 @@ final class mathpix_client {
 
         $rawlatex = self::extract_latex($data);
         $rawascii = self::extract_data_value($data, 'asciimath');
-        $lines = self::build_lines($rawlatex);
+        $rawtext = isset($data['text']) && is_string($data['text']) ? trim($data['text']) : '';
+        // The data/latex field may contain only the first formula in a page.
+        // Mathpix's text field contains the complete document, including prose
+        // and every maths line, so use it for the algebraic review rows.
+        $lines = self::build_document_lines($rawtext, $rawlatex);
         $stack = self::recommended_stack($lines);
         if ($stack === '') {
             $stack = stack_converter::normalize_selection($rawlatex);
@@ -175,11 +179,122 @@ final class mathpix_client {
         return [
             'raw_latex' => $rawlatex,
             'raw_asciimath' => $rawascii,
+            'raw_text' => $rawtext,
+            'freetext' => self::build_freetext($rawtext, $rawascii, $rawlatex),
             'stack' => $stack,
             'text' => $stack,
             'lines' => $lines,
             'mathpix' => $data,
         ];
+    }
+
+    /**
+     * Preserve Mathpix prose and paragraphs while converting only delimited maths
+     * into STACK free-text inline mathematics.
+     */
+    public static function build_freetext(string $text, string $ascii = '', string $latex = ''): string {
+        $text = trim(str_replace(["\r\n", "\r"], "\n", $text));
+        if ($text === '') {
+            $fallback = trim(str_replace(["\r\n", "\r"], "\n", $ascii));
+            if ($fallback === '' && trim($latex) !== '') {
+                $fallback = stack_converter::normalize_selection($latex);
+            }
+            return $fallback === '' ? '' : "`{$fallback}`";
+        }
+
+        // Mathpix's text format keeps prose as text and marks mathematics with
+        // TeX delimiters. Replace each mathematical fragment independently so a
+        // paragraph such as "Therefore, \\(x=3\\)." remains readable prose.
+        $patterns = [
+            '/\\\\\[([\\s\\S]*?)\\\\\]/u',
+            '/\\$\\$([\\s\\S]*?)\\$\\$/u',
+            '/(?<!\\$)\\$\\s*(\\\\begin\\{(?:aligned|gathered|split|align|array)\\*?\\}'
+                . '(?:\\{[^}]*\\})?[\\s\\S]*?\\\\end\\{(?:aligned|gathered|split|align|array)\\*?\\})'
+                . '\\s*\\$(?!\\$)/u',
+            '/\\\\\(([\\s\\S]*?)\\\\\)/u',
+            '/(?<!\\$)\\$([^$\\n]+?)\\$(?!\\$)/u',
+        ];
+        foreach ($patterns as $pattern) {
+            $text = preg_replace_callback($pattern, static function(array $match): string {
+                $math = self::freetext_math_to_ascii(trim($match[1]));
+                return $math === '' ? trim($match[1]) : self::wrap_freetext_math($math);
+            }, $text);
+        }
+
+        // Some Mathpix responses contain a bare display environment rather
+        // than wrapping it in \[...\]. Treat it as one maths region, but
+        // convert its rows independently so environment names and prose
+        // commands can never become implicit products such as b*e*g*i*n.
+        $text = preg_replace_callback(
+            '/\\\\begin\{(aligned|gathered|split|align|array)\*?\}(?:\{[^}]*\})?([\s\S]*?)'
+                . '\\\\end\{\1\*?\}/u',
+            static function(array $match): string {
+                $math = self::freetext_math_to_ascii($match[0]);
+                return $math === '' ? trim($match[0]) : self::wrap_freetext_math($math);
+            },
+            $text
+        );
+
+        $text = preg_replace('/`[ \t]*`/u', "`\n`", $text);
+        return trim(preg_replace("/\\n{3,}/", "\n\n", $text));
+    }
+
+    /** Wrap every converted row independently so STACK preserves line boundaries. */
+    private static function wrap_freetext_math(string $math): string {
+        $rows = preg_split('/\n+/', trim($math));
+        $rows = array_values(array_filter(array_map('trim', $rows), static function(string $row): bool {
+            return $row !== '';
+        }));
+        return implode("\n", array_map(static function(string $row): string {
+            return '`' . $row . '`';
+        }, $rows));
+    }
+
+    /** Convert one Free-text maths region without treating TeX layout as algebra. */
+    private static function freetext_math_to_ascii(string $latex): string {
+        $converted = [];
+        $numbering = [];
+        $multilinebody = self::extract_multiline_body(trim($latex));
+        if ($multilinebody !== null) {
+            $rawrows = preg_split('/(?:\n+|\\\\\\\\)/', $multilinebody);
+            foreach ($rawrows as $rawrow) {
+                if (preg_match('/^\s*&?\s*(\d+)\s*[\.\)]\s*/', $rawrow, $match)) {
+                    $numbering[] = $match[1] . '. ';
+                } else {
+                    $numbering[] = '';
+                }
+            }
+        }
+        $rowindex = 0;
+        foreach (self::build_lines($latex) as $line) {
+            if (!empty($line['synthetic'])) {
+                continue;
+            }
+            $stack = trim((string)($line['stack'] ?? ''));
+            $linelatex = (string)($line['latex'] ?? '');
+            $withoutproofarrow = preg_replace(
+                '/^(?:\\s|\\\\[,;:! ])*\\\\(?:Rightarrow|Longrightarrow|implies|Leftrightarrow|iff)\\s*/',
+                '',
+                $linelatex
+            );
+            if ($withoutproofarrow !== $linelatex) {
+                $linelatex = $withoutproofarrow;
+                $stack = stack_converter::normalize_selection($linelatex);
+            }
+            if (preg_match('/\\\\(?:approx|simeq|sim)(?![A-Za-z])/', $linelatex)) {
+                $approx = preg_replace('/\\\\(?:approx|simeq|sim)(?![A-Za-z])/', '=', $linelatex);
+                $stack = stack_converter::normalize_selection($approx);
+                $stack = preg_replace('/=/', '~~', $stack, 1);
+            }
+            if ($stack !== '') {
+                $converted[] = ($numbering[$rowindex] ?? '') . $stack;
+            }
+            $rowindex++;
+        }
+        if ($converted) {
+            return implode("\n", $converted);
+        }
+        return stack_converter::normalize_selection($latex);
     }
 
     public static function build_lines(string $latex): array {
@@ -213,18 +328,36 @@ final class mathpix_client {
 
         $lines = [];
         foreach ($parts as $part) {
+            // Mathpix may put display-math delimiters on their own physical
+            // rows. They are document markup, not recognized student content.
+            if (preg_match('/^\s*(?:\\\\\[|\\\\\]|\$\$?)\s*$/u', $part)) {
+                continue;
+            }
+            // The text endpoint may prepend the uploaded filename as a header.
+            if (preg_match('#^\s*[^/\\\\]+\.(?:png|jpe?g|heic|webp|gif)\s*$#iu', $part)) {
+                continue;
+            }
             $part = self::clean_line_latex($part);
             if ($part === '') {
                 continue;
             }
 
             $math = stack_converter::extract_math($part);
+            $math = self::remove_prose_boundary_artifact($part, $math);
+            $metadata = self::classify_candidate($part, $math);
+            $stack = $math === '' ? '' : stack_converter::normalize($math);
+            $normalized = $math === '' ? '' : stack_converter::normalize($metadata['value']);
             $lines[] = [
+                'raw' => $part,
                 'latex' => $part,
                 'display' => self::display_latex($part),
                 'display_parts' => self::display_parts($part, $math),
                 'math' => $math,
-                'stack' => $math === '' ? '' : stack_converter::normalize($math),
+                'ascii' => $stack,
+                'normalized' => $normalized,
+                'stack' => $stack,
+                'type' => $metadata['type'],
+                'relation' => $metadata['relation'],
             ];
         }
 
@@ -234,6 +367,59 @@ final class mathpix_client {
         }
 
         return $lines;
+    }
+
+    /**
+     * Remove an OCR letter left between a prose cue and the real expression.
+     * Example: "\\text{Finall} y. 1<=x<=3" must yield "1<=x<=3", not y.1...
+     */
+    private static function remove_prose_boundary_artifact(string $raw, string $math): string {
+        if ($math === '' || preg_match('/(?:finall?|therefore|hence|thus|so)[^A-Za-z]/iu', $raw) !== 1) {
+            return $math;
+        }
+        return trim(preg_replace('/^[A-Za-z]\s*[.,:]\s*(?=[0-9(])/u', '', $math));
+    }
+
+    /** Build every visible document row, retaining prose around its maths. */
+    public static function build_document_lines(string $text, string $latex = ''): array {
+        $text = trim(str_replace(["\r\n", "\r"], "\n", $text));
+        if ($text === '') {
+            return self::build_lines($latex);
+        }
+
+        $lines = self::build_lines($text);
+        if (!$lines && trim($latex) !== '') {
+            return self::build_lines($latex);
+        }
+        return $lines;
+    }
+
+    /** @return array{value:string,type:string,relation:?string} */
+    private static function classify_candidate(string $raw, string $math): array {
+        if ($math === '') {
+            return ['value' => '', 'type' => 'text', 'relation' => null];
+        }
+        $value = trim($math);
+        $relation = null;
+        if (preg_match('/^\s*(?:~~|≈|\\\\approx)\s*/u', $value)) {
+            $relation = 'approximate';
+            $value = preg_replace('/^\s*(?:~~|≈|\\\\approx)\s*/u', '', $value);
+        } else if (preg_match('/(?:~~|≈|\\\\approx)/u', $raw)) {
+            $relation = 'approximate';
+            $value = preg_replace('/(?:~~|≈|\\\\approx)\s*/u', '', $value);
+        }
+        if ($relation === 'approximate') {
+            $value = preg_replace('/[.。]\s*$/u', '', trim($value));
+        }
+        $type = 'expression';
+        if ($relation === 'approximate') {
+            $type = 'approximation';
+        } else if (preg_match('/(?:<=|>=|<|>|\\\\leq|\\\\geq|≤|≥)/u', $value)) {
+            $type = 'condition';
+        } else if (preg_match('/(?<![<>!#])=(?!=)/', $value)) {
+            $type = 'equation';
+        }
+        return ['value' => $value, 'type' => $type, 'relation' => $relation];
     }
 
     private static function recommended_stack(array $lines): string {
@@ -269,11 +455,16 @@ final class mathpix_client {
         $stack = '[' . implode(',', $assignments) . ']';
         $latex = implode(',\\ ', $assignments);
         return [
+            'raw' => $latex,
             'latex' => $latex,
             'display' => $latex,
             'display_parts' => [['type' => 'math', 'latex' => $latex]],
             'math' => $latex,
             'stack' => $stack,
+            'ascii' => $stack,
+            'normalized' => $stack,
+            'type' => 'expression',
+            'relation' => null,
             'synthetic' => true,
         ];
     }
@@ -288,6 +479,9 @@ final class mathpix_client {
 
     private static function clean_line_latex(string $line): string {
         $line = trim($line);
+        // Repair a common Mathpix boundary split: the final "y" in Finally
+        // is emitted outside the prose command and otherwise looks like maths.
+        $line = preg_replace('/\\\\text\s*\{\s*Finall\s*\}\s*y\b/iu', '\\text{Finally}', $line);
         $line = preg_replace('/^\\\\begin\{(?:aligned|gathered|split|align|array)\*?\}(?:\{[^}]*\})?/', '', $line);
         $line = preg_replace('/\\\\end\{(?:aligned|gathered|split|align|array)\*?\}$/', '', $line);
         if (!preg_match('/\\\\begin\{(?:cases|array|pmatrix|bmatrix|matrix|vmatrix)\}/', $line)) {
@@ -296,12 +490,12 @@ final class mathpix_client {
         $line = str_replace(['\\therefore', '\\because'], '', $line);
         $line = preg_replace('/^\s*=\s*/', '', $line);
         $line = preg_replace('/^\s*(?:\d+[\.\)]\s*|[-*]\s+)/', '', $line);
-        $line = preg_replace('/^\$\s*/', '', $line);
-        $line = preg_replace('/\s*\$$/', '', $line);
-        $line = preg_replace('/^\\\\\(\s*/', '', $line);
-        $line = preg_replace('/\s*\\\\\)$/', '', $line);
-        $line = preg_replace('/^\\\\\[\s*/', '', $line);
-        $line = preg_replace('/\s*\\\\\]$/', '', $line);
+        // Remove delimiters only when they wrap the complete row. Mixed prose
+        // such as "Therefore, \(x>=1\)" must keep both delimiters until its
+        // text and mathematical parts have been separated.
+        $line = preg_replace('/^\$\s*([\s\S]*?)\s*\$$/u', '$1', $line);
+        $line = preg_replace('/^\\\\\(\s*([\s\S]*?)\s*\\\\\)$/u', '$1', $line);
+        $line = preg_replace('/^\\\\\[\s*([\s\S]*?)\s*\\\\\]$/u', '$1', $line);
         $line = preg_replace('/(?<!\\\\)\btext\s*\{/u', '\\text{', $line);
 
         // In Japanese handwriting Mathpix can read the compact sequence
@@ -317,6 +511,7 @@ final class mathpix_client {
     private static function display_latex(string $line): string {
         $line = preg_replace('/\\\\text\s*\{\s*([^{}]*?)\s*\}/u', '$1', $line);
         $line = preg_replace('/(?<!\\\\)\btext\s*\{\s*([^{}]*?)\s*\}/u', '$1', $line);
+        $line = str_replace(['\\(', '\\)', '\\[', '\\]'], '', $line);
         $line = preg_replace('/[$¥￥]/u', '', $line);
         $line = str_replace(['\\,', '\\;', '\\:', '\\!'], '', $line);
         return trim($line);

@@ -44,6 +44,7 @@ try {
         'status' => 'waiting',
         'rawlatex' => '',
         'rawascii' => '',
+        'rawtext' => '',
         'stack' => '',
         'resulttext' => '',
         'timecreated' => $now,

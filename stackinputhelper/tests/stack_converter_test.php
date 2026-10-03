@@ -137,6 +137,44 @@ final class stack_converter_test extends \advanced_testcase {
         ], $lines[0]['display_parts']);
     }
 
+    public function test_freetext_preserves_prose_paragraphs_and_marks_only_math(): void {
+        $text = "First explain the method.\n\nTherefore, \\(x=\\frac{3}{2}\\), so the result follows.";
+
+        $this->assertSame(
+            "First explain the method.\n\nTherefore, `x=3/2`, so the result follows.",
+            mathpix_client::build_freetext($text)
+        );
+    }
+
+    public function test_freetext_uses_ascii_fallback_without_losing_lines(): void {
+        $this->assertSame("`x=1\ny=2`", mathpix_client::build_freetext('', "x=1\ny=2"));
+    }
+
+    public function test_freetext_converts_aligned_math_by_row_without_leaking_layout_commands(): void {
+        $text = "For \\(theta=1\\)\n"
+            . "\\[\\begin{aligned}g(1)&=2\\sin(\\pi/2)^2+1/\\sqrt{2}\\\\"
+            . "&=2+1/\\sqrt{2}\\\\&\\approx2.71\\end{aligned}\\]\n"
+            . "Therefore, this is the final value.";
+        $result = mathpix_client::build_freetext($text);
+
+        $this->assertStringContainsString('For `theta=1`', $result);
+        $this->assertStringContainsString("`g(1)=2*sin(%pi/2)^2+1/sqrt(2)`\n", $result);
+        $this->assertStringContainsString("`2+1/sqrt(2)`\n`~~2.71`", $result);
+        $this->assertStringContainsString('Therefore, this is the final value.', $result);
+        $this->assertStringNotContainsString('b*%e*g*%i*n', $result);
+        $this->assertStringNotContainsString('a*p*p*r*o*x', $result);
+
+        $singleDollar = '$\\begin{aligned}x&=1\\\\y&=2\\end{aligned}$';
+        $this->assertSame("`x=1`\n`y=2`", mathpix_client::build_freetext($singleDollar));
+
+        $finalanswers = '\\[\\begin{aligned}1.\ f(2)&\\approx1+2\\sqrt{2}\\\\'
+            . '2)\ \\Rightarrow g(1)&\\approx2+1/\\sqrt{2}=2.71\\end{aligned}\\]';
+        $convertedanswers = mathpix_client::build_freetext($finalanswers);
+        $this->assertStringContainsString("`1. f(2)~~1+2*sqrt(2)`\n", $convertedanswers);
+        $this->assertStringContainsString('`2. g(1)~~2+1/sqrt(2)=2.71`', $convertedanswers);
+        $this->assertStringNotContainsString('R*%i*g*h*t*a*r*r*o*w', $convertedanswers);
+    }
+
     public function test_aligned_continuation_drops_leading_equals(): void {
         $lines = mathpix_client::build_lines(
             '\\begin{aligned}f(x)&=\\frac{x^2+2x+1}{x+1}\\\\&=x+1\\end{aligned}'
@@ -154,6 +192,60 @@ final class stack_converter_test extends \advanced_testcase {
         $last = $lines[count($lines) - 1];
         $this->assertTrue($last['synthetic']);
         $this->assertSame('[x=2,y=1]', $last['stack']);
+    }
+
+    public function test_lines_are_candidates_not_automatic_answers(): void {
+        $lines = mathpix_client::build_lines("g(1)=2+1/\\sqrt{2}\n~~2.71.");
+        $this->assertSame('equation', $lines[0]['type']);
+        $this->assertNull($lines[0]['relation']);
+        $this->assertSame('g(1)=2+1/sqrt(2)', $lines[0]['normalized']);
+        $this->assertSame('approximation', $lines[1]['type']);
+        $this->assertSame('approximate', $lines[1]['relation']);
+        $this->assertSame('2.71', $lines[1]['normalized']);
+        $this->assertSame('~~2.71.', $lines[1]['raw']);
+    }
+
+    public function test_document_lines_use_complete_text_not_single_latex_result(): void {
+        $text = "\\( |x-2|+|x|\\leq x+1 \\)\n"
+            . "First consider the case \\(0\\leq x<2\\)\n"
+            . "\\( (2-x)+x\\leq x+1 \\)\n"
+            . "Therefore, \\(x\\geq1\\)\n"
+            . "Finally, \\(1\\leq x\\leq3\\)";
+        $lines = mathpix_client::build_document_lines($text, '|x-2|+|x|\\leq x+1');
+
+        $this->assertCount(5, $lines);
+        $this->assertSame('abs(x-2)+abs(x)<=x+1', $lines[0]['stack']);
+        $this->assertSame('0<=x and x<2', $lines[1]['stack']);
+        $this->assertSame('1<=x and x<=3', $lines[4]['stack']);
+        $this->assertSame('text', $lines[1]['display_parts'][0]['type']);
+        $this->assertSame('math', $lines[1]['display_parts'][1]['type']);
+    }
+
+    public function test_document_lines_ignore_delimiters_and_remove_finally_ocr_tail(): void {
+        $text = "\\[\n\\(x+1=2\\)\n\\]\n"
+            . "\\text{Finall} y. \\(1\\leq x\\leq3\\)";
+        $lines = mathpix_client::build_document_lines($text);
+
+        $this->assertCount(2, $lines);
+        $this->assertSame('x+1=2', $lines[0]['stack']);
+        $this->assertSame('1<=x and x<=3', $lines[1]['stack']);
+        $this->assertSame('text', $lines[1]['display_parts'][0]['type']);
+        $this->assertSame('math', $lines[1]['display_parts'][1]['type']);
+    }
+
+    public function test_document_lines_respect_dollar_boundaries_before_prose_matching(): void {
+        $text = "IMG_2397.PNG\n"
+            . 'Next, for $x \\geqslant 2$' . "\n"
+            . 'so, $x \\leq 3$' . "\n"
+            . 'Finally. $1 \\leq x \\leq 3';
+        $lines = mathpix_client::build_document_lines($text);
+
+        $this->assertCount(3, $lines);
+        $this->assertSame('x>=2', $lines[0]['stack']);
+        $this->assertSame('x<=3', $lines[1]['stack']);
+        $this->assertSame('1<=x and x<=3', $lines[2]['stack']);
+        $this->assertSame('Next, for ', $lines[0]['display_parts'][0]['text']);
+        $this->assertSame('Finally. ', $lines[2]['display_parts'][0]['text']);
     }
 
     /**
@@ -195,6 +287,19 @@ final class stack_converter_test extends \advanced_testcase {
             'number before group' => ['2(x+1)', '2*(x+1)'],
             'absolute value' => ['|x-1|', 'abs(x-1)'],
             'unicode minus' => ['x=−1', 'x=-1'],
+            'logical interval with implicit multiplication' => [
+                '1<=x and x<=3*2x',
+                '1<=x and x<=3*2*x',
+            ],
+            'logical alternative is not treated as a chained inequality' => [
+                'x<1 or x>3',
+                'x<1 or x>3',
+            ],
+            'logical negation remains a function' => ['not(x=1)', 'not(x=1)'],
+            'list membership uses the valid STACK predicate' => [
+                'x in [1,2]',
+                'elementp(x,[1,2])',
+            ],
         ];
     }
 }

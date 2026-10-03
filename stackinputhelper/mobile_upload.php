@@ -60,8 +60,9 @@ try {
     $record->status = 'done';
     $record->rawlatex = $result['raw_latex'];
     $record->rawascii = $result['raw_asciimath'];
+    $record->rawtext = $result['raw_text'];
     $record->stack = $result['stack'];
-    $record->resulttext = $result['text'];
+    $record->resulttext = $result['freetext'];
     $record->timemodified = time();
     $DB->update_record('local_stackinputhelper_sess', $record);
 
@@ -69,6 +70,8 @@ try {
         'success' => true,
         'raw_latex' => $result['raw_latex'],
         'raw_asciimath' => $result['raw_asciimath'],
+        'raw_text' => $result['raw_text'],
+        'freetext' => $result['freetext'],
         'stack' => $result['stack'],
         'text' => $result['text'],
         'lines' => $result['lines'],

@@ -5,6 +5,9 @@ Hand2STACK was previously known as STACK Input Helper. The internal Moodle compo
 
 ## Unreleased
 
+- Preserve complete Mathpix document text through mobile-upload polling.
+- Prevent stale recognition matches or concurrent learner edits from overwriting sibling STACK answers.
+
 ## 0.2.14-alpha - 2026-09-26
 
 - Keep the handwriting canvas and recognition panel within the Moodle question width, and preserve stroke geometry when surrounding layout changes.

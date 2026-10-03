@@ -69,5 +69,16 @@ function xmldb_local_stackinputhelper_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026092400, 'local', 'stackinputhelper');
     }
 
+    if ($oldversion < 2026100400) {
+        $table = new xmldb_table('local_stackinputhelper_sess');
+        $field = new xmldb_field('rawtext', XMLDB_TYPE_TEXT, null, null, null, null, null, 'rawascii');
+
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_plugin_savepoint(true, 2026100400, 'local', 'stackinputhelper');
+    }
+
     return true;
 }

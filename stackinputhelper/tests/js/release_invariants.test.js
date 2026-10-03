@@ -19,6 +19,9 @@ const convertEndpoint = fs.readFileSync(path.join(pluginRoot, 'convert.php'), 'u
 const apiResponse = fs.readFileSync(path.join(pluginRoot, 'classes/local/api_response.php'), 'utf8');
 const limiter = fs.readFileSync(path.join(pluginRoot, 'classes/local/request_limiter.php'), 'utf8');
 const mobilePage = fs.readFileSync(path.join(pluginRoot, 'mobile.php'), 'utf8');
+const mobileUpload = fs.readFileSync(path.join(pluginRoot, 'mobile_upload.php'), 'utf8');
+const sessionResult = fs.readFileSync(path.join(pluginRoot, 'session_result.php'), 'utf8');
+const installXml = fs.readFileSync(path.join(pluginRoot, 'db/install.xml'), 'utf8');
 
 test('mobile QR generation does not use a third-party QR service', () => {
     assert.doesNotMatch(source, /api\.qrserver\.com|create-qr-code/);
@@ -56,15 +59,45 @@ test('partial drag state blocks same-line whole-answer overwrite', () => {
 
 test('free-text inputs preserve multiline AsciiMath instead of selecting one answer line', () => {
     assert.match(source, /dataset\.stackInputType[\s\S]*=== 'freetext'/);
-    assert.match(source, /formatFreeTextWorking\(rawAscii, rawLatex, stackResult, lines\)/);
+    assert.match(source, /formatFreeTextWorking\(recognizedText, rawAscii, rawLatex, stackResult, lines\)/);
+    assert.match(source, /result\.freetext \|\| result\.raw_text/);
     assert.match(source, /return '`\\n' \+ working \+ '\\n`'/);
     assert.match(source, /panel\._options\.style\.display = freeTextMode \? 'none' : 'grid'/);
-    assert.match(source, /panel\._stackTextarea\.rows = freeTextMode \? 8 : 1/);
+    assert.match(source, /panel\._stackTextarea\.rows = freeTextMode \? 14 : 1/);
+});
+
+test('free-text edits are visually distinguished without changing submitted text', () => {
+    assert.match(source, /const createChangeHighlighter = textarea =>/);
+    assert.match(source, /Array\(newSuffix - prefix\)\.fill\(true\)/);
+    assert.match(source, /span\.style\.color = '#0b63ce'/);
+    assert.doesNotMatch(source, /span\.style\.fontWeight/);
+    assert.match(source, /panel\._changeHighlighter\.reset\(panel\._stackTextarea\.value\)/);
+    assert.match(source, /answerBox\.value = panel\._stackTextarea\.value/);
+    assert.match(source, /answerBox\.dispatchEvent\(new Event\('input'/);
 });
 
 test('free-text mode is configured with localized review labels', () => {
     assert.match(hook, /'recognizedworking' => get_string\('recognizedworking'/);
     assert.match(hook, /'freetextpreview' => get_string\('freetextpreview'/);
+    assert.match(hook, /'originalwork' => get_string\('originalwork'/);
+    assert.match(hook, /'appendfreetext' => get_string\('appendfreetext'/);
+    assert.match(hook, /'insertfreetext' => get_string\('insertfreetext'/);
+    assert.match(hook, /'zoomin' => get_string\('zoomin'/);
+    assert.match(hook, /'zoomout' => get_string\('zoomout'/);
+    assert.match(source, /answerBox\.style\.display = 'none'/);
+    assert.match(source, /panel\._actionButtons\.style\.display = freeTextMode \? 'none' : 'flex'/);
+    assert.match(source, /setAnswerValue\(answerBox, panel\._stackTextarea\.value\)/);
+    assert.match(source, /config\.confirmrecognition \|\| 'Review recognized content'/);
+    assert.match(source, /config\.recognizedfullanswer \|\| 'Complete recognized answer · editable'/);
+    assert.match(source, /panel\._freeTextHelp\.style\.display = freeTextMode \? 'block' : 'none'/);
+    assert.match(source, /panel\._appendHint\.style\.display = 'none'/);
+});
+
+test('quiz content is widened for side-by-side free-text review only', () => {
+    assert.match(source, /document\.querySelector\('\.main-inner'\)/);
+    assert.match(source, /document\.body\.id === 'page-mod-quiz-attempt'/);
+    assert.match(source, /document\.body\.id === 'page-question-preview'/);
+    assert.match(source, /mainContent\.style\.maxWidth = '1200px'/);
 });
 
 test('recognized lines have editable ASCII with independent selection and reset', () => {
@@ -87,22 +120,32 @@ test('single-line STACK answer inputs are compact', () => {
 test('conversion review distinguishes editable OCR from read-only STACK output', () => {
     assert.match(source, /config\.convertedstack \|\| 'Converted for STACK:'/);
     assert.match(source, /panel\._stackTextarea\.readOnly = !freeTextMode/);
-    assert.match(source, /isDefault && resultLines\.length > 1/);
+    assert.match(source, /let defaultIndex = Math\.max\(0, resultLines\.length - 1\)/);
+    assert.match(source, /index === defaultIndex && resultLines\.length > 1/);
     assert.match(source, /stack\.replace\(\/\\b\(\[A-Za-z\]\)\\\(\/g, '\$1\*\('/);
     assert.match(hook, /'convertedstack' => get_string\('convertedstack'/);
 });
 
+test('free-text review does not show a redundant candidate summary', () => {
+    assert.match(source, /normalized: String\(line\.normalized/);
+    assert.match(source, /relation: line\.relation/);
+    assert.match(source, /candidateSummaryList/);
+    assert.match(source, /if \(freeTextMode\)[\s\S]*panel\._candidateSummary\.style\.display = 'none'/);
+    assert.doesNotMatch(source, /line\.relation === 'approximate'/);
+});
+
 test('algebraic review uses a responsive candidate-and-single-editor layout', () => {
     assert.match(source, /reviewGrid\.style\.display = 'grid'/);
-    assert.match(source, /candidateColumn\.append\(title, instruction, options\)/);
+    assert.match(source, /candidateColumn\.append\(title, instruction, options, sourceTitle, sourceViewer\)/);
     assert.match(source, /reviewGrid\.append\(candidateColumn, recognizedColumn\)/);
-    assert.match(source, /recognizedColumn\.append\(editableHeader, formatRows, rawTextarea, convertedColumn, applyBtn, requestStatus\)/);
+    assert.match(source, /recognizedColumn\.append\(editableHeader, formatRows, rawTextarea, candidateSummary,[\s\S]*convertedColumn, actionButtons, requestStatus\)/);
     assert.match(source, /panel\.style\.width = 'auto'[\s\S]*panel\.style\.maxWidth = '100%'/);
-    assert.match(source, /!isMobileOrTablet && width >= 820[\s\S]*'minmax\(0, 1fr\) minmax\(0, 1fr\)'/);
+    assert.match(source, /panel\._freeTextMode[\s\S]*\? !isMobileOrTablet[\s\S]*width >= 820/);
+    assert.match(source, /reviewGrid\.style\.gridTemplateColumns = useColumns[\s\S]*'minmax\(0, 1fr\) minmax\(0, 1fr\)'/);
     assert.match(source, /candidateColumn\.style\.overflow = 'hidden'/);
     assert.match(source, /container\.style\.overflowX = 'auto'/);
     assert.match(source, /new ResizeObserver\(updateReviewLayout\)/);
-    assert.match(source, /panel\._candidateColumn\.style\.display = freeTextMode \? 'none' : 'block'/);
+    assert.match(source, /panel\._sourceViewer\.style\.display = freeTextMode && sourceUrl \? 'block' : 'none'/);
     assert.match(source, /const index = selectedIndex[\s\S]*const line = resultLines\[index\][\s\S]*panel\._formatRows\.appendChild\(row\)/);
     assert.doesNotMatch(source, /resultLines\.forEach\(\(line, index\) => \{[\s\S]*panel\._formatRows\.appendChild\(row\)/);
     assert.doesNotMatch(source, /field\.addEventListener\('focus', \(\) => panel\._activateLine/);
@@ -114,15 +157,52 @@ test('algebraic review uses a responsive candidate-and-single-editor layout', ()
     assert.match(source, /panel\._stackTextarea\.style\.height = freeTextMode \? '' : '38px'/);
     assert.match(source, /body\.style\.display = 'flex'/);
     assert.match(source, /line\._status\.textContent = statuses\.join\(' · '\)/);
-    assert.match(source, /editedPreview\.textContent = [^\n]*line\.latex[^\n]*asciiToLatexPreview\(line\.ascii\)/);
+    assert.match(source, /const synchronizedContent = createLineContent\(panel, synchronizedLine\)/);
     assert.match(source, /typesetMath\(line\._lineContent\)/);
     assert.match(source, /status\.style\.marginLeft = 'auto'/);
 });
 
+test('free-text source image supports zoom reset and drag inspection', () => {
+    assert.match(source, /const zoomOut = makeZoomButton\('−'/);
+    assert.match(source, /const zoomReset = makeZoomButton\('100%'/);
+    assert.match(source, /const zoomIn = makeZoomButton\('\+'/);
+    assert.match(source, /imageScale = Math\.max\(1, Math\.min\(4,/);
+    assert.match(source, /sourceViewer\.addEventListener\('pointermove'/);
+    assert.match(source, /imageX = imageDrag\.imageX \+ event\.clientX - imageDrag\.x/);
+    assert.match(source, /panel\._resetImageView\(\)/);
+});
+
 test('editing ASCII keeps the LaTeX review value synchronized', () => {
     assert.match(source, /const asciiToLatexPreview = value =>/);
+    assert.match(source, /Display an expanded STACK interval in its original chained form/);
+    assert.match(source, /\\mathrel\{\\\\land\}/);
+    assert.match(source, /\\mathrel\{\\\\lor\}/);
+    assert.ok(source.includes("latex = latex.replace(/\\bsqrt\\(([^()]*)\\)/g, '\\\\sqrt{$1}');"));
+    assert.match(source, /sin\|cos\|tan/);
     assert.match(source, /line\.latex = asciiToLatexPreview\(line\.ascii\)/);
     assert.match(source, /line\.latex = line\.originalLatex \|\| asciiToLatexPreview\(line\.ascii\)/);
+});
+
+test('algebraic edits use the same blue edit cue and suggested wording', () => {
+    assert.match(source, /recommendedanswer: 'Suggested'/);
+    assert.match(source, /const fieldHighlighter = createChangeHighlighter\(field\)/);
+    assert.match(source, /fieldHighlighter\.compare\(/);
+    assert.match(source, /setProperty\('background-color', 'transparent', 'important'\)/);
+    assert.match(source, /for \(let i = prefix; i < currentSuffix; i\+\+\) edited\[i\] = true/);
+    assert.match(hook, /'recommendedanswer' => get_string\('recommendedanswer'/);
+});
+
+test('algebraic editing synchronizes the formula without changing OCR prose styling', () => {
+    assert.match(source, /Keep the OCR prose styling, while synchronizing only its formula/);
+    assert.match(source, /part\.type !== 'math' \|\| formulaUpdated \|\| !line\.edited/);
+    assert.match(source, /Object\.assign\(\{\}, part, \{latex: line\.latex, text: line\.latex\}\)/);
+    assert.doesNotMatch(source, /const editedPreview = document\.createElement/);
+});
+
+test('LaTeX review remains black while ASCII edits use blue diff highlighting', () => {
+    assert.match(source, /if \(selectedFormat === 'ascii'\)[\s\S]*fieldHighlighter\.compare\(line\.originalAscii, field\.value\)/);
+    assert.match(source, /fieldHighlighter\.backdrop\.style\.display = 'none'/);
+    assert.match(source, /setProperty\('color', '#1f2937', 'important'\)/);
 });
 
 test('insert recomputes the current selected value in STACK format', () => {
@@ -140,6 +220,8 @@ test('edited ASCII is normalized and validated by STACK before insertion', () =>
     assert.match(source, /formData\.append\('ascii', ascii\)/);
     assert.match(convertEndpoint, /stack_converter::normalize_ascii\(\$ascii\)/);
     assert.match(convertEndpoint, /stack_ast_container::make_from_student_source/);
+    assert.match(convertEndpoint, /caserror\.class\.php/);
+    assert.match(convertEndpoint, /require_once\(\$stackcaserrorfile\)/);
     assert.match(convertEndpoint, /\$ast->get_valid\(\)/);
 });
 
@@ -185,6 +267,19 @@ test('expired mobile pages fail before asking the user to take a photo', () => {
     const pageHeader = mobilePage.indexOf('$OUTPUT->header()');
     assert.ok(expiryCheck >= 0);
     assert.ok(pageHeader > expiryCheck);
+});
+
+test('mobile polling preserves the complete Mathpix document text', () => {
+    assert.match(installXml, /FIELD NAME="rawtext" TYPE="text"/);
+    assert.match(mobileUpload, /\$record->rawtext = \$result\['raw_text'\]/);
+    assert.match(sessionResult, /'raw_text' => \$record->rawtext/);
+    assert.match(sessionResult, /mathpix_client::build_document_lines\(/);
+});
+
+test('matched sibling answers reject stale recognition and concurrent edits', () => {
+    assert.match(source, /applyMatchedAnswers = async \(sourceBox, lines, isCurrent/);
+    assert.match(source, /if \(!isCurrent\(\)\) return/);
+    assert.match(source, /box\.value === valueBeforeValidation/);
 });
 
 test('candidate selection is delegated so MathJax updates cannot break the detail panel', () => {

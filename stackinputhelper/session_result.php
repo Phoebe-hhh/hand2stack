@@ -52,9 +52,14 @@ try {
         'status' => $record->status,
         'raw_latex' => $record->rawlatex,
         'raw_asciimath' => $record->rawascii,
+        'raw_text' => $record->rawtext,
         'stack' => $record->stack,
         'text' => $record->resulttext,
-        'lines' => \local_stackinputhelper\local\mathpix_client::build_lines((string)$record->rawlatex),
+        'freetext' => $record->resulttext,
+        'lines' => \local_stackinputhelper\local\mathpix_client::build_document_lines(
+            (string)$record->rawtext,
+            (string)$record->rawlatex
+        ),
         'updated_at' => (int)$record->timemodified,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $error) {
