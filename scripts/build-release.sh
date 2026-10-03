@@ -10,13 +10,13 @@ if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
   exit 2
 fi
 
-if ! version_contents="$(git show "${commit}:stackinputhelper/version.php")"; then
-  echo "Could not read stackinputhelper/version.php from ${commit}." >&2
+if ! version_contents="$(git show "${commit}:hand2stack/version.php")"; then
+  echo "Could not read hand2stack/version.php from ${commit}." >&2
   exit 1
 fi
 plugin_release="$(printf '%s\n' "$version_contents" | awk -F"'" '/\$plugin->release/{print $2; exit}')"
 if [[ -z "$plugin_release" ]]; then
-  echo "Could not read the plugin release from stackinputhelper/version.php." >&2
+  echo "Could not read the plugin release from hand2stack/version.php." >&2
   exit 1
 fi
 if [[ "$tag" != "v${plugin_release}" ]]; then
@@ -25,14 +25,14 @@ if [[ "$tag" != "v${plugin_release}" ]]; then
 fi
 
 mkdir -p "$output_dir"
-zip_path="${output_dir}/stackinputhelper-${tag}.zip"
+zip_path="${output_dir}/hand2stack-${tag}.zip"
 changelog_path="${output_dir}/CHANGELOG-${tag}.md"
 
 git archive \
   --format=zip \
   --prefix=stackinputhelper/ \
   --output="$zip_path" \
-  "${commit}:stackinputhelper"
+  "${commit}:hand2stack"
 
 previous_tag="$(git tag --list 'v*' --sort=-version:refname | awk -v current="$tag" '$0 != current {print; exit}')"
 {

@@ -5,6 +5,11 @@ Hand2STACK was previously known as STACK Input Helper. The internal Moodle compo
 
 ## Unreleased
 
+## 0.2.16-alpha - 2026-10-04
+
+- Rename the public source directory, npm package, and release ZIP to Hand2STACK.
+- Keep the installed Moodle directory and component identifier unchanged so existing sites upgrade normally.
+
 ## 0.2.15-alpha - 2026-10-04
 
 - Preserve complete Mathpix document text through mobile-upload polling.

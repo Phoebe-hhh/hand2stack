@@ -16,7 +16,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_stackinputhelper';
-$plugin->version   = 2026100400;
+$plugin->version   = 2026100401;
 $plugin->requires  = 2024042200;
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release = '0.2.15-alpha';
+$plugin->release = '0.2.16-alpha';

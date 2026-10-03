@@ -24,10 +24,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: stackinputhelper/package-lock.json
+          cache-dependency-path: hand2stack/package-lock.json
 
       - name: Test and build JavaScript
-        working-directory: stackinputhelper
+        working-directory: hand2stack
         run: |
           npm ci
           npm test
@@ -35,7 +35,7 @@ jobs:
           git diff --exit-code -- amd/build/main.min.js
 
       - name: Validate PHP syntax
-        run: find stackinputhelper -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: find hand2stack -name '*.php' -print0 | xargs -0 -n1 php -l
 
       - name: Build Moodle plugin package and changelog
         run: ./scripts/build-release.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" dist
@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          zip_asset="dist/stackinputhelper-${GITHUB_REF_NAME}.zip"
+          zip_asset="dist/hand2stack-${GITHUB_REF_NAME}.zip"
           changelog_asset="dist/CHANGELOG-${GITHUB_REF_NAME}.md"
 
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then

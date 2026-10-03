@@ -4,15 +4,15 @@
 
 Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-> **Current pilot release:** [v0.2.15-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.2.15-alpha)
+> **Current pilot release:** [v0.2.16-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.2.16-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download stackinputhelper-v0.2.15-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.2.15-alpha/stackinputhelper-v0.2.15-alpha.zip)**
+**[Download hand2stack-v0.2.16-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.2.16-alpha/hand2stack-v0.2.16-alpha.zip)**
 
-Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `stackinputhelper-v0.2.15-alpha.zip` and contains a single root folder named `stackinputhelper/`.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.2.16-alpha.zip`. For compatibility with existing Moodle installations, the ZIP still contains the required plugin root folder `stackinputhelper/`.
 
 ## Features
 
@@ -80,7 +80,7 @@ Uploaded images and handwriting coordinates are sent to Mathpix for recognition.
 
 ## Repository Layout
 
-- [`stackinputhelper/`](stackinputhelper/) — the Moodle plugin source and detailed documentation.
+- [`hand2stack/`](hand2stack/) — the Moodle plugin source and detailed documentation.
 - [`.github/workflows/release.yml`](.github/workflows/release.yml) — tests, builds, and publishes tagged releases.
 - [`scripts/build-release.sh`](scripts/build-release.sh) — creates the correctly structured Moodle installation ZIP for GitHub Actions.
 
@@ -89,14 +89,14 @@ The `scripts/` directory is release infrastructure, not an additional server com
 ## Development
 
 ```bash
-cd stackinputhelper
+cd hand2stack
 npm ci
 npm test
 npm run build
 ```
 
-See the [plugin README](stackinputhelper/README.md) for development details, configuration notes, and the release process.
+See the [plugin README](hand2stack/README.md) for development details, configuration notes, and the release process.
 
 ## Status
 
-Version `0.2.15-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, free-text document preservation, guarded sibling-answer matching, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+Version `0.2.16-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, free-text document preservation, guarded sibling-answer matching, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.

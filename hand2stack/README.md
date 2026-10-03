@@ -19,7 +19,7 @@ Requirements:
 
 Installation:
 
-1. Open the latest GitHub Release and download `stackinputhelper-vX.Y.Z.zip` from **Assets**. Do not use GitHub's automatically generated "Source code" archives.
+1. Open the latest GitHub Release and download `hand2stack-vX.Y.Z.zip` from **Assets**. Do not use GitHub's automatically generated "Source code" archives.
 2. In Moodle, open `Site administration > Plugins > Install plugins` and upload the ZIP.
 3. Complete the installation from `Site administration > Notifications`.
 4. Open `Site administration > Plugins > Local plugins > Hand2STACK`.
@@ -166,7 +166,7 @@ Site administrators should confirm that Mathpix use complies with institutional 
 Install the pinned JavaScript build dependency, run regression tests, and rebuild the Moodle AMD asset:
 
 ```bash
-cd stackinputhelper
+cd hand2stack
 npm ci
 npm run check
 npm run build
@@ -203,8 +203,8 @@ amd/build/main.min.js
 Update `version.php` and `CHANGELOG.md`, merge the change into the release branch, and push a matching version tag:
 
 ```bash
-git tag v0.2.15-alpha
-git push origin v0.2.15-alpha
+git tag v0.2.16-alpha
+git push origin v0.2.16-alpha
 ```
 
 The GitHub Actions workflow then checks PHP syntax and creates a GitHub Release containing:
@@ -220,5 +220,5 @@ The workflow refuses to publish if the tag does not match `$plugin->release` in 
 Current version:
 
 ```text
-0.2.15-alpha
+0.2.16-alpha
 ```
