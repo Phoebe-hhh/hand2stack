@@ -38,6 +38,9 @@ If Moodle reports that the destination directory already exists and ZIP upgrades
 - Displays multi-line recognition results instead of immediately submitting a single OCR result.
 - Detects STACK free-text inputs and preserves all recognized lines as editable displayed AsciiMath.
 - Keeps the Free-text review compact by showing the original work and one complete editable transcription, without a redundant candidate list.
+- Preserves complete Mathpix document text, including prose and every mathematical line, across mobile-upload polling.
+- Shows the uploaded source image beside free-text recognition with zoom, reset, and drag inspection.
+- Matches labelled results such as `f(2)=...` to sibling STACK fields through their syntax hints while protecting newer recognition results and concurrent student edits.
 - Classifies recognized lines as text, equation, expression, approximation, or condition without inferring which is the answer.
 - Preserves approximate values as normalized candidates with an `approximate` relation instead of discarding them.
 - Lets users choose a different line, drag-select part of a line, or edit the selected recognized ASCII expression.
@@ -64,7 +67,9 @@ x = -1
 
 the plugin displays each recognized line separately and waits for the student to select one. The selected line is then converted to STACK syntax in the editable preview before insertion. A candidate is never treated as an answer merely because it is the last line.
 
-For a STACK 4.13 or later free-text input, the workflow changes automatically: the plugin keeps the complete multiline Mathpix ASCII result, wraps it as a displayed AsciiMath block, and presents one editable working preview. Applying the preview inserts the whole mathematical process; no answer-line selector is shown. Algebraic inputs continue to use the line-selection workflow above.
+For a STACK 4.13 or later free-text input, the workflow changes automatically: the plugin keeps the complete Mathpix document, converts delimited mathematics to displayed AsciiMath while retaining surrounding prose, and presents the source image beside one editable transcription. Edits remain synchronized with the hidden STACK answer field; no answer-line selector is shown. Algebraic inputs continue to use the line-selection workflow above.
+
+When the same question also contains short algebraic inputs with syntax hints such as `f(2)=`, the plugin can match corresponding labelled lines in the recognized working and fill those inputs after server-side STACK validation. A match is discarded if a newer recognition request starts or the student edits the target field while validation is in progress.
 
 If the OCR result contains natural language such as `Therefore, x = -1`, the review display keeps the text visible so the student can understand the recognition result. The STACK preview extracts the mathematical part, for example `x=-1`.
 

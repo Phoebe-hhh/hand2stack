@@ -7,6 +7,11 @@ Hand2STACK was previously known as STACK Input Helper. The internal Moodle compo
 
 - Preserve complete Mathpix document text through mobile-upload polling.
 - Prevent stale recognition matches or concurrent learner edits from overwriting sibling STACK answers.
+- Preserve prose and multiple mathematics regions in STACK free-text answers.
+- Add a side-by-side source-image viewer with zoom and drag inspection for free-text review.
+- Match labelled working such as `f(2)=...` to sibling STACK fields using their configured syntax hints.
+- Improve logical-relation, approximation, interval, and multiline-environment conversion and previews.
+- Highlight edits in free-text and algebraic ASCII review fields without changing submitted content.
 
 ## 0.2.14-alpha - 2026-09-26
 

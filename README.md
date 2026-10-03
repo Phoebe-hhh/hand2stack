@@ -25,6 +25,9 @@ Do not upload GitHub's automatically generated **Source code** archives to Moodl
 - Edit the selected ASCII result, inspect its synchronized LaTeX form, and restore the original OCR value.
 - Validate edited algebraic expressions with STACK's parser before insertion.
 - Preserve complete multiline working automatically in STACK 4.13+ free-text inputs.
+- Preserve prose and every recognized mathematics line during desktop and mobile free-text recognition.
+- Show the uploaded source image beside the editable free-text transcription, with zoom and drag inspection.
+- Match labelled results such as `f(2)=...` to sibling STACK inputs using their syntax hints without overwriting newer results or student edits.
 - Select part of a recognized formula and insert only the confirmed STACK expression.
 - Prevent stale recognition requests from replacing newer results and limit recognition requests per user.
 - Keep Mathpix credentials on the Moodle server rather than in browser JavaScript.
@@ -65,9 +68,9 @@ Then visit **Site administration → Notifications**. When upgrading manually, b
 
 1. Choose image upload, handwriting, or mobile upload beside a STACK answer field.
 2. Submit the image or handwritten strokes for recognition.
-3. For an algebraic input, select the relevant line or symbols; for a free-text input, review the complete multiline working.
-4. Correct the selected recognized ASCII expression or free-text working if necessary.
-5. Insert the confirmed expression into the answer field.
+3. For an algebraic input, select the relevant line or symbols; for a free-text input, compare the source image with the complete editable transcription.
+4. Correct the selected recognized ASCII expression or free-text working if necessary. Free-text edits stay synchronized with the hidden STACK answer field.
+5. Insert the confirmed algebraic expression. Labelled free-text results may also fill matching sibling inputs when their syntax hints agree.
 
 The plugin does not submit the quiz answer automatically.
 
@@ -96,4 +99,4 @@ See the [plugin README](stackinputhelper/README.md) for development details, con
 
 ## Status
 
-Version `0.2.14-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+Version `0.2.14-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, free-text document preservation, guarded sibling-answer matching, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
