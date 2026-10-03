@@ -19,4 +19,4 @@ $plugin->component = 'local_stackinputhelper';
 $plugin->version   = 2026100400;
 $plugin->requires  = 2024042200;
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release = '0.2.14-alpha';
+$plugin->release = '0.2.15-alpha';

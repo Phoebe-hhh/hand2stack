@@ -4,15 +4,15 @@
 
 Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-> **Current pilot release:** [v0.2.14-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.2.14-alpha)
+> **Current pilot release:** [v0.2.15-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.2.15-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download stackinputhelper-v0.2.14-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.2.14-alpha/stackinputhelper-v0.2.14-alpha.zip)**
+**[Download stackinputhelper-v0.2.15-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.2.15-alpha/stackinputhelper-v0.2.15-alpha.zip)**
 
-Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `stackinputhelper-v0.2.14-alpha.zip` and contains a single root folder named `stackinputhelper/`.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `stackinputhelper-v0.2.15-alpha.zip` and contains a single root folder named `stackinputhelper/`.
 
 ## Features
 
@@ -99,4 +99,4 @@ See the [plugin README](stackinputhelper/README.md) for development details, con
 
 ## Status
 
-Version `0.2.14-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, free-text document preservation, guarded sibling-answer matching, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+Version `0.2.15-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, free-text document preservation, guarded sibling-answer matching, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
