@@ -24,6 +24,7 @@ const sessionResult = fs.readFileSync(path.join(pluginRoot, 'session_result.php'
 const installXml = fs.readFileSync(path.join(pluginRoot, 'db/install.xml'), 'utf8');
 const versionPhp = fs.readFileSync(path.join(pluginRoot, 'version.php'), 'utf8');
 const installPhp = fs.readFileSync(path.join(pluginRoot, 'db/install.php'), 'utf8');
+const anchorsEndpoint = fs.readFileSync(path.join(pluginRoot, 'anchors.php'), 'utf8');
 
 test('the public and Moodle component identity is Hand2STACK', () => {
     assert.match(versionPhp, /\$plugin->component = 'local_hand2stack'/);
@@ -296,6 +297,17 @@ test('matched sibling answers reject stale recognition and concurrent edits', ()
     assert.match(source, /applyMatchedAnswers = async \(sourceBox, lines, isCurrent/);
     assert.match(source, /if \(!isCurrent\(\)\) return/);
     assert.match(source, /box\.value === valueBeforeValidation/);
+});
+
+test('syntax-hint recovery is limited to an authorized question usage', () => {
+    assert.match(anchorsEndpoint, /require_login\(\)/);
+    assert.match(anchorsEndpoint, /require_sesskey\(\)/);
+    assert.match(anchorsEndpoint, /local\/hand2stack:use/);
+    assert.match(anchorsEndpoint, /quiz_attempts/);
+    assert.match(anchorsEndpoint, /\$attempt->userid/);
+    assert.match(anchorsEndpoint, /mod\/quiz:viewreports/);
+    assert.match(anchorsEndpoint, /core_question_preview/);
+    assert.match(anchorsEndpoint, /context_user::instance\(\$USER->id\)/);
 });
 
 test('candidate selection is delegated so MathJax updates cannot break the detail panel', () => {

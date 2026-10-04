@@ -1,9 +1,17 @@
 # Changelog
 
-Hand2STACK was previously known as Hand2STACK. The internal Moodle component name
-`local_hand2stack` remains unchanged so existing installations can upgrade safely.
+Hand2STACK was previously known as STACK Input Helper. Releases from 0.3.0 onward
+use the Moodle component name `local_hand2stack` and install in `local/hand2stack`.
 
 ## Unreleased
+
+## 0.3.1-alpha - 2026-10-04
+
+- Recover STACK syntax hints from the server when a saved or empty submission no longer exposes them in the page.
+- Extract labelled results such as `f(2)=...` from recognized working and report each matched or missing target clearly.
+- Add thin, medium, and thick handwriting pen sizes.
+- Improve conversion of numbered result lines, approximation chains, and short LaTeX inequality commands.
+- Preserve exact results when a trailing decimal approximation only restates the same answer.
 
 ## 0.3.0-alpha - 2026-10-04
 

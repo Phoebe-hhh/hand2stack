@@ -60,6 +60,13 @@ final class stack_converter_test extends \advanced_testcase {
             'text i constant' => ['\\text { i }', '%i'],
             'absolute value' => ['\\left|x^{2}-1\\right|', 'abs(x^2-1)'],
             'chained inequality' => ['0<x<1', '0<x and x<1'],
+            'numbered result label' => ['1. f(2)=1+2\\sqrt{2}', 'f(2)=1+2*sqrt(2)'],
+            'exact value followed by decimal approximation' => [
+                'g(1)=2+\\frac{1}{\\sqrt{2}}\\approx2.71',
+                'g(1)=2+1/sqrt(2)',
+            ],
+            'approximate assignment' => ['x\\approx3.83', 'x=3.83'],
+            'short LaTeX inequality commands' => ['1\\le x\\lt3', '1<=x and x<3'],
             'derivative' => ['\\frac{d}{d x} x^{2}', 'diff(x^2,x)'],
             'derivative quotient' => ['\\frac{dy}{dx}', 'diff(y,x)'],
             'second derivative equation' => [

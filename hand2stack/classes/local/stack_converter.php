@@ -60,6 +60,21 @@ final class stack_converter {
         );
         $s = str_replace(['\\quad', '\\qquad', '\\therefore', '\\because'], '', $s);
 
+        // List numbering such as "1. f(2)=..." is layout, not a product "1.f(2)".
+        $s = preg_replace('/^\s*(?:\d+[.)]|\(\d+\))\s+(?=[A-Za-z\\\\(])/', '', $s);
+
+        // Maxima has no approximation operator. A trailing "≈ 3.83" after an
+        // exact value restates it as a decimal, so keep the exact part; a
+        // lone approximation ("x ≈ 3.83", "≈ 2.71") keeps the decimal.
+        $approx = '(?:\\\\(?:approx|simeq|thickapprox|sim)(?![A-Za-z])|(?<![A-Za-z\\\\])approx(?![A-Za-z])|≈|~~)';
+        $s = preg_replace('/^\s*' . $approx . '\s*/u', '', $s);
+        if (preg_match('/' . $approx . '/u', $s, $match, PREG_OFFSET_CAPTURE)) {
+            $head = substr($s, 0, $match[0][1]);
+            $s = preg_match('/(?<![<>!#:])=/', $head)
+                ? rtrim($head)
+                : preg_replace('/' . $approx . '/u', '=', $s, 1);
+        }
+
         $piecewise = self::normalize_piecewise($s);
         if ($piecewise !== '') {
             return $piecewise;
@@ -109,6 +124,10 @@ final class stack_converter {
         $s = str_replace(['\\cdot', '\\times', '×', '\\div', '÷'], ['*', '*', '*', '/', '/'], $s);
         $s = str_replace(['\\geqslant', '\\geq', '≥'], '>=', $s);
         $s = str_replace(['\\leqslant', '\\leq', '≤'], '<=', $s);
+        $s = preg_replace('/\\\\ge(?![a-zA-Z])/', '>=', $s);
+        $s = preg_replace('/\\\\le(?![a-zA-Z])/', '<=', $s);
+        $s = preg_replace('/\\\\gt(?![a-zA-Z])/', '>', $s);
+        $s = preg_replace('/\\\\lt(?![a-zA-Z])/', '<', $s);
         $s = str_replace(['\\neq', '\\ne'], '#', $s);
 
         $s = preg_replace('/[a-zA-Z]\s*=\s*\\\\pm\s*([A-Za-z0-9%.\[\]\^()+\-*\/]+)/', '[$1,-$1]', $s);

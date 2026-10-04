@@ -77,6 +77,7 @@ const buildApplyMatchedAnswers = (0, eval)(`(function(isFreeTextInput, findSibli
     ${extractFunctionSource('normalizeAnchorText')}
     ${extractFunctionSource('matchableLineText')}
     ${extractFunctionSource('extractAnchoredValue')}
+    ${extractFunctionSource('extractAnchoredAnswers')}
     ${extractFunctionSource('applyMatchedAnswers')}
     return applyMatchedAnswers;
 })`);
@@ -163,4 +164,43 @@ test('applyMatchedAnswers preserves an answer edited during validation', async (
     await pending;
 
     assert.deepEqual(calls, []);
+});
+
+const extractAnchoredAnswers = (0, eval)(`(function() {
+    ${extractFunctionSource('normalizeAnchorText')}
+    ${extractFunctionSource('matchableLineText')}
+    ${extractFunctionSource('extractAnchoredValue')}
+    ${extractFunctionSource('extractAnchoredAnswers')}
+    return extractAnchoredAnswers;
+})()`);
+
+test('extractAnchoredAnswers returns one structured result per anchor', () => {
+    const lines = [
+        {math: 'f(2)=\\frac{3}{2}'},
+        {math: 'so g is larger'},
+        {math: 'g(1)=2+\\frac{1}{\\sqrt{2}}'}
+    ];
+    assert.deepEqual(extractAnchoredAnswers(['f(2)=', 'g(1)=', 'h(3)='], lines), [
+        {anchor: 'f(2)=', expr: '\\frac{3}{2}', lineIndex: 0},
+        {anchor: 'g(1)=', expr: '2+\\frac{1}{\\sqrt{2}}', lineIndex: 2},
+        {anchor: 'h(3)=', expr: null, lineIndex: -1}
+    ]);
+});
+
+test('applyMatchedAnswers reports filled and missing targets', async () => {
+    const reports = [];
+    const found = {value: '', dataset: {hand2stackAnchor: 'f(2)='}};
+    const missing = {value: '', dataset: {hand2stackAnchor: 'g(1)='}};
+    const applyMatchedAnswers = buildApplyMatchedAnswers(
+        () => true,
+        () => [found, missing],
+        async latex => latex,
+        () => {},
+        () => {}
+    );
+
+    await applyMatchedAnswers('SOURCE', [{math: 'f(2)=1'}], () => true,
+        (box, result) => reports.push([box === found ? 'f' : 'g', result.status, result.lineIndex]));
+
+    assert.deepEqual(reports, [['f', 'filled', 0], ['g', 'notfound', -1]]);
 });

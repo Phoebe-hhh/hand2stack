@@ -28,6 +28,7 @@ define([], function() {
         recognizeUrl: '',
         strokesUrl: '',
         convertUrl: '',
+        anchorsUrl: '',
         sessionCreateUrl: '',
         sessionResultUrl: '',
         sesskey: '',
@@ -82,6 +83,13 @@ define([], function() {
         resizehandwriting: 'Drag to resize the writing area',
         draw: 'Pen',
         eraser: 'Eraser',
+        extractedfromworking: 'Extracted from your working',
+        anchornotfound: 'Could not find {$a} in the recognized working. Please enter it manually.',
+        anchorconvertfailed: 'Found {$a} in the recognized working, but could not convert it. Please enter it manually.',
+        pensize: 'Pen size',
+        penthin: 'Thin pen',
+        penmedium: 'Medium pen',
+        penthick: 'Thick pen',
         undo: 'Undo',
         clear: 'Clear',
         recognizestrokes: 'Recognize handwriting',
@@ -151,6 +159,50 @@ define([], function() {
         }
     };
 
+    // STACK input names look like "q43:4_fval": usage id, slot, input name.
+    const parseStackInputName = name => {
+        const match = /^q(\d+):(\d+)_(.+)$/.exec(String(name || ''));
+        return match ? {usage: match[1], slot: match[2], input: match[3]} : null;
+    };
+
+    // STACK drops the Syntax hint from the page once an empty answer has been
+    // submitted, so fill in any missing anchors from the question definition.
+    const fetchMissingAnchors = async boxes => {
+        const missing = boxes.filter(box => !box.dataset.hand2stackAnchor && parseStackInputName(box.name));
+        if (!missing.length || !config.anchorsUrl) return;
+        const questions = new Map();
+        missing.forEach(box => {
+            const parsed = parseStackInputName(box.name);
+            const key = parsed.usage + ':' + parsed.slot;
+            if (!questions.has(key)) questions.set(key, parsed);
+        });
+        await Promise.all(Array.from(questions.values()).map(async question => {
+            try {
+                const formData = new FormData();
+                formData.append('usage', question.usage);
+                formData.append('slot', question.slot);
+                formData.append('sesskey', config.sesskey);
+                const response = await fetch(config.anchorsUrl, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+                const data = await parseJsonResponse(response);
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || ('HTTP ' + response.status));
+                }
+                missing.forEach(box => {
+                    const parsed = parseStackInputName(box.name);
+                    if (parsed.usage !== question.usage || parsed.slot !== question.slot) return;
+                    const anchor = data.anchors && data.anchors[parsed.input];
+                    if (anchor && !box.dataset.hand2stackAnchor) box.dataset.hand2stackAnchor = anchor;
+                });
+            } catch (error) {
+                window.console.warn('[hand2stack] could not load answer anchors:', error);
+            }
+        }));
+    };
+
     // Other STACK inputs that live in the same question as a free-text box,
     // so one photo of the full working can also fill in their small answer
     // boxes (e.g. f(2)= / g(1)= inputs alongside a "show your work" box).
@@ -212,46 +264,139 @@ define([], function() {
         }, 2000);
     };
 
-    // Generic across questions: it never hardcodes which answers a question
-    // needs, it only matches whatever Syntax hints the teacher already set.
-    const applyMatchedAnswers = async (sourceBox, lines, isCurrent = () => true) => {
-        if (!isFreeTextInput(sourceBox) || !Array.isArray(lines) || !lines.length) {
-            return;
-        }
-        const siblings = findSiblingAnswerBoxes(sourceBox)
-            .filter(box => box.dataset.hand2stackAnchor);
-
-        for (const box of siblings) {
-            if (!isCurrent()) return;
-            const anchor = box.dataset.hand2stackAnchor;
-            const valueBeforeValidation = box.value;
-            let fragment = null;
-            // Scan from the end: when a label is restated after an earlier
-            // derivation step (e.g. "g(1)=..." mid-working, then "g(1)~~..."
-            // as the final answer), the later line is the intended answer.
+    // The data layer between recognition and the answer boxes. One recognized
+    // working is turned into one structured result per anchor, e.g.
+    //   [{anchor: 'f(2)=', expr: '\frac{3}{2}', lineIndex: 4},
+    //    {anchor: 'g(1)=', expr: null, lineIndex: -1}]
+    // Scan from the end: when a label is restated after an earlier derivation
+    // step (e.g. "g(1)=..." mid-working, then "g(1)~~..." as the final
+    // answer), the later line is the intended answer.
+    const extractAnchoredAnswers = (anchors, lines) => {
+        return anchors.map(anchor => {
             for (let i = lines.length - 1; i >= 0; i--) {
-                fragment = extractAnchoredValue(anchor, matchableLineText(lines[i]));
-                if (fragment) {
-                    break;
+                const expr = extractAnchoredValue(anchor, matchableLineText(lines[i]));
+                if (expr) {
+                    return {anchor, expr, lineIndex: i};
                 }
             }
-            if (!fragment) {
+            return {anchor, expr: null, lineIndex: -1};
+        });
+    };
+
+    // Generic across questions: it never hardcodes which answers a question
+    // needs, it only matches whatever Syntax hints the teacher already set.
+    // The free-text box is the source; its anchored sibling boxes are targets.
+    const applyMatchedAnswers = async (sourceBox, lines, isCurrent = () => true, onTargetResult = null) => {
+        if (!isFreeTextInput(sourceBox) || !Array.isArray(lines) || !lines.length) {
+            return [];
+        }
+        const report = onTargetResult || (() => null);
+        const targets = findSiblingAnswerBoxes(sourceBox)
+            .filter(box => box.dataset.hand2stackAnchor);
+        const extracted = extractAnchoredAnswers(targets.map(box => box.dataset.hand2stackAnchor), lines);
+
+        for (let index = 0; index < targets.length; index++) {
+            if (!isCurrent()) return extracted;
+            const box = targets[index];
+            const result = extracted[index];
+            if (!result.expr) {
+                report(box, Object.assign({status: 'notfound'}, result));
                 continue;
             }
+            const valueBeforeValidation = box.value;
             try {
-                const cleanStack = await postLatex(fragment);
+                const cleanStack = await postLatex(result.expr);
                 // Recognition and STACK validation are asynchronous. Never let
                 // an older result, or a result validated while the learner was
                 // typing, replace the current answer.
-                if (!isCurrent()) return;
-                if (cleanStack && box.value === valueBeforeValidation) {
+                if (!isCurrent()) return extracted;
+                result.stack = cleanStack || '';
+                if (!cleanStack) {
+                    report(box, Object.assign({status: 'convertfailed'}, result));
+                } else if (box.value === valueBeforeValidation) {
                     setAnswerValue(box, cleanStack);
                     flashAutofilledBox(box);
+                    report(box, Object.assign({status: 'filled'}, result));
                 }
             } catch (error) {
-                window.console.warn('[hand2stack] anchor match could not be validated:', anchor, error);
+                window.console.warn('[hand2stack] anchor match could not be validated:', result.anchor, error);
+                if (isCurrent()) {
+                    report(box, Object.assign({status: 'convertfailed'}, result));
+                }
             }
         }
+        return extracted;
+    };
+
+    const setTargetStatus = (box, kind, text) => {
+        const status = box._hand2stackStatus;
+        if (!status) return;
+        window.clearTimeout(status._fadeTimer);
+        status._kind = kind;
+        status.textContent = text;
+        status.style.color = kind === 'success' ? '#1a7f37' : '#b45309';
+        status.style.opacity = text ? '1' : '0';
+        status.style.display = text ? 'inline-block' : 'none';
+        if (kind === 'success' && text) {
+            status._fadeTimer = window.setTimeout(() => {
+                status.style.opacity = '0';
+                status._fadeTimer = window.setTimeout(() => {
+                    status.style.display = 'none';
+                }, 400);
+            }, 3000);
+        }
+    };
+
+    // Keep a per-target record of what recognition proposed and what the
+    // learner did with it, so the process can be inspected or logged later.
+    const reportTargetResult = (box, result) => {
+        const label = normalizeAnchorText(result.anchor);
+        box._hand2stackExtraction = {
+            anchor: label,
+            recognized: result.expr,
+            stack: result.stack || '',
+            sourceLine: result.lineIndex,
+            autoFilled: result.status === 'filled',
+            studentEdited: false
+        };
+        box.dataset.hand2stackAutoFilled = result.status === 'filled' ? '1' : '0';
+        delete box.dataset.hand2stackStudentEdited;
+        if (result.status === 'filled') {
+            setTargetStatus(box, 'success', '✓ ' + (config.extractedfromworking || 'Extracted from your working'));
+        } else if (result.status === 'notfound') {
+            setTargetStatus(box, 'warning', (config.anchornotfound
+                || 'Could not find {$a} in the recognized working. Please enter it manually.').replace('{$a}', label));
+        } else {
+            setTargetStatus(box, 'warning', (config.anchorconvertfailed
+                || 'Found {$a} in the recognized working, but could not convert it. Please enter it manually.')
+                .replace('{$a}', label));
+        }
+    };
+
+    // A target box is filled from the free-text working, so it gets no capture
+    // buttons of its own: only a status message, and it stays fully editable.
+    const setupTargetBox = box => {
+        if (box.dataset.hand2stackBound === '1') return;
+        box.dataset.hand2stackBound = '1';
+        box.dataset.hand2stackTarget = '1';
+        if (box.tagName === 'INPUT') {
+            box.style.width = 'min(260px, 45vw)';
+            box.style.maxWidth = '100%';
+        }
+        const status = document.createElement('span');
+        status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
+        status.style.cssText = 'display:none;margin-left:10px;font-size:0.875rem;vertical-align:middle;' +
+            'transition:opacity 0.4s';
+        box.insertAdjacentElement('afterend', status);
+        box._hand2stackStatus = status;
+        box.addEventListener('input', event => {
+            if (!event.isTrusted) return;
+            if (box._hand2stackExtraction) box._hand2stackExtraction.studentEdited = true;
+            box.dataset.hand2stackStudentEdited = '1';
+            // A "please enter it manually" hint has served its purpose once they type.
+            if (status._kind === 'warning') setTargetStatus(box, 'warning', '');
+        });
     };
 
     const formatFreeTextWorking = (recognizedText, rawAscii, rawLatex, stackResult, lines) => {
@@ -529,6 +674,13 @@ define([], function() {
         options.style.gap = '6px';
         options.style.marginBottom = '8px';
         options.style.minWidth = '0';
+        // Long recognitions scroll inside the list so the editable column stays in view.
+        options.style.position = 'relative';
+        options.style.maxHeight = 'min(60vh, 560px)';
+        options.style.overflowY = 'auto';
+        options.style.overscrollBehavior = 'contain';
+        options.style.paddingRight = '4px';
+        options.style.scrollbarWidth = 'thin';
 
         const formatTitle = document.createElement('div');
         formatTitle.textContent = config.recognizedformat || 'Recognized format:';
@@ -1684,7 +1836,10 @@ define([], function() {
             }
 
             const text = document.createElement('span');
-            text.textContent = String(part.text || '').replace(/[$¥￥]/g, '');
+            // OCR text segments can carry LaTeX spacing commands outside math; show them as spaces.
+            text.textContent = String(part.text || '').replace(/[$¥￥]/g, '')
+                .replace(/\\q?quad(?![a-zA-Z])|\\[,;:! ]/g, ' ')
+                .replace(/ {2,}/g, ' ');
             text.style.whiteSpace = 'pre-wrap';
             text.style.fontFamily = 'inherit';
             displayRow.appendChild(text);
@@ -1964,6 +2119,7 @@ define([], function() {
         panel._latexTab.onclick = () => selectFormat('latex');
         panel._asciiTab.onclick = () => selectFormat('ascii');
         panel._options.innerHTML = '';
+        panel._options.scrollTop = 0;
         panel._tokenRows = [];
         panel._selectionBoxes = [];
         panel._optionWrappers = [];
@@ -2212,6 +2368,14 @@ define([], function() {
                 const lineIndex = option ? Number(option.dataset.resultLineIndex) : -1;
                 setupInteractiveFormula(panel, rendered, resultLines[lineIndex] || null);
             });
+            const defaultOption = panel._optionWrappers[defaultIndex];
+            if (defaultOption) {
+                const list = panel._options;
+                const bottom = defaultOption.offsetTop + defaultOption.offsetHeight;
+                if (bottom > list.clientHeight) {
+                    list.scrollTop = defaultOption.offsetTop - Math.max(0, (list.clientHeight - defaultOption.offsetHeight) / 2);
+                }
+            }
         });
     };
 
@@ -2344,7 +2508,44 @@ define([], function() {
         undo.textContent = config.undo;
         clear.textContent = config.clear;
         recognize.textContent = config.recognizestrokes;
-        controls.append(draw, eraser, undo, clear, recognize, status);
+        // Pen widths are in CSS pixels; each stroke keeps the width it was drawn with.
+        const penSizes = [
+            {width: 1.5, label: config.penthin || 'Thin pen'},
+            {width: 2.5, label: config.penmedium || 'Medium pen'},
+            {width: 4, label: config.penthick || 'Thick pen'}
+        ];
+        let penWidth = penSizes[1].width;
+        const sizeGroup = document.createElement('div');
+        sizeGroup.setAttribute('role', 'group');
+        sizeGroup.setAttribute('aria-label', config.pensize || 'Pen size');
+        sizeGroup.style.cssText = 'display:inline-flex;align-items:center;gap:2px;padding:2px;' +
+            'border:1px solid #cfd4dc;border-radius:6px;background:#fff';
+        const sizeButtons = penSizes.map(size => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.title = size.label;
+            button.setAttribute('aria-label', size.label);
+            button.style.cssText = 'width:32px;height:30px;padding:0;border:0;border-radius:4px;' +
+                'display:inline-flex;align-items:center;justify-content:center;cursor:pointer';
+            const dot = document.createElement('span');
+            const dotSize = Math.round(size.width * 2 + 2);
+            dot.style.cssText = 'display:block;border-radius:50%;background:#111827;' +
+                'width:' + dotSize + 'px;height:' + dotSize + 'px';
+            button.appendChild(dot);
+            button._penWidth = size.width;
+            sizeGroup.appendChild(button);
+            return button;
+        });
+        const paintSizeButtons = () => {
+            sizeButtons.forEach(button => {
+                const selected = button._penWidth === penWidth;
+                button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+                button.style.background = selected ? '#e8f1ff' : 'transparent';
+                button.style.boxShadow = selected ? 'inset 0 0 0 1px #3978c5' : 'none';
+            });
+        };
+        paintSizeButtons();
+        controls.append(draw, eraser, sizeGroup, undo, clear, recognize, status);
         canvasWrapper.append(canvas, resizeHandle);
         panel.append(instruction, canvasWrapper, controls);
 
@@ -2357,7 +2558,7 @@ define([], function() {
         const dirtyStrokes = new Set();
         const context = canvas.getContext('2d');
         const cloneStrokes = () => strokes.map(stroke => ({
-            x: stroke.x.slice(), y: stroke.y.slice(), drawn: stroke.x.length
+            x: stroke.x.slice(), y: stroke.y.slice(), drawn: stroke.x.length, width: stroke.width
         }));
         const saveHistory = () => history.push(cloneStrokes());
         const setTool = nextTool => {
@@ -2369,9 +2570,9 @@ define([], function() {
             eraser.className = drawing ? 'btn btn-secondary' : 'btn btn-primary';
             canvas.style.cursor = drawing ? 'crosshair' : 'cell';
         };
-        const configureContext = () => {
+        const configureContext = (width = 4) => {
             context.strokeStyle = '#111827';
-            context.lineWidth = 4;
+            context.lineWidth = width;
             context.lineCap = 'round';
             context.lineJoin = 'round';
         };
@@ -2386,7 +2587,7 @@ define([], function() {
             const length = stroke.x.length;
             if (!length || stroke.drawn >= length) return;
 
-            configureContext();
+            configureContext(stroke.width);
             context.beginPath();
             if (stroke.drawn === 0) {
                 context.moveTo(stroke.x[0], stroke.y[0]);
@@ -2505,7 +2706,8 @@ define([], function() {
                 addSamples(event);
                 return;
             }
-            active = {x: [], y: [], drawn: 0, pointerId};
+            const scale = canvasRect.width > 0 ? canvas.width / canvasRect.width : 1;
+            active = {x: [], y: [], drawn: 0, pointerId, width: penWidth * scale};
             strokes.push(active);
             addSamples(event);
         };
@@ -2579,6 +2781,11 @@ define([], function() {
         }, {passive: false});
         draw.addEventListener('click', () => setTool('draw'));
         eraser.addEventListener('click', () => setTool('eraser'));
+        sizeButtons.forEach(button => button.addEventListener('click', () => {
+            penWidth = button._penWidth;
+            paintSizeButtons();
+            setTool('draw');
+        }));
         undo.addEventListener('click', () => {
             if (!history.length) return;
             strokes.splice(0, strokes.length, ...history.pop());
@@ -2606,7 +2813,7 @@ define([], function() {
                 updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
                     answerBox, result.lines || [], result.freetext || result.raw_text || '', canvas.toDataURL('image/png'));
                 applyMatchedAnswers(answerBox, result.lines || [],
-                    () => requestCoordinator.isCurrent(requestId)).catch(error => {
+                    () => requestCoordinator.isCurrent(requestId), reportTargetResult).catch(error => {
                     window.console.error('[hand2stack] applyMatchedAnswers failed:', error);
                 });
                 status.textContent = '';
@@ -2629,24 +2836,46 @@ define([], function() {
         button.setAttribute('aria-label', label);
     };
 
-    const createIconButton = (label, icon, background) => {
+    const iconButtonColors = {
+        idle: {background: '#fff', border: '#cfd4dc', color: '#374151'},
+        hover: {background: '#f3f6fa', border: '#aeb6c2', color: '#1f2937'},
+        selected: {background: '#e8f1ff', border: '#3978c5', color: '#1d4f91'}
+    };
+
+    const paintIconButton = (button) => {
+        const selected = button.getAttribute('aria-pressed') === 'true';
+        const colors = iconButtonColors[selected ? 'selected' : (button._hovered ? 'hover' : 'idle')];
+        button.style.background = colors.background;
+        button.style.borderColor = colors.border;
+        button.style.color = colors.color;
+    };
+
+    const createIconButton = (label, icon) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.innerHTML = icon;
         setIconButtonLabel(button, label);
-        button.style.marginLeft = '8px';
         button.style.width = '36px';
         button.style.height = '34px';
         button.style.padding = '0';
-        button.style.border = '1px solid #999';
-        button.style.borderRadius = '4px';
-        button.style.background = background;
-        button.style.color = '#1f2937';
+        button.style.border = '1px solid';
+        button.style.borderRadius = '6px';
+        button.style.boxShadow = '0 1px 2px rgba(15, 23, 42, 0.06)';
         button.style.display = 'inline-flex';
         button.style.alignItems = 'center';
         button.style.justifyContent = 'center';
-        button.style.verticalAlign = 'middle';
+        button.style.flex = '0 0 auto';
         button.style.cursor = 'pointer';
+        button.style.transition = 'background-color 0.15s, border-color 0.15s, color 0.15s';
+        button.addEventListener('mouseenter', () => {
+            button._hovered = true;
+            paintIconButton(button);
+        });
+        button.addEventListener('mouseleave', () => {
+            button._hovered = false;
+            paintIconButton(button);
+        });
+        paintIconButton(button);
         return button;
     };
 
@@ -2689,9 +2918,9 @@ define([], function() {
         const mobileLabel = isMobileOrTablet
             ? (config.camerabtn || 'Take a photo')
             : (config.mobilebtn || 'Mobile Math Upload');
-        const uploadBtn = createIconButton(uploadLabel, icons.image, '#f5f5f5');
-        const mobileBtn = createIconButton(mobileLabel, icons.camera, '#eef6ff');
-        const handwriteBtn = createIconButton(config.handwritebtn, icons.pen, '#f2f7ef');
+        const uploadBtn = createIconButton(uploadLabel, icons.image);
+        const mobileBtn = createIconButton(mobileLabel, icons.camera);
+        const handwriteBtn = createIconButton(config.handwritebtn, icons.pen);
         let inputMode = '';
 
         const selectInputMode = mode => {
@@ -2708,14 +2937,12 @@ define([], function() {
             }
 
             [
-                [uploadBtn, 'image', '#f5f5f5'],
-                [handwriteBtn, 'handwrite', '#f2f7ef'],
-                [mobileBtn, isMobileOrTablet ? 'camera' : 'mobile', '#eef6ff']
-            ].forEach(([button, buttonMode, background]) => {
-                const selected = mode === buttonMode;
-                button.setAttribute('aria-pressed', selected ? 'true' : 'false');
-                button.style.background = selected ? '#d9e9ff' : background;
-                button.style.borderColor = selected ? '#3978c5' : '#999';
+                [uploadBtn, 'image'],
+                [handwriteBtn, 'handwrite'],
+                [mobileBtn, isMobileOrTablet ? 'camera' : 'mobile']
+            ].forEach(([button, buttonMode]) => {
+                button.setAttribute('aria-pressed', mode === buttonMode ? 'true' : 'false');
+                paintIconButton(button);
             });
         };
 
@@ -2752,7 +2979,7 @@ define([], function() {
                 updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
                     answerBox, result.lines || [], result.freetext || result.raw_text || '', sourceUrl);
                 applyMatchedAnswers(answerBox, result.lines || [],
-                    () => requestCoordinator.isCurrent(requestId)).catch(error => {
+                    () => requestCoordinator.isCurrent(requestId), reportTargetResult).catch(error => {
                     window.console.error('[hand2stack] applyMatchedAnswers failed:', error);
                 });
             } catch (error) {
@@ -2851,7 +3078,7 @@ define([], function() {
                                 updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
                                     answerBox, result.lines || [], result.freetext || result.raw_text || '');
                                 applyMatchedAnswers(answerBox, result.lines || [],
-                                    () => requestCoordinator.isCurrent(requestId) && inputMode === 'mobile').catch(error => {
+                                    () => requestCoordinator.isCurrent(requestId) && inputMode === 'mobile', reportTargetResult).catch(error => {
                                     window.console.error('[hand2stack] applyMatchedAnswers failed:', error);
                                 });
                             }
@@ -2894,17 +3121,48 @@ define([], function() {
             }
         });
 
-        answerBox.insertAdjacentElement('afterend', uploadBtn);
-        uploadBtn.insertAdjacentElement('afterend', handwriteBtn);
+        // Keep the buttons together: if they do not fit beside the answer box,
+        // the whole group wraps onto the next line instead of splitting up.
+        const buttonGroup = document.createElement('span');
+        buttonGroup.style.display = 'inline-flex';
+        buttonGroup.style.flexWrap = 'nowrap';
+        buttonGroup.style.alignItems = 'center';
+        buttonGroup.style.gap = '6px';
+        buttonGroup.style.verticalAlign = 'top';
+        buttonGroup.style.whiteSpace = 'nowrap';
+        buttonGroup.append(uploadBtn, handwriteBtn);
         if (config.enablemobile) {
-            handwriteBtn.insertAdjacentElement('afterend', mobileBtn);
-            mobileBtn.insertAdjacentElement('afterend', mobilePanel);
-            mobilePanel.insertAdjacentElement('afterend', handwritingPanel);
-            handwritingPanel.insertAdjacentElement('afterend', resultPanel);
-        } else {
-            handwriteBtn.insertAdjacentElement('afterend', handwritingPanel);
-            handwritingPanel.insertAdjacentElement('afterend', resultPanel);
+            buttonGroup.appendChild(mobileBtn);
         }
+
+        answerBox.insertAdjacentElement('afterend', buttonGroup);
+
+        // Beside the box the group just needs a small gap. Once it has wrapped
+        // below, line it up with the box's left edge and give it room to breathe.
+        const layoutButtonGroup = () => {
+            if (answerBox.offsetParent === null) return;
+            buttonGroup.style.margin = '0 0 0 10px';
+            const boxRect = answerBox.getBoundingClientRect();
+            const groupRect = buttonGroup.getBoundingClientRect();
+            if (groupRect.top < boxRect.bottom - 1) return;
+            const indent = Math.max(0, boxRect.left - (groupRect.left - 10));
+            buttonGroup.style.margin = '8px 0 4px ' + indent + 'px';
+        };
+        layoutButtonGroup();
+        window.addEventListener('resize', layoutButtonGroup, {signal: lifecycleController.signal});
+        if (typeof ResizeObserver !== 'undefined') {
+            const groupResizeObserver = new ResizeObserver(layoutButtonGroup);
+            groupResizeObserver.observe(answerBox);
+            if (answerBox.parentElement) groupResizeObserver.observe(answerBox.parentElement);
+            lifecycleController.signal.addEventListener('abort', () => groupResizeObserver.disconnect(), {once: true});
+        }
+        if (config.enablemobile) {
+            buttonGroup.insertAdjacentElement('afterend', mobilePanel);
+            mobilePanel.insertAdjacentElement('afterend', handwritingPanel);
+        } else {
+            buttonGroup.insertAdjacentElement('afterend', handwritingPanel);
+        }
+        handwritingPanel.insertAdjacentElement('afterend', resultPanel);
 
         const cleanupObserver = new MutationObserver(() => {
             if (answerBox.isConnected) return;
@@ -2922,7 +3180,7 @@ define([], function() {
         cleanupObserver.observe(document.body, {childList: true, subtree: true});
     };
 
-    const run = () => {
+    const run = async () => {
         const mainContent = document.querySelector('.main-inner');
         if (mainContent && (document.body.id === 'page-mod-quiz-attempt'
                 || document.body.id === 'page-question-preview')) {
@@ -2933,7 +3191,16 @@ define([], function() {
             window.console.warn(config.nofieldfound || 'No visible STACK input found');
             return;
         }
-        boxes.forEach(attachButton);
+        // One capture interaction per question: anchored inputs next to a
+        // free-text box are filled from that box's working, not captured alone.
+        boxes.forEach(captureAnswerAnchor);
+        const candidates = new Set();
+        boxes.filter(isFreeTextInput).forEach(source => {
+            findSiblingAnswerBoxes(source).forEach(box => candidates.add(box));
+        });
+        boxes.filter(box => !candidates.has(box)).forEach(attachButton);
+        await fetchMissingAnchors(Array.from(candidates));
+        candidates.forEach(box => (box.dataset.hand2stackAnchor ? setupTargetBox(box) : attachButton(box)));
     };
 
     const init = suppliedConfig => {
@@ -2941,6 +3208,7 @@ define([], function() {
         config.recognizeUrl = replaceLegacyNodeUrl(config.recognizeUrl || config.apiurl, pluginUrl('recognize.php'));
         config.strokesUrl = replaceLegacyNodeUrl(config.strokesUrl, pluginUrl('strokes.php'));
         config.convertUrl = replaceLegacyNodeUrl(config.convertUrl, pluginUrl('convert.php'));
+        config.anchorsUrl = config.anchorsUrl || pluginUrl('anchors.php');
         config.sessionCreateUrl = replaceLegacyNodeUrl(config.sessionCreateUrl, pluginUrl('session_create.php'));
         config.sessionResultUrl = replaceLegacyNodeUrl(
             config.sessionResultUrl || config.sessionResultBaseUrl,

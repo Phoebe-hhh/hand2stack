@@ -282,9 +282,12 @@ final class mathpix_client {
                 $stack = stack_converter::normalize_selection($linelatex);
             }
             if (preg_match('/\\\\(?:approx|simeq|sim)(?![A-Za-z])/', $linelatex)) {
-                $approx = preg_replace('/\\\\(?:approx|simeq|sim)(?![A-Za-z])/', '=', $linelatex);
-                $stack = stack_converter::normalize_selection($approx);
-                $stack = preg_replace('/=/', '~~', $stack, 1);
+                // Convert each side separately so "~~" lands where the approximation was,
+                // not on an earlier "=" in the same row.
+                $sides = preg_split('/\\\\(?:approx|simeq|sim)(?![A-Za-z])/', $linelatex);
+                $stack = implode('~~', array_map(static function(string $side): string {
+                    return trim($side) === '' ? '' : stack_converter::normalize_selection($side);
+                }, $sides));
             }
             if ($stack !== '') {
                 $converted[] = ($numbering[$rowindex] ?? '') . $stack;

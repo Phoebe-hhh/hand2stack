@@ -1,7 +1,7 @@
 {
   "name": "moodle-local-hand2stack",
   "private": true,
-  "version": "0.3.0-alpha",
+  "version": "0.3.1-alpha",
   "scripts": {
     "build": "terser amd/src/main.js --compress --mangle --comments '/^!|@license|@copyright/' -o amd/build/main.min.js",
     "test": "node --test tests/js/*.test.js",

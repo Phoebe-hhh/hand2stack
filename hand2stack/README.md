@@ -205,8 +205,8 @@ amd/build/main.min.js
 Update `version.php` and `CHANGELOG.md`, merge the change into the release branch, and push a matching version tag:
 
 ```bash
-git tag v0.3.0-alpha
-git push origin v0.3.0-alpha
+git tag v0.3.1-alpha
+git push origin v0.3.1-alpha
 ```
 
 The GitHub Actions workflow then checks PHP syntax and creates a GitHub Release containing:
@@ -222,5 +222,5 @@ The workflow refuses to publish if the tag does not match `$plugin->release` in 
 Current version:
 
 ```text
-0.3.0-alpha
+0.3.1-alpha
 ```
