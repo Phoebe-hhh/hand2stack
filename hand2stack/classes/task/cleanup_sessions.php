@@ -6,19 +6,19 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-namespace local_stackinputhelper\task;
+namespace local_hand2stack\task;
 
 defined('MOODLE_INTERNAL') || die();
 
 /** Removes expired mobile-upload sessions and their recognition results. */
 final class cleanup_sessions extends \core\task\scheduled_task {
     public function get_name(): string {
-        return get_string('taskcleanupexpiredsessions', 'local_stackinputhelper');
+        return get_string('taskcleanupexpiredsessions', 'local_hand2stack');
     }
 
     public function execute(): void {
         global $DB;
 
-        $DB->delete_records_select('local_stackinputhelper_sess', 'expiresat < ?', [time()]);
+        $DB->delete_records_select('local_hand2stack_sess', 'expiresat < ?', [time()]);
     }
 }

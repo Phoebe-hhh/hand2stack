@@ -9,7 +9,7 @@
 /**
  * Capability definitions for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -17,7 +17,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $capabilities = [
-    'local/stackinputhelper:use' => [
+    'local/hand2stack:use' => [
         'captype' => 'write',
         'contextlevel' => CONTEXT_SYSTEM,
         'archetypes' => [

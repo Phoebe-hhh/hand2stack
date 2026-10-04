@@ -6,7 +6,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-namespace local_stackinputhelper\local;
+namespace local_hand2stack\local;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -29,7 +29,7 @@ final class api_response {
      * @param int $status HTTP status code.
      */
     public static function send_error(\Throwable $error, int $status = 0): void {
-        error_log('[local_stackinputhelper] ' . $error);
+        error_log('[local_hand2stack] ' . $error);
         $errorcode = $error instanceof \moodle_exception ? $error->errorcode : '';
         if (!in_array($errorcode, self::SAFE_ERROR_CODES, true)) {
             $errorcode = 'requestfailed';
@@ -40,7 +40,7 @@ final class api_response {
         http_response_code($status);
         echo json_encode([
             'success' => false,
-            'error' => get_string($errorcode, 'local_stackinputhelper'),
+            'error' => get_string($errorcode, 'local_hand2stack'),
             'error_code' => $errorcode,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }

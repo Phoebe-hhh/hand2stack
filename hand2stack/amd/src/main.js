@@ -5,7 +5,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// @package local_stackinputhelper
+// @package local_hand2stack
 // @copyright 2026 Phoebe Huang
 // @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 
@@ -14,7 +14,7 @@ define([], function() {
         const moodleRoot = window.M && M.cfg && M.cfg.wwwroot
             ? String(M.cfg.wwwroot).replace(/\/$/, '')
             : window.location.origin;
-        return moodleRoot + '/local/stackinputhelper/' + path;
+        return moodleRoot + '/local/hand2stack/' + path;
     };
 
     const replaceLegacyNodeUrl = (url, fallback) => {
@@ -140,14 +140,14 @@ define([], function() {
     // in `value`, so a value is accepted as a hint only when it looks like a
     // label ("f(2)=" / "f(2):"), never a saved answer such as "1+2*sqrt(2)".
     const captureAnswerAnchor = box => {
-        if (isFreeTextInput(box) || box.dataset.stackinputhelperAnchor) {
+        if (isFreeTextInput(box) || box.dataset.hand2stackAnchor) {
             return;
         }
         const value = String(box.value || '').trim();
         const hint = String(box.getAttribute('placeholder') || '').trim()
             || (/[=:]$/.test(value) ? value : '');
         if (hint) {
-            box.dataset.stackinputhelperAnchor = hint;
+            box.dataset.hand2stackAnchor = hint;
         }
     };
 
@@ -219,11 +219,11 @@ define([], function() {
             return;
         }
         const siblings = findSiblingAnswerBoxes(sourceBox)
-            .filter(box => box.dataset.stackinputhelperAnchor);
+            .filter(box => box.dataset.hand2stackAnchor);
 
         for (const box of siblings) {
             if (!isCurrent()) return;
-            const anchor = box.dataset.stackinputhelperAnchor;
+            const anchor = box.dataset.hand2stackAnchor;
             const valueBeforeValidation = box.value;
             let fragment = null;
             // Scan from the end: when a label is restated after an earlier
@@ -249,7 +249,7 @@ define([], function() {
                     flashAutofilledBox(box);
                 }
             } catch (error) {
-                window.console.warn('[stackinputhelper] anchor match could not be validated:', anchor, error);
+                window.console.warn('[hand2stack] anchor match could not be validated:', anchor, error);
             }
         }
     };
@@ -485,7 +485,7 @@ define([], function() {
 
     const createResultPanel = () => {
         const panel = document.createElement('div');
-        const choiceName = 'local-stackinputhelper-line-choice-' + Math.random().toString(36).slice(2);
+        const choiceName = 'local-hand2stack-line-choice-' + Math.random().toString(36).slice(2);
         panel.style.marginTop = '8px';
         panel.style.padding = '12px';
         panel.style.border = '1px solid #d8e1e8';
@@ -575,7 +575,7 @@ define([], function() {
         stackTitle.style.fontWeight = 'bold';
         const stackTextarea = createTextarea('', false);
         const changeHighlighter = createChangeHighlighter(stackTextarea);
-        const stackTextareaId = 'local-stackinputhelper-stack-preview-' + Math.random().toString(36).slice(2);
+        const stackTextareaId = 'local-hand2stack-stack-preview-' + Math.random().toString(36).slice(2);
         stackTextarea.id = stackTextareaId;
         stackTitle.setAttribute('for', stackTextareaId);
 
@@ -904,7 +904,7 @@ define([], function() {
 
         if (typeof window.MathJax.typesetPromise === 'function') {
             return window.MathJax.typesetPromise([element]).catch(error => {
-                window.console.warn('[stackinputhelper] MathJax typeset failed:', error);
+                window.console.warn('[hand2stack] MathJax typeset failed:', error);
             });
         }
 
@@ -1319,7 +1319,7 @@ define([], function() {
                 panel._stackTextarea.value = stack || fallback || latex;
             }
         } catch (error) {
-            window.console.warn('[stackinputhelper] partial selection conversion failed:', error);
+            window.console.warn('[hand2stack] partial selection conversion failed:', error);
             if (panel._selectionRequestId === requestId) {
                 panel._stackTextarea.value = fallback || latex;
             }
@@ -1436,7 +1436,7 @@ define([], function() {
                         ? fallback : (stack || fallback);
                     panel._partialSelection.value = panel._stackTextarea.value;
                 } catch (error) {
-                    window.console.warn('[stackinputhelper] partial selection conversion failed:', error);
+                    window.console.warn('[hand2stack] partial selection conversion failed:', error);
                     if (panel._selectionRequestId === requestId) {
                         panel._stackTextarea.value = fallback;
                     }
@@ -1870,7 +1870,7 @@ define([], function() {
             field.style.border = '1px solid #b8c2cc';
             field.style.borderRadius = '3px';
             field.style.background = '#fff';
-            const fieldId = 'local-stackinputhelper-format-line-' + Math.random().toString(36).slice(2);
+            const fieldId = 'local-hand2stack-format-line-' + Math.random().toString(36).slice(2);
             field.id = fieldId;
             label.setAttribute('for', fieldId);
             const fieldHighlighter = createChangeHighlighter(field);
@@ -2018,7 +2018,7 @@ define([], function() {
         resultLines.forEach((line, index) => {
             const hasMath = Boolean(line.stack || line.math);
             const isDefault = index === defaultIndex;
-            const optionId = 'local-stackinputhelper-line-' + Math.random().toString(36).slice(2);
+            const optionId = 'local-hand2stack-line-' + Math.random().toString(36).slice(2);
             const wrapper = document.createElement('div');
             wrapper.dataset.resultLineIndex = String(index);
             wrapper.dataset.stackValue = line.stack || line.math || '';
@@ -2607,7 +2607,7 @@ define([], function() {
                     answerBox, result.lines || [], result.freetext || result.raw_text || '', canvas.toDataURL('image/png'));
                 applyMatchedAnswers(answerBox, result.lines || [],
                     () => requestCoordinator.isCurrent(requestId)).catch(error => {
-                    window.console.error('[stackinputhelper] applyMatchedAnswers failed:', error);
+                    window.console.error('[hand2stack] applyMatchedAnswers failed:', error);
                 });
                 status.textContent = '';
             } catch (error) {
@@ -2651,11 +2651,11 @@ define([], function() {
     };
 
     const attachButton = (answerBox) => {
-        if (!answerBox || answerBox.dataset.stackinputhelperBound === '1') {
+        if (!answerBox || answerBox.dataset.hand2stackBound === '1') {
             return;
         }
 
-        answerBox.dataset.stackinputhelperBound = '1';
+        answerBox.dataset.hand2stackBound = '1';
         captureAnswerAnchor(answerBox);
         if (answerBox.tagName === 'INPUT' && !isFreeTextInput(answerBox)) {
             answerBox.style.width = 'min(260px, 45vw)';
@@ -2753,11 +2753,11 @@ define([], function() {
                     answerBox, result.lines || [], result.freetext || result.raw_text || '', sourceUrl);
                 applyMatchedAnswers(answerBox, result.lines || [],
                     () => requestCoordinator.isCurrent(requestId)).catch(error => {
-                    window.console.error('[stackinputhelper] applyMatchedAnswers failed:', error);
+                    window.console.error('[hand2stack] applyMatchedAnswers failed:', error);
                 });
             } catch (error) {
                 if (!requestCoordinator.isCurrent(requestId)) return;
-                window.console.error('[stackinputhelper] recognition failed:', error);
+                window.console.error('[hand2stack] recognition failed:', error);
                 resultPanel.style.display = 'block';
                 setRequestStatus(resultPanel, (config.recognizefailed || 'Recognition failed.') + ' ' + error.message, true);
             } finally {
@@ -2852,7 +2852,7 @@ define([], function() {
                                     answerBox, result.lines || [], result.freetext || result.raw_text || '');
                                 applyMatchedAnswers(answerBox, result.lines || [],
                                     () => requestCoordinator.isCurrent(requestId) && inputMode === 'mobile').catch(error => {
-                                    window.console.error('[stackinputhelper] applyMatchedAnswers failed:', error);
+                                    window.console.error('[hand2stack] applyMatchedAnswers failed:', error);
                                 });
                             }
                         } else if (result.expired) {
@@ -2869,7 +2869,7 @@ define([], function() {
                             mobilePanel._status.textContent = config.mobileuploadtimeout || 'Timeout waiting for result. Please create a new session.';
                         }
                     } catch (error) {
-                        window.console.error('[stackinputhelper] polling failed:', error);
+                        window.console.error('[hand2stack] polling failed:', error);
                         mobilePollFailures++;
                         mobilePanel._status.textContent = config.pollingfailed || 'The mobile connection was interrupted. Retrying...';
                         if (mobilePollFailures >= 3) {
@@ -2887,7 +2887,7 @@ define([], function() {
                     setIconButtonLabel(mobileBtn, mobileLabel);
                     return;
                 }
-                window.console.error('[stackinputhelper] mobile session failed:', error);
+                window.console.error('[hand2stack] mobile session failed:', error);
                 window.alert((config.mobilesessionfailed || 'Failed to create mobile session:') + ' ' + error.message);
                 mobileBtn.disabled = false;
                 setIconButtonLabel(mobileBtn, mobileLabel);

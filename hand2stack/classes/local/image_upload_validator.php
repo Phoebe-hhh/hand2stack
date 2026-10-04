@@ -9,11 +9,11 @@
 /**
  * classes local image upload validator.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-namespace local_stackinputhelper\local;
+namespace local_hand2stack\local;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -44,10 +44,10 @@ final class image_upload_validator {
 
         $filepath = $file['tmp_name'] ?? '';
         if (!is_string($filepath) || $filepath === '' || !is_uploaded_file($filepath)) {
-            throw new \moodle_exception('invaliduploadedfile', 'local_stackinputhelper');
+            throw new \moodle_exception('invaliduploadedfile', 'local_hand2stack');
         }
 
-        $configuredmb = max(1, (int)get_config('local_stackinputhelper', 'maxfilesize'));
+        $configuredmb = max(1, (int)get_config('local_hand2stack', 'maxfilesize'));
         $metadata = self::inspect_image($filepath, $configuredmb * 1024 * 1024);
         $metadata['filepath'] = $filepath;
         $metadata['filename'] = 'stack-input.' . self::ALLOWED_MIME_TYPES[$metadata['mimetype']];
@@ -67,56 +67,56 @@ final class image_upload_validator {
      */
     public static function inspect_image(string $filepath, int $maxbytes): array {
         if (!is_readable($filepath) || !is_file($filepath)) {
-            throw new \moodle_exception('invaliduploadedfile', 'local_stackinputhelper');
+            throw new \moodle_exception('invaliduploadedfile', 'local_hand2stack');
         }
 
         $filesize = filesize($filepath);
         if ($filesize === false) {
-            throw new \moodle_exception('invaliduploadedfile', 'local_stackinputhelper');
+            throw new \moodle_exception('invaliduploadedfile', 'local_hand2stack');
         }
         if ($filesize === 0) {
-            throw new \moodle_exception('emptyuploadedfile', 'local_stackinputhelper');
+            throw new \moodle_exception('emptyuploadedfile', 'local_hand2stack');
         }
         if ($maxbytes < 1 || $filesize > $maxbytes) {
-            throw new \moodle_exception('filetoolarge', 'local_stackinputhelper');
+            throw new \moodle_exception('filetoolarge', 'local_hand2stack');
         }
 
         if (!class_exists('\finfo')) {
-            throw new \moodle_exception('imagevalidationunavailable', 'local_stackinputhelper');
+            throw new \moodle_exception('imagevalidationunavailable', 'local_hand2stack');
         }
         $finfo = new \finfo(FILEINFO_MIME_TYPE);
         $mimetype = $finfo->file($filepath);
         if (!is_string($mimetype) || !array_key_exists($mimetype, self::ALLOWED_MIME_TYPES)) {
-            throw new \moodle_exception('invalidfiletype', 'local_stackinputhelper');
+            throw new \moodle_exception('invalidfiletype', 'local_hand2stack');
         }
 
         $imageinfo = @getimagesize($filepath);
         if ($imageinfo === false || empty($imageinfo[0]) || empty($imageinfo[1])) {
-            throw new \moodle_exception('invalidimagecontents', 'local_stackinputhelper');
+            throw new \moodle_exception('invalidimagecontents', 'local_hand2stack');
         }
 
         $headermime = $imageinfo['mime'] ?? '';
         if ($headermime !== $mimetype) {
-            throw new \moodle_exception('invalidimagecontents', 'local_stackinputhelper');
+            throw new \moodle_exception('invalidimagecontents', 'local_hand2stack');
         }
 
         $width = (int)$imageinfo[0];
         $height = (int)$imageinfo[1];
         if ($width > self::MAX_DIMENSION || $height > self::MAX_DIMENSION
                 || $width * $height > self::MAX_PIXELS) {
-            throw new \moodle_exception('imagedimensionstoolarge', 'local_stackinputhelper');
+            throw new \moodle_exception('imagedimensionstoolarge', 'local_hand2stack');
         }
 
         if (!function_exists('imagecreatefromstring')) {
-            throw new \moodle_exception('imagevalidationunavailable', 'local_stackinputhelper');
+            throw new \moodle_exception('imagevalidationunavailable', 'local_hand2stack');
         }
         if (!self::decoder_supports($mimetype)) {
-            throw new \moodle_exception('unsupportedserverimageformat', 'local_stackinputhelper');
+            throw new \moodle_exception('unsupportedserverimageformat', 'local_hand2stack');
         }
         $contents = file_get_contents($filepath);
         $image = $contents === false ? false : @imagecreatefromstring($contents);
         if ($image === false) {
-            throw new \moodle_exception('invalidimagecontents', 'local_stackinputhelper');
+            throw new \moodle_exception('invalidimagecontents', 'local_hand2stack');
         }
         // GdImage objects are released automatically on PHP 8+. The explicit
         // cleanup is retained only for Moodle installations still using PHP 7.
@@ -159,16 +159,16 @@ final class image_upload_validator {
      */
     private static function validate_upload_error(array $file): void {
         if (!array_key_exists('error', $file) || !is_int($file['error'])) {
-            throw new \moodle_exception('invaliduploadedfile', 'local_stackinputhelper');
+            throw new \moodle_exception('invaliduploadedfile', 'local_hand2stack');
         }
 
         if ($file['error'] === UPLOAD_ERR_OK) {
             return;
         }
         if ($file['error'] === UPLOAD_ERR_INI_SIZE || $file['error'] === UPLOAD_ERR_FORM_SIZE) {
-            throw new \moodle_exception('filetoolarge', 'local_stackinputhelper');
+            throw new \moodle_exception('filetoolarge', 'local_hand2stack');
         }
 
-        throw new \moodle_exception('invaliduploadedfile', 'local_stackinputhelper');
+        throw new \moodle_exception('invaliduploadedfile', 'local_hand2stack');
     }
 }

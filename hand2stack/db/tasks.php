@@ -5,7 +5,7 @@ defined('MOODLE_INTERNAL') || die();
 
 $tasks = [
     [
-        'classname' => '\\local_stackinputhelper\\task\\cleanup_sessions',
+        'classname' => '\\local_hand2stack\\task\\cleanup_sessions',
         'blocking' => 0,
         'minute' => 'R',
         'hour' => '*',

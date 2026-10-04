@@ -9,19 +9,19 @@
 /**
  * db upgrade.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 defined('MOODLE_INTERNAL') || die();
 
-function xmldb_local_stackinputhelper_upgrade($oldversion) {
+function xmldb_local_hand2stack_upgrade($oldversion) {
     global $DB;
 
     $dbman = $DB->get_manager();
 
     if ($oldversion < 2026053100) {
-        $table = new xmldb_table('local_stackinputhelper_sess');
+        $table = new xmldb_table('local_hand2stack_sess');
 
         if (!$dbman->table_exists($table)) {
             $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
@@ -43,41 +43,41 @@ function xmldb_local_stackinputhelper_upgrade($oldversion) {
             $dbman->create_table($table);
         }
 
-        upgrade_plugin_savepoint(true, 2026053100, 'local', 'stackinputhelper');
+        upgrade_plugin_savepoint(true, 2026053100, 'local', 'hand2stack');
     }
 
     if ($oldversion < 2026091200) {
-        $table = new xmldb_table('local_stackinputhelper_sess');
+        $table = new xmldb_table('local_hand2stack_sess');
         $field = new xmldb_field('rawascii', XMLDB_TYPE_TEXT, null, null, null, null, null, 'rawlatex');
 
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
 
-        upgrade_plugin_savepoint(true, 2026091200, 'local', 'stackinputhelper');
+        upgrade_plugin_savepoint(true, 2026091200, 'local', 'hand2stack');
     }
 
     if ($oldversion < 2026091500) {
-        upgrade_plugin_savepoint(true, 2026091500, 'local', 'stackinputhelper');
+        upgrade_plugin_savepoint(true, 2026091500, 'local', 'hand2stack');
     }
 
     if ($oldversion < 2026092300) {
-        upgrade_plugin_savepoint(true, 2026092300, 'local', 'stackinputhelper');
+        upgrade_plugin_savepoint(true, 2026092300, 'local', 'hand2stack');
     }
 
     if ($oldversion < 2026092400) {
-        upgrade_plugin_savepoint(true, 2026092400, 'local', 'stackinputhelper');
+        upgrade_plugin_savepoint(true, 2026092400, 'local', 'hand2stack');
     }
 
     if ($oldversion < 2026100400) {
-        $table = new xmldb_table('local_stackinputhelper_sess');
+        $table = new xmldb_table('local_hand2stack_sess');
         $field = new xmldb_field('rawtext', XMLDB_TYPE_TEXT, null, null, null, null, null, 'rawascii');
 
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
 
-        upgrade_plugin_savepoint(true, 2026100400, 'local', 'stackinputhelper');
+        upgrade_plugin_savepoint(true, 2026100400, 'local', 'hand2stack');
     }
 
     return true;

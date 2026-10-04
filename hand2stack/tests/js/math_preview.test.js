@@ -1,6 +1,6 @@
 // This file is part of Moodle - http://moodle.org/.
 //
-// @package local_stackinputhelper
+// @package local_hand2stack
 // @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 
 const test = require('node:test');

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/stackinputhelper/db" VERSION="2026100400" COMMENT="XMLDB file for local_stackinputhelper"
+<XMLDB PATH="local/hand2stack/db" VERSION="2026100400" COMMENT="XMLDB file for local_hand2stack"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
-    <TABLE NAME="local_stackinputhelper_sess" COMMENT="Mobile upload sessions for Hand2STACK">
+    <TABLE NAME="local_hand2stack_sess" COMMENT="Mobile upload sessions for Hand2STACK">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="sessionid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>

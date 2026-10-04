@@ -1,14 +1,21 @@
 # Changelog
 
-Hand2STACK was previously known as STACK Input Helper. The internal Moodle component name
-`local_stackinputhelper` remains unchanged so existing installations can upgrade safely.
+Hand2STACK was previously known as Hand2STACK. The internal Moodle component name
+`local_hand2stack` remains unchanged so existing installations can upgrade safely.
 
 ## Unreleased
+
+## 0.3.0-alpha - 2026-10-04
+
+- Rename the Moodle plugin identity from `local_stackinputhelper` to `local_hand2stack`.
+- Rename the installed directory, namespaces, capabilities, settings, database table, AMD module, language files, routes, DOM identifiers, and logs to Hand2STACK.
+- Copy plugin settings from the legacy component when Hand2STACK is installed alongside it.
+- Treat this as a new Moodle plugin identity; administrators must follow the documented migration procedure from 0.2.x.
 
 ## 0.2.16-alpha - 2026-10-04
 
 - Rename the public source directory, npm package, and release ZIP to Hand2STACK.
-- Keep the installed Moodle directory and component identifier unchanged so existing sites upgrade normally.
+- Keep the installed Moodle directory and component identifier unchanged in the 0.2.x compatibility series.
 
 ## 0.2.15-alpha - 2026-10-04
 
@@ -39,7 +46,7 @@ Hand2STACK was previously known as STACK Input Helper. The internal Moodle compo
 ## 0.2.12-alpha - 2026-09-18
 
 - Rename the plugin to Hand2STACK.
-- Keep `local_stackinputhelper` as the internal Moodle component name for upgrade compatibility.
+- Keep `local_hand2stack` as the internal Moodle component name for upgrade compatibility.
 
 ## 0.2.11-alpha
 

@@ -9,7 +9,7 @@
 /**
  * convert.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -19,42 +19,42 @@ require_once(__DIR__ . '/../../config.php');
 
 require_login();
 require_sesskey();
-require_capability('local/stackinputhelper:use', context_system::instance());
+require_capability('local/hand2stack:use', context_system::instance());
 
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-    if (!get_config('local_stackinputhelper', 'enabled')) {
-        throw new moodle_exception('pluginnotenabled', 'local_stackinputhelper');
+    if (!get_config('local_hand2stack', 'enabled')) {
+        throw new moodle_exception('pluginnotenabled', 'local_hand2stack');
     }
 
     $ascii = optional_param('ascii', '', PARAM_RAW_TRIMMED);
     $latex = optional_param('latex', '', PARAM_RAW_TRIMMED);
     if ($ascii === '' && $latex === '') {
-        throw new moodle_exception('emptylatex', 'local_stackinputhelper');
+        throw new moodle_exception('emptylatex', 'local_hand2stack');
     }
 
     $stack = $ascii !== ''
-        ? \local_stackinputhelper\local\stack_converter::normalize_ascii($ascii)
-        : \local_stackinputhelper\local\stack_converter::normalize_selection($latex);
+        ? \local_hand2stack\local\stack_converter::normalize_ascii($ascii)
+        : \local_hand2stack\local\stack_converter::normalize_selection($latex);
     if ($stack === '') {
-        throw new moodle_exception('invalidstackexpression', 'local_stackinputhelper');
+        throw new moodle_exception('invalidstackexpression', 'local_hand2stack');
     }
 
     $stackastfile = $CFG->dirroot . '/question/type/stack/stack/cas/ast.container.class.php';
     $stackcaserrorfile = $CFG->dirroot . '/question/type/stack/stack/cas/caserror.class.php';
     if (!is_readable($stackastfile) || !is_readable($stackcaserrorfile)) {
-        throw new moodle_exception('stackvalidationunavailable', 'local_stackinputhelper');
+        throw new moodle_exception('stackvalidationunavailable', 'local_hand2stack');
     }
     require_once($stackcaserrorfile);
     require_once($stackastfile);
     $ast = \stack_ast_container::make_from_student_source(
         $stack,
-        'local_stackinputhelper',
+        'local_hand2stack',
         new \stack_cas_security()
     );
     if (!$ast->get_valid()) {
-        throw new moodle_exception('invalidstackexpression', 'local_stackinputhelper');
+        throw new moodle_exception('invalidstackexpression', 'local_hand2stack');
     }
 
     echo json_encode([
@@ -63,5 +63,5 @@ try {
         'valid' => true,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $error) {
-    \local_stackinputhelper\local\api_response::send_error($error);
+    \local_hand2stack\local\api_response::send_error($error);
 }

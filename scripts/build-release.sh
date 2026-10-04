@@ -30,7 +30,7 @@ changelog_path="${output_dir}/CHANGELOG-${tag}.md"
 
 git archive \
   --format=zip \
-  --prefix=stackinputhelper/ \
+  --prefix=hand2stack/ \
   --output="$zip_path" \
   "${commit}:hand2stack"
 

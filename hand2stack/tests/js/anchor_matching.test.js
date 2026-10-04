@@ -86,7 +86,7 @@ test('applyMatchedAnswers prefers a later restated line over an earlier derivati
     // "=", then restates it later with "~~" as their final answer. The
     // restated line must win, not whichever one appears first.
     const calls = [];
-    const fakeBox = {id: 'ans_g1', dataset: {stackinputhelperAnchor: 'g(1)='}};
+    const fakeBox = {id: 'ans_g1', dataset: {hand2stackAnchor: 'g(1)='}};
     const applyMatchedAnswers = buildApplyMatchedAnswers(
         box => box === 'SOURCE',
         () => [fakeBox],
@@ -124,7 +124,7 @@ test('applyMatchedAnswers does nothing for a non-free-text source box', async ()
 
 test('applyMatchedAnswers does not apply a stale recognition result', async () => {
     const calls = [];
-    const fakeBox = {value: '', dataset: {stackinputhelperAnchor: 'f(2)='}};
+    const fakeBox = {value: '', dataset: {hand2stackAnchor: 'f(2)='}};
     let resolveValidation;
     let current = true;
     const validation = new Promise(resolve => { resolveValidation = resolve; });
@@ -146,7 +146,7 @@ test('applyMatchedAnswers does not apply a stale recognition result', async () =
 
 test('applyMatchedAnswers preserves an answer edited during validation', async () => {
     const calls = [];
-    const fakeBox = {value: '', dataset: {stackinputhelperAnchor: 'f(2)='}};
+    const fakeBox = {value: '', dataset: {hand2stackAnchor: 'f(2)='}};
     let resolveValidation;
     const validation = new Promise(resolve => { resolveValidation = resolve; });
     const applyMatchedAnswers = buildApplyMatchedAnswers(

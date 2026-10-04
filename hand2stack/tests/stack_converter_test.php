@@ -9,14 +9,14 @@
 /**
  * tests stack converter test.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-namespace local_stackinputhelper;
+namespace local_hand2stack;
 
-use local_stackinputhelper\local\mathpix_client;
-use local_stackinputhelper\local\stack_converter;
+use local_hand2stack\local\mathpix_client;
+use local_hand2stack\local\stack_converter;
 
 defined('MOODLE_INTERNAL') || die();
 

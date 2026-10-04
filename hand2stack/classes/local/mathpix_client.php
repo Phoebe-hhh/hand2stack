@@ -9,11 +9,11 @@
 /**
  * classes local mathpix client.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-namespace local_stackinputhelper\local;
+namespace local_hand2stack\local;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -22,19 +22,19 @@ final class mathpix_client {
     private const STROKES_ENDPOINT = 'https://api.mathpix.com/v3/strokes';
 
     public static function recognize(string $filepath, string $filename, string $mimetype): array {
-        $appid = trim((string)get_config('local_stackinputhelper', 'mathpixappid'));
-        $appkey = trim((string)get_config('local_stackinputhelper', 'mathpixappkey'));
+        $appid = trim((string)get_config('local_hand2stack', 'mathpixappid'));
+        $appkey = trim((string)get_config('local_hand2stack', 'mathpixappkey'));
 
         if ($appid === '' || $appkey === '') {
-            throw new \moodle_exception('missingmathpixcredentials', 'local_stackinputhelper');
+            throw new \moodle_exception('missingmathpixcredentials', 'local_hand2stack');
         }
 
         if (!is_readable($filepath)) {
-            throw new \moodle_exception('invaliduploadedfile', 'local_stackinputhelper');
+            throw new \moodle_exception('invaliduploadedfile', 'local_hand2stack');
         }
 
         if (!function_exists('curl_init')) {
-            throw new \moodle_exception('curlrequired', 'local_stackinputhelper');
+            throw new \moodle_exception('curlrequired', 'local_hand2stack');
         }
 
         $options = [
@@ -71,7 +71,7 @@ final class mathpix_client {
         curl_close($curl);
 
         if ($body === false || $errno !== 0) {
-            throw new \moodle_exception('mathpixrequestfailed', 'local_stackinputhelper', '', null, $error);
+            throw new \moodle_exception('mathpixrequestfailed', 'local_hand2stack', '', null, $error);
         }
 
         return self::parse_response($body, $errno, $error, $status);
@@ -81,13 +81,13 @@ final class mathpix_client {
     public static function recognize_strokes(array $x, array $y): array {
         self::validate_strokes($x, $y);
 
-        $appid = trim((string)get_config('local_stackinputhelper', 'mathpixappid'));
-        $appkey = trim((string)get_config('local_stackinputhelper', 'mathpixappkey'));
+        $appid = trim((string)get_config('local_hand2stack', 'mathpixappid'));
+        $appkey = trim((string)get_config('local_hand2stack', 'mathpixappkey'));
         if ($appid === '' || $appkey === '') {
-            throw new \moodle_exception('missingmathpixcredentials', 'local_stackinputhelper');
+            throw new \moodle_exception('missingmathpixcredentials', 'local_hand2stack');
         }
         if (!function_exists('curl_init')) {
-            throw new \moodle_exception('curlrequired', 'local_stackinputhelper');
+            throw new \moodle_exception('curlrequired', 'local_hand2stack');
         }
 
         $payload = json_encode([
@@ -101,7 +101,7 @@ final class mathpix_client {
             ],
         ]);
         if ($payload === false || strlen($payload) > 512 * 1024) {
-            throw new \moodle_exception('invalidstrokes', 'local_stackinputhelper');
+            throw new \moodle_exception('invalidstrokes', 'local_hand2stack');
         }
 
         $curl = curl_init(self::STROKES_ENDPOINT);
@@ -127,23 +127,23 @@ final class mathpix_client {
 
     private static function validate_strokes(array $x, array $y): void {
         if (!$x || count($x) !== count($y) || count($x) > 1000) {
-            throw new \moodle_exception('invalidstrokes', 'local_stackinputhelper');
+            throw new \moodle_exception('invalidstrokes', 'local_hand2stack');
         }
         $pointcount = 0;
         foreach ($x as $index => $xstroke) {
             $ystroke = $y[$index] ?? null;
             if (!is_array($xstroke) || !is_array($ystroke) || !$xstroke || count($xstroke) !== count($ystroke)) {
-                throw new \moodle_exception('invalidstrokes', 'local_stackinputhelper');
+                throw new \moodle_exception('invalidstrokes', 'local_hand2stack');
             }
             $pointcount += count($xstroke);
             if ($pointcount > 50000) {
-                throw new \moodle_exception('invalidstrokes', 'local_stackinputhelper');
+                throw new \moodle_exception('invalidstrokes', 'local_hand2stack');
             }
             foreach ($xstroke as $pointindex => $xvalue) {
                 $yvalue = $ystroke[$pointindex];
                 if (!is_numeric($xvalue) || !is_numeric($yvalue)
                         || abs((float)$xvalue) > 100000 || abs((float)$yvalue) > 100000) {
-                    throw new \moodle_exception('invalidstrokes', 'local_stackinputhelper');
+                    throw new \moodle_exception('invalidstrokes', 'local_hand2stack');
                 }
             }
         }
@@ -151,17 +151,17 @@ final class mathpix_client {
 
     private static function parse_response($body, int $errno, string $error, int $status): array {
         if ($body === false || $errno !== 0) {
-            throw new \moodle_exception('mathpixrequestfailed', 'local_stackinputhelper', '', null, $error);
+            throw new \moodle_exception('mathpixrequestfailed', 'local_hand2stack', '', null, $error);
         }
 
         $data = json_decode($body, true);
         if (!is_array($data)) {
-            throw new \moodle_exception('mathpixinvalidresponse', 'local_stackinputhelper');
+            throw new \moodle_exception('mathpixinvalidresponse', 'local_hand2stack');
         }
 
         if ($status < 200 || $status >= 300) {
             $message = $data['error'] ?? $data['message'] ?? ('HTTP ' . $status);
-            throw new \moodle_exception('mathpixrequestfailed', 'local_stackinputhelper', '', null, $message);
+            throw new \moodle_exception('mathpixrequestfailed', 'local_hand2stack', '', null, $message);
         }
 
         $rawlatex = self::extract_latex($data);
@@ -315,10 +315,10 @@ final class mathpix_client {
         } else if (preg_match_all('/\\\\begin\{(?:pmatrix|bmatrix|matrix|vmatrix)\}/', $normalized) > 1) {
             $marked = preg_replace(
                 '/(\\\\end\{(?:pmatrix|bmatrix|matrix|vmatrix)\})\s*\n+\s*(?=\\\\begin\{(?:pmatrix|bmatrix|matrix|vmatrix)\})/',
-                '$1__STACKINPUTHELPER_MATRIX_SPLIT__',
+                '$1__HAND2STACK_MATRIX_SPLIT__',
                 $normalized
             );
-            $parts = explode('__STACKINPUTHELPER_MATRIX_SPLIT__', $marked);
+            $parts = explode('__HAND2STACK_MATRIX_SPLIT__', $marked);
         } else if (preg_match('/\\\\begin\{(?:cases|pmatrix|bmatrix|matrix|vmatrix)\}/', $normalized)
                 || preg_match('/\\\\left\s*\\\\?[({\[]?\s*\\\\begin\{array\}/', $normalized)) {
             $parts = [$normalized];

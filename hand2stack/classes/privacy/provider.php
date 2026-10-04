@@ -9,11 +9,11 @@
 /**
  * classes privacy provider.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-namespace local_stackinputhelper\privacy;
+namespace local_hand2stack\privacy;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -26,7 +26,7 @@ class provider implements
             'strokes' => 'privacy:metadata:mathpix:strokes',
         ], 'privacy:metadata:mathpix');
 
-        $collection->add_database_table('local_stackinputhelper_sess', [
+        $collection->add_database_table('local_hand2stack_sess', [
             'userid' => 'privacy:metadata:session:userid',
             'rawlatex' => 'privacy:metadata:session:rawlatex',
             'rawascii' => 'privacy:metadata:session:rawascii',
@@ -44,7 +44,7 @@ class provider implements
         global $DB;
 
         $contextlist = new \core_privacy\local\request\contextlist();
-        if ($DB->record_exists('local_stackinputhelper_sess', ['userid' => $userid])) {
+        if ($DB->record_exists('local_hand2stack_sess', ['userid' => $userid])) {
             $contextlist->add_context(\context_system::instance());
         }
         return $contextlist;
@@ -58,7 +58,7 @@ class provider implements
         }
 
         $userid = $contextlist->get_user()->id;
-        $sessions = $DB->get_records('local_stackinputhelper_sess', ['userid' => $userid]);
+        $sessions = $DB->get_records('local_hand2stack_sess', ['userid' => $userid]);
         if (!$sessions) {
             return;
         }
@@ -66,7 +66,7 @@ class provider implements
         $context = \context_system::instance();
         $data = (object)['sessions' => array_values($sessions)];
         \core_privacy\local\request\writer::with_context($context)->export_data(
-            [get_string('pluginname', 'local_stackinputhelper')],
+            [get_string('pluginname', 'local_hand2stack')],
             $data
         );
     }
@@ -75,7 +75,7 @@ class provider implements
         global $DB;
 
         if ($context->contextlevel === CONTEXT_SYSTEM) {
-            $DB->delete_records('local_stackinputhelper_sess');
+            $DB->delete_records('local_hand2stack_sess');
         }
     }
 
@@ -88,7 +88,7 @@ class provider implements
 
         foreach ($contextlist->get_contexts() as $context) {
             if ($context->contextlevel === CONTEXT_SYSTEM) {
-                $DB->delete_records('local_stackinputhelper_sess', ['userid' => $contextlist->get_user()->id]);
+                $DB->delete_records('local_hand2stack_sess', ['userid' => $contextlist->get_user()->id]);
                 return;
             }
         }

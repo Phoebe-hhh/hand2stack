@@ -9,7 +9,7 @@
 /**
  * settings.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -17,60 +17,60 @@ defined('MOODLE_INTERNAL') || die();
 
 if ($hassiteconfig) {
     $settings = new admin_settingpage(
-        'local_stackinputhelper',
-        get_string('pluginname', 'local_stackinputhelper')
+        'local_hand2stack',
+        get_string('pluginname', 'local_hand2stack')
     );
 
     if ($ADMIN->fulltree) {
         $settings->add(new admin_setting_configcheckbox(
-            'local_stackinputhelper/enabled',
-            get_string('enabled', 'local_stackinputhelper'),
-            get_string('enabled_desc', 'local_stackinputhelper'),
+            'local_hand2stack/enabled',
+            get_string('enabled', 'local_hand2stack'),
+            get_string('enabled_desc', 'local_hand2stack'),
             1
         ));
 
         $settings->add(new admin_setting_configtext(
-            'local_stackinputhelper/mathpixappid',
-            get_string('mathpixappid', 'local_stackinputhelper'),
-            get_string('mathpixappid_desc', 'local_stackinputhelper'),
+            'local_hand2stack/mathpixappid',
+            get_string('mathpixappid', 'local_hand2stack'),
+            get_string('mathpixappid_desc', 'local_hand2stack'),
             '',
             PARAM_TEXT
         ));
 
         $settings->add(new admin_setting_configpasswordunmask(
-            'local_stackinputhelper/mathpixappkey',
-            get_string('mathpixappkey', 'local_stackinputhelper'),
-            get_string('mathpixappkey_desc', 'local_stackinputhelper'),
+            'local_hand2stack/mathpixappkey',
+            get_string('mathpixappkey', 'local_hand2stack'),
+            get_string('mathpixappkey_desc', 'local_hand2stack'),
             ''
         ));
 
         $settings->add(new admin_setting_configtext(
-            'local_stackinputhelper/maxfilesize',
-            get_string('maxfilesize', 'local_stackinputhelper'),
-            get_string('maxfilesize_desc', 'local_stackinputhelper'),
+            'local_hand2stack/maxfilesize',
+            get_string('maxfilesize', 'local_hand2stack'),
+            get_string('maxfilesize_desc', 'local_hand2stack'),
             2,
             PARAM_INT
         ));
 
         $settings->add(new admin_setting_configtext(
-            'local_stackinputhelper/ratelimit',
-            get_string('ratelimit', 'local_stackinputhelper'),
-            get_string('ratelimit_desc', 'local_stackinputhelper'),
+            'local_hand2stack/ratelimit',
+            get_string('ratelimit', 'local_hand2stack'),
+            get_string('ratelimit_desc', 'local_hand2stack'),
             20,
             PARAM_INT
         ));
 
         $settings->add(new admin_setting_configcheckbox(
-            'local_stackinputhelper/enablemobile',
-            get_string('enablemobile', 'local_stackinputhelper'),
-            get_string('enablemobile_desc', 'local_stackinputhelper'),
+            'local_hand2stack/enablemobile',
+            get_string('enablemobile', 'local_hand2stack'),
+            get_string('enablemobile_desc', 'local_hand2stack'),
             1
         ));
 
         $settings->add(new admin_setting_configtext(
-            'local_stackinputhelper/mobilebaseurl',
-            get_string('mobilebaseurl', 'local_stackinputhelper'),
-            get_string('mobilebaseurl_desc', 'local_stackinputhelper'),
+            'local_hand2stack/mobilebaseurl',
+            get_string('mobilebaseurl', 'local_hand2stack'),
+            get_string('mobilebaseurl_desc', 'local_hand2stack'),
             '',
             PARAM_URL
         ));

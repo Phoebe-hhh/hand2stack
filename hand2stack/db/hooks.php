@@ -9,7 +9,7 @@
 /**
  * db hooks.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -18,7 +18,7 @@ defined('MOODLE_INTERNAL') || die();
 $callbacks = [
     [
         'hook' => \core\hook\output\before_standard_top_of_body_html_generation::class,
-        'callback' => [\local_stackinputhelper\local\hook_callbacks::class, 'before_standard_top_of_body_html_generation'],
+        'callback' => [\local_hand2stack\local\hook_callbacks::class, 'before_standard_top_of_body_html_generation'],
         'priority' => 500,
     ],
 ];

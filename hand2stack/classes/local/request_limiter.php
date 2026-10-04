@@ -1,7 +1,7 @@
 <?php
 // This file is part of Moodle - http://moodle.org/.
 
-namespace local_stackinputhelper\local;
+namespace local_hand2stack\local;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -17,11 +17,11 @@ final class request_limiter {
     public static function enforce(string $operation = 'recognition', int $limit = 20, int $windowseconds = 60): void {
         global $USER;
 
-        $configured = (int)get_config('local_stackinputhelper', 'ratelimit');
+        $configured = (int)get_config('local_hand2stack', 'ratelimit');
         if ($configured > 0) {
             $limit = $configured;
         }
-        $cache = \cache::make('local_stackinputhelper', 'ratelimit');
+        $cache = \cache::make('local_hand2stack', 'ratelimit');
         $key = preg_replace('/[^a-z0-9_-]/i', '_', $operation) . '_' . (int)$USER->id;
         $now = time();
         $attempts = $cache->get($key);
@@ -32,7 +32,7 @@ final class request_limiter {
             return is_int($timestamp) && $timestamp > $now - $windowseconds;
         }));
         if (count($attempts) >= $limit) {
-            throw new \moodle_exception('ratelimitexceeded', 'local_stackinputhelper');
+            throw new \moodle_exception('ratelimitexceeded', 'local_hand2stack');
         }
         $attempts[] = $now;
         $cache->set($key, $attempts);

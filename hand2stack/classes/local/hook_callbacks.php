@@ -9,11 +9,11 @@
 /**
  * classes local hook callbacks.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-namespace local_stackinputhelper\local;
+namespace local_hand2stack\local;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -38,80 +38,80 @@ final class hook_callbacks {
             return;
         }
 
-        if (!get_config('local_stackinputhelper', 'enabled')) {
+        if (!get_config('local_hand2stack', 'enabled')) {
             return;
         }
         if (!isloggedin() || isguestuser()
-                || !has_capability('local/stackinputhelper:use', \context_system::instance())) {
+                || !has_capability('local/hand2stack:use', \context_system::instance())) {
             return;
         }
 
         $config = [
-            'recognizeUrl' => (new \moodle_url('/local/stackinputhelper/recognize.php'))->out(false),
-            'strokesUrl' => (new \moodle_url('/local/stackinputhelper/strokes.php'))->out(false),
-            'convertUrl' => (new \moodle_url('/local/stackinputhelper/convert.php'))->out(false),
-            'sessionCreateUrl' => (new \moodle_url('/local/stackinputhelper/session_create.php'))->out(false),
-            'sessionResultUrl' => (new \moodle_url('/local/stackinputhelper/session_result.php'))->out(false),
+            'recognizeUrl' => (new \moodle_url('/local/hand2stack/recognize.php'))->out(false),
+            'strokesUrl' => (new \moodle_url('/local/hand2stack/strokes.php'))->out(false),
+            'convertUrl' => (new \moodle_url('/local/hand2stack/convert.php'))->out(false),
+            'sessionCreateUrl' => (new \moodle_url('/local/hand2stack/session_create.php'))->out(false),
+            'sessionResultUrl' => (new \moodle_url('/local/hand2stack/session_result.php'))->out(false),
             'sesskey' => sesskey(),
-            'enablemobile' => (bool)get_config('local_stackinputhelper', 'enablemobile'),
-            'uploadbtn' => get_string('uploadbtn', 'local_stackinputhelper'),
-            'mobilebtn' => get_string('mobileuploadbtn', 'local_stackinputhelper'),
-            'camerabtn' => get_string('camerabtn', 'local_stackinputhelper'),
-            'uploading' => get_string('uploading', 'local_stackinputhelper'),
-            'nofieldfound' => get_string('nofieldfound', 'local_stackinputhelper'),
-            'recognizefailed' => get_string('recognizefailed', 'local_stackinputhelper'),
-            'recognizedresults' => get_string('recognizedresults', 'local_stackinputhelper'),
-            'selectanswer' => get_string('selectanswer', 'local_stackinputhelper'),
-            'recognizedworking' => get_string('recognizedworking', 'local_stackinputhelper'),
-            'selectpart' => get_string('selectpart', 'local_stackinputhelper'),
-            'recommendedanswer' => get_string('recommendedanswer', 'local_stackinputhelper'),
-            'approximation' => get_string('approximation', 'local_stackinputhelper'),
-            'detectedcandidates' => get_string('detectedcandidates', 'local_stackinputhelper'),
-            'edited' => get_string('edited', 'local_stackinputhelper'),
-            'restoreocr' => get_string('restoreocr', 'local_stackinputhelper'),
-            'stackpreview' => get_string('stackpreview', 'local_stackinputhelper'),
-            'convertedstack' => get_string('convertedstack', 'local_stackinputhelper'),
-            'freetextpreview' => get_string('freetextpreview', 'local_stackinputhelper'),
-            'originalwork' => get_string('originalwork', 'local_stackinputhelper'),
-            'confirmrecognition' => get_string('confirmrecognition', 'local_stackinputhelper'),
-            'freetextworkflow' => get_string('freetextworkflow', 'local_stackinputhelper'),
-            'recognizedfullanswer' => get_string('recognizedfullanswer', 'local_stackinputhelper'),
-            'freetexthelp' => get_string('freetexthelp', 'local_stackinputhelper'),
-            'editedhighlighthelp' => get_string('editedhighlighthelp', 'local_stackinputhelper'),
-            'directsubmithelp' => get_string('directsubmithelp', 'local_stackinputhelper'),
-            'appendhint' => get_string('appendhint', 'local_stackinputhelper'),
-            'appendfreetext' => get_string('appendfreetext', 'local_stackinputhelper'),
-            'insertfreetext' => get_string('insertfreetext', 'local_stackinputhelper'),
-            'zoomin' => get_string('zoomin', 'local_stackinputhelper'),
-            'zoomout' => get_string('zoomout', 'local_stackinputhelper'),
-            'resetzoom' => get_string('resetzoom', 'local_stackinputhelper'),
-            'dragimage' => get_string('dragimage', 'local_stackinputhelper'),
-            'insertanswer' => get_string('insertanswer', 'local_stackinputhelper'),
-            'rawlatex' => get_string('rawlatex', 'local_stackinputhelper'),
-            'recognizedformat' => get_string('recognizedformat', 'local_stackinputhelper'),
-            'asciimath' => get_string('asciimath', 'local_stackinputhelper'),
-            'asciiunavailable' => get_string('asciiunavailable', 'local_stackinputhelper'),
-            'lineprefix' => get_string('lineprefix', 'local_stackinputhelper'),
-            'creatingmobilesession' => get_string('creatingmobilesession', 'local_stackinputhelper'),
-            'waitingmobileupload' => get_string('waitingmobileupload', 'local_stackinputhelper'),
-            'mobileuploadreceived' => get_string('mobileuploadreceived', 'local_stackinputhelper'),
-            'mobileuploadexpired' => get_string('mobileuploadexpired', 'local_stackinputhelper'),
-            'mobileuploadtimeout' => get_string('mobileuploadtimeout', 'local_stackinputhelper'),
-            'mobilesessionfailed' => get_string('mobilesessionfailed', 'local_stackinputhelper'),
-            'partialselectionfailed' => get_string('partialselectionfailed', 'local_stackinputhelper'),
-            'conversioninprogress' => get_string('conversioninprogress', 'local_stackinputhelper'),
-            'pollingfailed' => get_string('pollingfailed', 'local_stackinputhelper'),
-            'handwritebtn' => get_string('handwritebtn', 'local_stackinputhelper'),
-            'handwriteinstructions' => get_string('handwriteinstructions', 'local_stackinputhelper'),
-            'resizehandwriting' => get_string('resizehandwriting', 'local_stackinputhelper'),
-            'draw' => get_string('draw', 'local_stackinputhelper'),
-            'eraser' => get_string('eraser', 'local_stackinputhelper'),
-            'undo' => get_string('undo', 'local_stackinputhelper'),
-            'clear' => get_string('clear', 'local_stackinputhelper'),
-            'recognizestrokes' => get_string('recognizestrokes', 'local_stackinputhelper'),
-            'nostrokes' => get_string('nostrokes', 'local_stackinputhelper'),
+            'enablemobile' => (bool)get_config('local_hand2stack', 'enablemobile'),
+            'uploadbtn' => get_string('uploadbtn', 'local_hand2stack'),
+            'mobilebtn' => get_string('mobileuploadbtn', 'local_hand2stack'),
+            'camerabtn' => get_string('camerabtn', 'local_hand2stack'),
+            'uploading' => get_string('uploading', 'local_hand2stack'),
+            'nofieldfound' => get_string('nofieldfound', 'local_hand2stack'),
+            'recognizefailed' => get_string('recognizefailed', 'local_hand2stack'),
+            'recognizedresults' => get_string('recognizedresults', 'local_hand2stack'),
+            'selectanswer' => get_string('selectanswer', 'local_hand2stack'),
+            'recognizedworking' => get_string('recognizedworking', 'local_hand2stack'),
+            'selectpart' => get_string('selectpart', 'local_hand2stack'),
+            'recommendedanswer' => get_string('recommendedanswer', 'local_hand2stack'),
+            'approximation' => get_string('approximation', 'local_hand2stack'),
+            'detectedcandidates' => get_string('detectedcandidates', 'local_hand2stack'),
+            'edited' => get_string('edited', 'local_hand2stack'),
+            'restoreocr' => get_string('restoreocr', 'local_hand2stack'),
+            'stackpreview' => get_string('stackpreview', 'local_hand2stack'),
+            'convertedstack' => get_string('convertedstack', 'local_hand2stack'),
+            'freetextpreview' => get_string('freetextpreview', 'local_hand2stack'),
+            'originalwork' => get_string('originalwork', 'local_hand2stack'),
+            'confirmrecognition' => get_string('confirmrecognition', 'local_hand2stack'),
+            'freetextworkflow' => get_string('freetextworkflow', 'local_hand2stack'),
+            'recognizedfullanswer' => get_string('recognizedfullanswer', 'local_hand2stack'),
+            'freetexthelp' => get_string('freetexthelp', 'local_hand2stack'),
+            'editedhighlighthelp' => get_string('editedhighlighthelp', 'local_hand2stack'),
+            'directsubmithelp' => get_string('directsubmithelp', 'local_hand2stack'),
+            'appendhint' => get_string('appendhint', 'local_hand2stack'),
+            'appendfreetext' => get_string('appendfreetext', 'local_hand2stack'),
+            'insertfreetext' => get_string('insertfreetext', 'local_hand2stack'),
+            'zoomin' => get_string('zoomin', 'local_hand2stack'),
+            'zoomout' => get_string('zoomout', 'local_hand2stack'),
+            'resetzoom' => get_string('resetzoom', 'local_hand2stack'),
+            'dragimage' => get_string('dragimage', 'local_hand2stack'),
+            'insertanswer' => get_string('insertanswer', 'local_hand2stack'),
+            'rawlatex' => get_string('rawlatex', 'local_hand2stack'),
+            'recognizedformat' => get_string('recognizedformat', 'local_hand2stack'),
+            'asciimath' => get_string('asciimath', 'local_hand2stack'),
+            'asciiunavailable' => get_string('asciiunavailable', 'local_hand2stack'),
+            'lineprefix' => get_string('lineprefix', 'local_hand2stack'),
+            'creatingmobilesession' => get_string('creatingmobilesession', 'local_hand2stack'),
+            'waitingmobileupload' => get_string('waitingmobileupload', 'local_hand2stack'),
+            'mobileuploadreceived' => get_string('mobileuploadreceived', 'local_hand2stack'),
+            'mobileuploadexpired' => get_string('mobileuploadexpired', 'local_hand2stack'),
+            'mobileuploadtimeout' => get_string('mobileuploadtimeout', 'local_hand2stack'),
+            'mobilesessionfailed' => get_string('mobilesessionfailed', 'local_hand2stack'),
+            'partialselectionfailed' => get_string('partialselectionfailed', 'local_hand2stack'),
+            'conversioninprogress' => get_string('conversioninprogress', 'local_hand2stack'),
+            'pollingfailed' => get_string('pollingfailed', 'local_hand2stack'),
+            'handwritebtn' => get_string('handwritebtn', 'local_hand2stack'),
+            'handwriteinstructions' => get_string('handwriteinstructions', 'local_hand2stack'),
+            'resizehandwriting' => get_string('resizehandwriting', 'local_hand2stack'),
+            'draw' => get_string('draw', 'local_hand2stack'),
+            'eraser' => get_string('eraser', 'local_hand2stack'),
+            'undo' => get_string('undo', 'local_hand2stack'),
+            'clear' => get_string('clear', 'local_hand2stack'),
+            'recognizestrokes' => get_string('recognizestrokes', 'local_hand2stack'),
+            'nostrokes' => get_string('nostrokes', 'local_hand2stack'),
         ];
 
-        $PAGE->requires->js_call_amd('local_stackinputhelper/main', 'init', [$config]);
+        $PAGE->requires->js_call_amd('local_hand2stack/main', 'init', [$config]);
     }
 }

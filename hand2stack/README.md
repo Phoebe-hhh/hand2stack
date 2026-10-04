@@ -27,9 +27,11 @@ Installation:
 6. Leave `Mobile public base URL` empty for normal deployments, including Moodle installations under paths such as `/projects`.
 7. Purge Moodle caches, then open a STACK question preview or quiz attempt and verify image upload, handwriting, recognition, and answer insertion.
 
-Upgrading uses the same procedure: upload the new Release ZIP and complete the Moodle notification/upgrade page. Existing plugin settings are retained.
+Upgrading from 0.3.x uses the same procedure: upload the new Release ZIP and complete the Moodle notification/upgrade page. Existing plugin settings are retained.
 
-If Moodle reports that the destination directory already exists and ZIP upgrades are disabled, the administrator can replace `local/stackinputhelper` with the folder from the Release ZIP, then visit `Site administration > Notifications`. Back up the existing folder first; never copy `node_modules` to the server.
+If Moodle reports that the destination directory already exists and ZIP upgrades are disabled, the administrator can replace `local/hand2stack` with the folder from the Release ZIP, then visit `Site administration > Notifications`. Back up the existing folder first; never copy `node_modules` to the server.
+
+Migrating from 0.2.x is a component migration rather than an ordinary upgrade. Disable the legacy plugin without uninstalling it, install the new ZIP, verify that its settings were copied, enable the new plugin, and only then uninstall and remove `local/stackinputhelper`. Temporary mobile-upload sessions are not migrated.
 
 ## Features
 
@@ -80,7 +82,7 @@ The plugin requires Moodle 4.4 or later. An administrator can install it directl
 Install a zip whose root folder is exactly:
 
 ```text
-stackinputhelper/
+hand2stack/
 ```
 
 from:
@@ -92,7 +94,7 @@ Site administration > Plugins > Install plugins
 Alternatively, copy this folder to:
 
 ```text
-moodle/local/stackinputhelper
+moodle/local/hand2stack
 ```
 
 Then visit Moodle as an administrator:
@@ -126,7 +128,7 @@ Optional settings:
 
 ## Mobile Upload URL
 
-For normal Moodle deployments, no network-specific setup is required. The mobile QR code uses the Moodle site URL configured in `$CFG->wwwroot`, including installations in a subdirectory. For example, a Moodle installed at `https://stack.example.edu/projects` automatically produces URLs below `https://stack.example.edu/projects/local/stackinputhelper/`.
+For normal Moodle deployments, no network-specific setup is required. The mobile QR code uses the Moodle site URL configured in `$CFG->wwwroot`, including installations in a subdirectory. For example, a Moodle installed at `https://stack.example.edu/projects` automatically produces URLs below `https://stack.example.edu/projects/local/hand2stack/`.
 
 Phones can only open the QR code if they can reach that Moodle URL. If a site is opened as `http://localhost:8000`, the phone will also see `localhost` and will try to connect to itself, not to the teacher's computer. In that case the plugin shows a warning instead of silently producing an unusable QR code.
 
@@ -203,13 +205,13 @@ amd/build/main.min.js
 Update `version.php` and `CHANGELOG.md`, merge the change into the release branch, and push a matching version tag:
 
 ```bash
-git tag v0.2.16-alpha
-git push origin v0.2.16-alpha
+git tag v0.3.0-alpha
+git push origin v0.3.0-alpha
 ```
 
 The GitHub Actions workflow then checks PHP syntax and creates a GitHub Release containing:
 
-- a Moodle-installable ZIP whose root folder is `stackinputhelper/`;
+- a Moodle-installable ZIP whose root folder is `hand2stack/`;
 - a changelog generated from commits since the previous version tag;
 - GitHub-generated release notes with merged pull requests and contributors.
 
@@ -220,5 +222,5 @@ The workflow refuses to publish if the tag does not match `$plugin->release` in 
 Current version:
 
 ```text
-0.2.16-alpha
+0.3.0-alpha
 ```

@@ -22,6 +22,22 @@ const mobilePage = fs.readFileSync(path.join(pluginRoot, 'mobile.php'), 'utf8');
 const mobileUpload = fs.readFileSync(path.join(pluginRoot, 'mobile_upload.php'), 'utf8');
 const sessionResult = fs.readFileSync(path.join(pluginRoot, 'session_result.php'), 'utf8');
 const installXml = fs.readFileSync(path.join(pluginRoot, 'db/install.xml'), 'utf8');
+const versionPhp = fs.readFileSync(path.join(pluginRoot, 'version.php'), 'utf8');
+const installPhp = fs.readFileSync(path.join(pluginRoot, 'db/install.php'), 'utf8');
+
+test('the public and Moodle component identity is Hand2STACK', () => {
+    assert.match(versionPhp, /\$plugin->component = 'local_hand2stack'/);
+    assert.match(source, /\/local\/hand2stack\//);
+    assert.match(hook, /local_hand2stack\/main/);
+    assert.match(installXml, /TABLE NAME="local_hand2stack_sess"/);
+    assert.ok(fs.existsSync(path.join(pluginRoot, 'lang/en/local_hand2stack.php')));
+    assert.ok(fs.existsSync(path.join(pluginRoot, 'lang/ja/local_hand2stack.php')));
+});
+
+test('new installs copy settings from the legacy component', () => {
+    assert.match(installPhp, /get_config\('local_stackinputhelper', \$name\)/);
+    assert.match(installPhp, /set_config\(\$name, \$legacyvalue, 'local_hand2stack'\)/);
+});
 
 test('mobile QR generation does not use a third-party QR service', () => {
     assert.doesNotMatch(source, /api\.qrserver\.com|create-qr-code/);
@@ -30,7 +46,7 @@ test('mobile QR generation does not use a third-party QR service', () => {
 
 test('fallback endpoints respect Moodle installations in a subdirectory', () => {
     assert.match(source, /M\.cfg\.wwwroot/);
-    assert.doesNotMatch(source, /window\.location\.origin \+ '\/local\/stackinputhelper\/'/);
+    assert.doesNotMatch(source, /window\.location\.origin \+ '\/local\/hand2stack\/'/);
 });
 
 test('image upload stays separate while phones and tablets use the camera button', () => {
@@ -253,7 +269,7 @@ test('candidate radios have associated visible labels', () => {
 });
 
 test('recognition endpoints are rate limited and return safe actionable errors', () => {
-    assert.match(limiter, /cache::make\('local_stackinputhelper', 'ratelimit'\)/);
+    assert.match(limiter, /cache::make\('local_hand2stack', 'ratelimit'\)/);
     assert.match(limiter, /ratelimitexceeded/);
     assert.match(apiResponse, /SAFE_ERROR_CODES/);
     assert.match(apiResponse, /'error_code' => \$errorcode/);
@@ -346,7 +362,7 @@ test('an eraser miss does not consume an undo step', () => {
 });
 
 test('plugin is loaded through the Moodle AMD API without inline configuration', () => {
-    assert.match(hook, /js_call_amd\('local_stackinputhelper\/main', 'init'/);
+    assert.match(hook, /js_call_amd\('local_hand2stack\/main', 'init'/);
     assert.doesNotMatch(hook, /<script|console\.log/);
 });
 
@@ -358,6 +374,6 @@ test('API endpoints do not expose internal exception messages', () => {
 });
 
 test('expired mobile sessions have a scheduled cleanup task', () => {
-    assert.match(scheduledTasks, /local_stackinputhelper\\\\task\\\\cleanup_sessions/);
-    assert.match(cleanupTask, /delete_records_select\('local_stackinputhelper_sess', 'expiresat < \?'/);
+    assert.match(scheduledTasks, /local_hand2stack\\\\task\\\\cleanup_sessions/);
+    assert.match(cleanupTask, /delete_records_select\('local_hand2stack_sess', 'expiresat < \?'/);
 });

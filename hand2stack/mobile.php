@@ -9,7 +9,7 @@
 /**
  * mobile.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -18,54 +18,54 @@ require_once(__DIR__ . '/../../config.php');
 $sessionid = required_param('session', PARAM_ALPHANUMEXT);
 
 require_login();
-require_capability('local/stackinputhelper:use', context_system::instance());
+require_capability('local/hand2stack:use', context_system::instance());
 
 global $DB, $PAGE, $OUTPUT, $USER;
 
-if (!get_config('local_stackinputhelper', 'enabled')) {
-    throw new moodle_exception('pluginnotenabled', 'local_stackinputhelper');
+if (!get_config('local_hand2stack', 'enabled')) {
+    throw new moodle_exception('pluginnotenabled', 'local_hand2stack');
 }
-if (!get_config('local_stackinputhelper', 'enablemobile')) {
-    throw new moodle_exception('mobilenotenabled', 'local_stackinputhelper');
+if (!get_config('local_hand2stack', 'enablemobile')) {
+    throw new moodle_exception('mobilenotenabled', 'local_hand2stack');
 }
 
-$record = $DB->get_record('local_stackinputhelper_sess', ['sessionid' => $sessionid], '*', MUST_EXIST);
+$record = $DB->get_record('local_hand2stack_sess', ['sessionid' => $sessionid], '*', MUST_EXIST);
 if ((int)$record->userid !== (int)$USER->id) {
     throw new moodle_exception('nopermissions', 'error', '', get_string('view'));
 }
 if ((int)$record->expiresat < time()) {
-    throw new moodle_exception('sessionexpired', 'local_stackinputhelper');
+    throw new moodle_exception('sessionexpired', 'local_hand2stack');
 }
 
-$PAGE->set_url(new moodle_url('/local/stackinputhelper/mobile.php', ['session' => $sessionid]));
+$PAGE->set_url(new moodle_url('/local/hand2stack/mobile.php', ['session' => $sessionid]));
 $PAGE->set_context(context_system::instance());
-$PAGE->set_title(get_string('mobileuploadbtn', 'local_stackinputhelper'));
-$PAGE->set_heading(get_string('mobileuploadbtn', 'local_stackinputhelper'));
+$PAGE->set_title(get_string('mobileuploadbtn', 'local_hand2stack'));
+$PAGE->set_heading(get_string('mobileuploadbtn', 'local_hand2stack'));
 
 echo $OUTPUT->header();
 ?>
-<div class="local-stackinputhelper-mobile">
-    <p><?php echo s(get_string('mobileuploadinstructions', 'local_stackinputhelper')); ?></p>
-    <input id="local-stackinputhelper-mobile-file" type="file" accept="image/*" capture="environment" style="display: none;">
-    <button id="local-stackinputhelper-mobile-camera" type="button" class="btn btn-secondary">
-        <?php echo s(get_string('takephoto', 'local_stackinputhelper')); ?>
+<div class="local-hand2stack-mobile">
+    <p><?php echo s(get_string('mobileuploadinstructions', 'local_hand2stack')); ?></p>
+    <input id="local-hand2stack-mobile-file" type="file" accept="image/*" capture="environment" style="display: none;">
+    <button id="local-hand2stack-mobile-camera" type="button" class="btn btn-secondary">
+        <?php echo s(get_string('takephoto', 'local_hand2stack')); ?>
     </button>
-    <span id="local-stackinputhelper-mobile-filename" style="display: inline-block; margin: 0 0.75rem;"></span>
-    <button id="local-stackinputhelper-mobile-submit" type="button" class="btn btn-primary" disabled>
-        <?php echo s(get_string('usethisphoto', 'local_stackinputhelper')); ?>
+    <span id="local-hand2stack-mobile-filename" style="display: inline-block; margin: 0 0.75rem;"></span>
+    <button id="local-hand2stack-mobile-submit" type="button" class="btn btn-primary" disabled>
+        <?php echo s(get_string('usethisphoto', 'local_hand2stack')); ?>
     </button>
-    <div id="local-stackinputhelper-mobile-status" style="margin-top: 1rem;"></div>
-    <pre id="local-stackinputhelper-mobile-result" style="margin-top: 1rem; display: none;"></pre>
+    <div id="local-hand2stack-mobile-status" style="margin-top: 1rem;"></div>
+    <pre id="local-hand2stack-mobile-result" style="margin-top: 1rem; display: none;"></pre>
 </div>
 <script>
 (function() {
-    const fileInput = document.getElementById('local-stackinputhelper-mobile-file');
-    const cameraBtn = document.getElementById('local-stackinputhelper-mobile-camera');
-    const filename = document.getElementById('local-stackinputhelper-mobile-filename');
-    const submitBtn = document.getElementById('local-stackinputhelper-mobile-submit');
-    const status = document.getElementById('local-stackinputhelper-mobile-status');
-    const result = document.getElementById('local-stackinputhelper-mobile-result');
-    const uploadUrl = <?php echo json_encode((new moodle_url('/local/stackinputhelper/mobile_upload.php'))->out(false)); ?>;
+    const fileInput = document.getElementById('local-hand2stack-mobile-file');
+    const cameraBtn = document.getElementById('local-hand2stack-mobile-camera');
+    const filename = document.getElementById('local-hand2stack-mobile-filename');
+    const submitBtn = document.getElementById('local-hand2stack-mobile-submit');
+    const status = document.getElementById('local-hand2stack-mobile-status');
+    const result = document.getElementById('local-hand2stack-mobile-result');
+    const uploadUrl = <?php echo json_encode((new moodle_url('/local/hand2stack/mobile_upload.php'))->out(false)); ?>;
     const sessionId = <?php echo json_encode($sessionid); ?>;
     const sesskey = <?php echo json_encode(sesskey()); ?>;
 
@@ -84,15 +84,15 @@ echo $OUTPUT->header();
     submitBtn.addEventListener('click', async function() {
         const file = fileInput.files && fileInput.files[0];
         if (!file) {
-            status.textContent = <?php echo json_encode(get_string('nofilechosen', 'local_stackinputhelper')); ?>;
+            status.textContent = <?php echo json_encode(get_string('nofilechosen', 'local_hand2stack')); ?>;
             return;
         }
 
         const oldText = submitBtn.textContent;
         cameraBtn.disabled = true;
         submitBtn.disabled = true;
-        submitBtn.textContent = <?php echo json_encode(get_string('uploading', 'local_stackinputhelper')); ?>;
-        status.textContent = <?php echo json_encode(get_string('uploading', 'local_stackinputhelper')); ?>;
+        submitBtn.textContent = <?php echo json_encode(get_string('uploading', 'local_hand2stack')); ?>;
+        status.textContent = <?php echo json_encode(get_string('uploading', 'local_hand2stack')); ?>;
         result.style.display = 'none';
 
         try {
@@ -112,11 +112,11 @@ echo $OUTPUT->header();
                 throw new Error(data.error || ('HTTP ' + response.status));
             }
 
-            status.textContent = <?php echo json_encode(get_string('mobileuploadcomplete', 'local_stackinputhelper')); ?>;
+            status.textContent = <?php echo json_encode(get_string('mobileuploadcomplete', 'local_hand2stack')); ?>;
             result.style.display = 'block';
             result.textContent = data.stack || '';
         } catch (error) {
-            status.textContent = <?php echo json_encode(get_string('recognizefailed', 'local_stackinputhelper')); ?> + ' ' + error.message;
+            status.textContent = <?php echo json_encode(get_string('recognizefailed', 'local_hand2stack')); ?> + ' ' + error.message;
         } finally {
             cameraBtn.disabled = false;
             submitBtn.disabled = false;

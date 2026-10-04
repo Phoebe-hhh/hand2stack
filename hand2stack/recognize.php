@@ -9,7 +9,7 @@
 /**
  * recognize.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -19,20 +19,20 @@ require_once(__DIR__ . '/../../config.php');
 
 require_login();
 require_sesskey();
-require_capability('local/stackinputhelper:use', context_system::instance());
+require_capability('local/hand2stack:use', context_system::instance());
 
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-    if (!get_config('local_stackinputhelper', 'enabled')) {
-        throw new moodle_exception('pluginnotenabled', 'local_stackinputhelper');
+    if (!get_config('local_hand2stack', 'enabled')) {
+        throw new moodle_exception('pluginnotenabled', 'local_hand2stack');
     }
 
-    \local_stackinputhelper\local\request_limiter::enforce();
+    \local_hand2stack\local\request_limiter::enforce();
 
-    $upload = \local_stackinputhelper\local\image_upload_validator::validate($_FILES['image'] ?? []);
+    $upload = \local_hand2stack\local\image_upload_validator::validate($_FILES['image'] ?? []);
 
-    $result = \local_stackinputhelper\local\mathpix_client::recognize(
+    $result = \local_hand2stack\local\mathpix_client::recognize(
         $upload['filepath'],
         $upload['filename'],
         $upload['mimetype']
@@ -49,5 +49,5 @@ try {
         'lines' => $result['lines'],
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $error) {
-    \local_stackinputhelper\local\api_response::send_error($error);
+    \local_hand2stack\local\api_response::send_error($error);
 }

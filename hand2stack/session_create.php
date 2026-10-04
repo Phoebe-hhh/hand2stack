@@ -9,7 +9,7 @@
 /**
  * session create.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -19,23 +19,23 @@ require_once(__DIR__ . '/../../config.php');
 
 require_login();
 require_sesskey();
-require_capability('local/stackinputhelper:use', context_system::instance());
+require_capability('local/hand2stack:use', context_system::instance());
 
 header('Content-Type: application/json; charset=utf-8');
 
 try {
     global $DB, $USER;
 
-    if (!get_config('local_stackinputhelper', 'enabled')) {
-        throw new moodle_exception('pluginnotenabled', 'local_stackinputhelper');
+    if (!get_config('local_hand2stack', 'enabled')) {
+        throw new moodle_exception('pluginnotenabled', 'local_hand2stack');
     }
 
-    if (!get_config('local_stackinputhelper', 'enablemobile')) {
-        throw new moodle_exception('mobilenotenabled', 'local_stackinputhelper');
+    if (!get_config('local_hand2stack', 'enablemobile')) {
+        throw new moodle_exception('mobilenotenabled', 'local_hand2stack');
     }
 
     $now = time();
-    $DB->delete_records_select('local_stackinputhelper_sess', 'expiresat < ?', [$now]);
+    $DB->delete_records_select('local_hand2stack_sess', 'expiresat < ?', [$now]);
 
     $sessionid = bin2hex(random_bytes(16));
     $record = (object)[
@@ -52,14 +52,14 @@ try {
         'expiresat' => $now + 10 * 60,
     ];
 
-    $DB->insert_record('local_stackinputhelper_sess', $record);
+    $DB->insert_record('local_hand2stack_sess', $record);
 
-    $mobileurl = new moodle_url('/local/stackinputhelper/mobile.php', ['session' => $sessionid]);
+    $mobileurl = new moodle_url('/local/hand2stack/mobile.php', ['session' => $sessionid]);
     $mobileurlout = $mobileurl->out(false);
 
-    $mobilebaseurl = trim((string)get_config('local_stackinputhelper', 'mobilebaseurl'));
+    $mobilebaseurl = trim((string)get_config('local_hand2stack', 'mobilebaseurl'));
     if ($mobilebaseurl !== '') {
-        $mobileurlout = rtrim($mobilebaseurl, '/') . '/local/stackinputhelper/mobile.php?session=' . rawurlencode($sessionid);
+        $mobileurlout = rtrim($mobilebaseurl, '/') . '/local/hand2stack/mobile.php?session=' . rawurlencode($sessionid);
     }
 
     $warning = '';
@@ -84,5 +84,5 @@ try {
         'expires_at' => $record->expiresat,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $error) {
-    \local_stackinputhelper\local\api_response::send_error($error);
+    \local_hand2stack\local\api_response::send_error($error);
 }

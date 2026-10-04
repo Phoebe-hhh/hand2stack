@@ -4,15 +4,15 @@
 
 Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-> **Current pilot release:** [v0.2.16-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.2.16-alpha)
+> **Current pilot release:** [v0.3.0-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.3.0-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download hand2stack-v0.2.16-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.2.16-alpha/hand2stack-v0.2.16-alpha.zip)**
+**[Download hand2stack-v0.3.0-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.3.0-alpha/hand2stack-v0.3.0-alpha.zip)**
 
-Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.2.16-alpha.zip`. For compatibility with existing Moodle installations, the ZIP still contains the required plugin root folder `stackinputhelper/`.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.3.0-alpha.zip` and contains the plugin root folder `hand2stack/`.
 
 ## Features
 
@@ -59,10 +59,22 @@ Moodle installations in a subdirectory are supported automatically. For example,
 For a manual installation, extract the package as:
 
 ```text
-moodle/local/stackinputhelper
+moodle/local/hand2stack
 ```
 
 Then visit **Site administration → Notifications**. When upgrading manually, back up and replace the existing plugin folder; do not copy `node_modules` to the server.
+
+### Migrating from 0.2.x
+
+Version 0.3.0 changes the Moodle component identity from `local_stackinputhelper` to `local_hand2stack`. It is not an in-place upgrade:
+
+1. Disable the old Hand2STACK plugin but do not uninstall it yet.
+2. Install `hand2stack-v0.3.0-alpha.zip` as a new plugin.
+3. The new plugin copies the old Mathpix and operational settings during installation.
+4. Enable and verify the new Hand2STACK plugin.
+5. Uninstall and remove `local/stackinputhelper`.
+
+Temporary mobile-upload sessions are intentionally not migrated.
 
 ## Student Workflow
 
@@ -99,4 +111,4 @@ See the [plugin README](hand2stack/README.md) for development details, configura
 
 ## Status
 
-Version `0.2.16-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, free-text document preservation, guarded sibling-answer matching, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+Version `0.3.0-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, free-text document preservation, guarded sibling-answer matching, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.

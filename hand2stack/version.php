@@ -9,14 +9,14 @@
 /**
  * version.php for Hand2STACK.
  *
- * @package    local_stackinputhelper
+ * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_stackinputhelper';
-$plugin->version   = 2026100401;
+$plugin->component = 'local_hand2stack';
+$plugin->version   = 2026100402;
 $plugin->requires  = 2024042200;
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release = '0.2.16-alpha';
+$plugin->release = '0.3.0-alpha';
