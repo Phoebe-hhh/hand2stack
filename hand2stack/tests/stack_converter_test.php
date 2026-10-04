@@ -130,6 +130,15 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame('x=\\frac{\\pi}{2}', $lines[0]['display_parts'][1]['latex']);
     }
 
+    public function test_nested_math_delimiters_are_removed_from_structured_lines(): void {
+        $lines = mathpix_client::build_lines('\\(\\(x=9\\)\\)');
+
+        $this->assertCount(1, $lines);
+        $this->assertSame('x=9', $lines[0]['latex']);
+        $this->assertSame('x=9', $lines[0]['math']);
+        $this->assertSame('x=9', $lines[0]['display_parts'][0]['latex']);
+    }
+
     public function test_japanese_answer_line_repairs_ocr_before_token_selection(): void {
         $lines = mathpix_client::build_lines('答えはメニー1たす');
 

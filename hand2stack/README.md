@@ -39,6 +39,7 @@ Migrating from 0.2.x is a component migration rather than an ordinary upgrade. D
 - Sends uploaded images from Moodle PHP to Mathpix.
 - Displays multi-line recognition results instead of immediately submitting a single OCR result.
 - Detects STACK free-text inputs and preserves all recognized lines as editable displayed AsciiMath.
+- Hides an optional STACK textarea named `process` (or `processN`) and keeps it synchronized with the recognized mathematical steps, while excluding prose and synthetic summaries.
 - Keeps the Free-text review compact by showing the original work and one complete editable transcription, without a redundant candidate list.
 - Preserves complete Mathpix document text, including prose and every mathematical line, across mobile-upload polling.
 - Shows the uploaded source image beside free-text recognition with zoom, reset, and drag inspection.
@@ -205,8 +206,8 @@ amd/build/main.min.js
 Update `version.php` and `CHANGELOG.md`, merge the change into the release branch, and push a matching version tag:
 
 ```bash
-git tag v0.3.1-alpha
-git push origin v0.3.1-alpha
+git tag v0.3.2-alpha
+git push origin v0.3.2-alpha
 ```
 
 The GitHub Actions workflow then checks PHP syntax and creates a GitHub Release containing:
@@ -222,5 +223,5 @@ The workflow refuses to publish if the tag does not match `$plugin->release` in 
 Current version:
 
 ```text
-0.3.1-alpha
+0.3.2-alpha
 ```

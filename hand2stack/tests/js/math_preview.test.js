@@ -13,6 +13,33 @@ const body = source.match(/const asciiToLatexPreview = value => \{([\s\S]*?)\n  
 assert.ok(body, 'asciiToLatexPreview must remain available for regression tests');
 // This evaluates only the extracted pure conversion function, with no DOM access.
 const asciiToLatexPreview = Function('return value => {' + body[1] + '}')();
+const delimiterBody = source.match(/const stripOuterMathDelimiters = value => \{([\s\S]*?)\n    \};/);
+assert.ok(delimiterBody, 'stripOuterMathDelimiters must remain available for regression tests');
+const stripOuterMathDelimiters = Function('return value => {' + delimiterBody[1] + '}')();
+const splitBody = source.match(/const splitEmbeddedMathText = value => \{([\s\S]*?)\n    \};/);
+assert.ok(splitBody, 'splitEmbeddedMathText must remain available for regression tests');
+const splitEmbeddedMathText = Function(
+    'stripOuterMathDelimiters',
+    'return value => {' + splitBody[1] + '}'
+)(stripOuterMathDelimiters);
+
+test('nested OCR math delimiters are removed before MathJax rendering', () => {
+    assert.equal(stripOuterMathDelimiters('\\(x=9\\)'), 'x=9');
+    assert.equal(stripOuterMathDelimiters('\\(\\(x=9\\)\\)'), 'x=9');
+    assert.equal(stripOuterMathDelimiters('\\[\\(x^2=1\\)\\]'), 'x^2=1');
+    assert.equal(stripOuterMathDelimiters('$$x=9$$'), 'x=9');
+});
+
+test('embedded OCR delimiters split prose from renderable mathematics', () => {
+    assert.deepEqual(splitEmbeddedMathText('for \\(3x-6+4=2x+7\\)'), [
+        {type: 'text', text: 'for '},
+        {type: 'math', latex: '3x-6+4=2x+7', text: '3x-6+4=2x+7'},
+    ]);
+    assert.deepEqual(splitEmbeddedMathText('so the ans is \\(\\(x=9\\)\\)'), [
+        {type: 'text', text: 'so the ans is '},
+        {type: 'math', latex: 'x=9', text: 'x=9'},
+    ]);
+});
 
 test('edited inequalities render logical relations as mathematical symbols', () => {
     assert.equal(

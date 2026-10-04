@@ -102,7 +102,7 @@ define([], function() {
         || /Android|Mobile|Tablet/i.test(navigator.userAgent)
         || Boolean(navigator.userAgentData && navigator.userAgentData.mobile);
 
-    const findAnswerBoxes = () => {
+    const findStackInputs = () => {
         const selectors = [
             'input[data-stack-input-type]',
             'textarea[data-stack-input-type]',
@@ -113,13 +113,36 @@ define([], function() {
         const boxes = [];
         selectors.forEach(selector => {
             document.querySelectorAll(selector).forEach(el => {
-                if (el.offsetParent !== null && !boxes.includes(el)) {
+                if (!boxes.includes(el)) {
                     boxes.push(el);
                 }
             });
         });
         return boxes;
     };
+
+    const processInputName = input => {
+        const parsed = input ? parseStackInputName(input.name) : null;
+        return parsed ? parsed.input : String((input && input.name) || '');
+    };
+
+    const isProcessInput = input => {
+        return Boolean(input
+            && input.tagName === 'TEXTAREA'
+            && /^process\d*$/i.test(processInputName(input)));
+    };
+
+    const prepareProcessInputs = () => {
+        findStackInputs().filter(isProcessInput).forEach(input => {
+            input.hidden = true;
+            input.setAttribute('aria-hidden', 'true');
+            input.dataset.hand2stackProcess = 'true';
+        });
+    };
+
+    const findAnswerBoxes = () => findStackInputs().filter(input => {
+        return input.offsetParent !== null && !isProcessInput(input);
+    });
 
     const createHiddenFileInput = (capture = false) => {
         const fileInput = document.createElement('input');
@@ -136,6 +159,75 @@ define([], function() {
         input.value = value;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const setBackgroundValue = (input, value) => {
+        if (!input || input.value === value) return;
+        input.value = value;
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        input.dispatchEvent(new Event('change', {bubbles: true}));
+    };
+
+    const findProcessInput = answerBox => {
+        const question = answerBox && answerBox.closest('.que');
+        if (!question) return null;
+        return findStackInputs().find(input => question.contains(input) && isProcessInput(input)) || null;
+    };
+
+    const processValueForLines = lines => {
+        if (!Array.isArray(lines)) return '';
+        return lines.filter(line => !line.synthetic
+                && String((line && line.type) || 'expression').toLowerCase() !== 'text')
+            .map(line => String((line && (line._validatedStack || line.stack || line.ascii || line.math)) || '').trim())
+            .filter(Boolean)
+            .join('\n');
+    };
+
+    // One backtick-marked Free-text row, normalised like the server normalises
+    // recognized lines: list numbering is layout, and Maxima has no "~~", so a
+    // restated decimal after an exact value is dropped.
+    const processRowFromFreeText = row => {
+        let value = String(row || '').trim()
+            .replace(/^(?:\d+[.)]|\(\d+\))\s+(?=[A-Za-z(])/, '')
+            .replace(/^(?:~~|≈)\s*/, '');
+        const approx = /~~|≈/.exec(value);
+        if (approx) {
+            const head = value.slice(0, approx.index);
+            value = /(^|[^<>!#:])=/.test(head) ? head : value.replace(/~~|≈/, '=');
+        }
+        return value.trim();
+    };
+
+    // The Free-text working marks each maths row with backticks; prose stays
+    // outside them. Unpaired backticks (mid-edit) are ignored.
+    const processValueForFreeText = text => {
+        const rows = [];
+        const pattern = /`([^`]*)`/g;
+        let match;
+        while ((match = pattern.exec(String(text || ''))) !== null) {
+            match[1].split('\n').map(processRowFromFreeText).filter(Boolean).forEach(row => rows.push(row));
+        }
+        return rows.join('\n');
+    };
+
+    const syncProcessValue = (answerBox, value) => {
+        const processInput = findProcessInput(answerBox);
+        if (!processInput) return;
+        setBackgroundValue(processInput, value);
+    };
+
+    const syncProcessInput = (answerBox, lines) => {
+        syncProcessValue(answerBox, processValueForLines(lines));
+    };
+
+    // A Free-text box is what the learner submits, so its process data
+    // follows every change to it, whether recognized or typed.
+    const bindFreeTextProcess = answerBox => {
+        if (!isFreeTextInput(answerBox) || answerBox.dataset.hand2stackProcessBound === '1') return;
+        answerBox.dataset.hand2stackProcessBound = '1';
+        const sync = () => syncProcessValue(answerBox, processValueForFreeText(answerBox.value));
+        answerBox.addEventListener('input', sync);
+        answerBox.addEventListener('change', sync);
     };
 
     const isFreeTextInput = input => {
@@ -1049,23 +1141,73 @@ define([], function() {
         return value ? '\\(' + escapeHtml(value) + '\\)' : '';
     };
 
-    const typesetMath = (element) => {
-        if (!window.MathJax || !element) {
-            return Promise.resolve();
-        }
-
-        if (typeof window.MathJax.typesetPromise === 'function') {
-            return window.MathJax.typesetPromise([element]).catch(error => {
-                window.console.warn('[hand2stack] MathJax typeset failed:', error);
+    // Moodle loads MathJax 2 with delayStartupUntil=configured and only calls
+    // Hub.Configured() once its filter finds an equation on the page. When the
+    // question text has no math, queued typesets would wait until STACK returns
+    // validation output, so start MathJax through Moodle's own loader.
+    let mathJax2ConfigPromise = null;
+    const ensureMathJax2Configured = mathJax => {
+        if (mathJax.isReady) return Promise.resolve();
+        if (!mathJax2ConfigPromise) {
+            mathJax2ConfigPromise = new Promise(resolve => {
+                const fallback = () => {
+                    if (!mathJax.isReady && typeof mathJax.Hub.Configured === 'function') {
+                        mathJax.Hub.Configured();
+                    }
+                    resolve();
+                };
+                if (typeof window.require !== 'function') {
+                    fallback();
+                    return;
+                }
+                window.require(['filter_mathjaxloader/loader'], loader => {
+                    if (loader && typeof loader.typeset === 'function') {
+                        loader.typeset();
+                    }
+                    resolve();
+                }, fallback);
             });
         }
+        return mathJax2ConfigPromise;
+    };
 
-        if (window.MathJax.Hub && typeof window.MathJax.Hub.Queue === 'function') {
-            return new Promise(resolve => {
-                window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, element], resolve);
-            });
+    const typesetMath = async (element, attempt = 0) => {
+        if (!element) return;
+
+        const retry = () => {
+            if (attempt >= 20 || !element.isConnected) return Promise.resolve();
+            return new Promise(resolve => window.setTimeout(resolve, 100))
+                .then(() => typesetMath(element, attempt + 1));
+        };
+        const mathJax = window.MathJax;
+        if (!mathJax) return retry();
+
+        try {
+            // Moodle may expose the MathJax configuration object before the
+            // runtime has finished loading. Waiting for startup prevents the
+            // first OCR preview from remaining as literal \(...\) text.
+            if (mathJax.startup && mathJax.startup.promise) {
+                await mathJax.startup.promise;
+            }
+            if (typeof mathJax.typesetPromise === 'function') {
+                await mathJax.typesetPromise([element]);
+                return;
+            }
+            if (mathJax.Hub && typeof mathJax.Hub.Queue === 'function') {
+                await ensureMathJax2Configured(mathJax);
+                await new Promise(resolve => {
+                    mathJax.Hub.Queue(['Typeset', mathJax.Hub, element], resolve);
+                });
+                return;
+            }
+        } catch (error) {
+            // MathJax rejects when another STACK typeset is in progress. A
+            // short retry is safer than waiting for an unrelated later click.
+            if (attempt < 20) return retry();
+            window.console.warn('[hand2stack] MathJax typeset failed:', error);
+            return;
         }
-        return Promise.resolve();
+        return retry();
     };
 
     const asciiToLatexPreview = value => {
@@ -1108,27 +1250,74 @@ define([], function() {
         return latex;
     };
 
+    const stripOuterMathDelimiters = value => {
+        let result = String(value || '').trim();
+        let previous = '';
+        while (result !== previous) {
+            previous = result;
+            result = result.replace(/^\\\(\s*([\s\S]*?)\s*\\\)$/u, '$1').trim();
+            result = result.replace(/^\\\[\s*([\s\S]*?)\s*\\\]$/u, '$1').trim();
+            result = result.replace(/^\$\$?\s*([\s\S]*?)\s*\$\$?$/u, '$1').trim();
+        }
+        return result;
+    };
+
+    const splitEmbeddedMathText = value => {
+        let text = String(value || '');
+        let previous = '';
+        while (text !== previous) {
+            previous = text;
+            text = text.replace(/\\\(\s*\\\(([\s\S]*?)\\\)\s*\\\)/gu, '\\($1\\)');
+            text = text.replace(/\\\[\s*\\\[([\s\S]*?)\\\]\s*\\\]/gu, '\\[$1\\]');
+        }
+        const pattern = /\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$|\$([^$\n]+?)\$/gu;
+        const parts = [];
+        let offset = 0;
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+            if (match.index > offset) {
+                parts.push({type: 'text', text: text.slice(offset, match.index)});
+            }
+            const latex = stripOuterMathDelimiters(match[1] ?? match[2] ?? match[3] ?? match[4] ?? '');
+            if (latex) parts.push({type: 'math', latex, text: latex});
+            offset = pattern.lastIndex;
+        }
+        if (offset < text.length) parts.push({type: 'text', text: text.slice(offset)});
+        return parts.length ? parts : [{type: 'text', text}];
+    };
+
+    const normalizeDisplayParts = parts => {
+        if (!Array.isArray(parts)) return [];
+        return parts.flatMap(part => {
+            if (!part) return [];
+            if (part.type !== 'math') return splitEmbeddedMathText(part.text || '');
+            const latex = stripOuterMathDelimiters(part.latex || part.text || '');
+            return [Object.assign({}, part, {latex, text: latex})];
+        });
+    };
+
     const normalizeResultLines = (rawLatex, stackResult, lines) => {
         if (Array.isArray(lines) && lines.length) {
             return lines.map((line, index) => ({
                 raw: String(line.raw || line.latex || line.ascii || '').trim(),
-                latex: String(line.latex || '').trim(),
-                originalLatex: String(line.latex || '').trim(),
+                latex: stripOuterMathDelimiters(line.latex || ''),
+                originalLatex: stripOuterMathDelimiters(line.latex || ''),
                 display: String(line.display || line.latex || '').trim(),
-                displayParts: Array.isArray(line.display_parts) ? line.display_parts : [],
-                math: String(line.math || '').trim(),
+                displayParts: normalizeDisplayParts(line.display_parts),
+                math: stripOuterMathDelimiters(line.math || ''),
                 stack: String(line.stack || line.text || '').trim(),
                 ascii: String(line.ascii || line.stack || line.text || line.math || '').trim(),
                 originalAscii: String(line.ascii || line.stack || line.text || line.math || '').trim(),
                 normalized: String(line.normalized || line.stack || '').trim(),
                 type: String(line.type || 'expression'),
                 relation: line.relation ? String(line.relation) : null,
+                synthetic: Boolean(line.synthetic),
                 edited: false,
                 recommended: false
             })).filter(line => line.latex || line.stack);
         }
 
-        const latex = String(rawLatex || stackResult || '').trim();
+        const latex = stripOuterMathDelimiters(rawLatex || stackResult || '');
         const stack = String(stackResult || latex || '').trim();
         return latex || stack ? [{
             latex,
@@ -1813,11 +2002,11 @@ define([], function() {
         displayRow.style.minHeight = '24px';
         container.appendChild(displayRow);
 
-        const parts = line.displayParts.length ? line.displayParts : [{
+        const parts = line.displayParts.length ? line.displayParts : normalizeDisplayParts([{
             type: line.math ? 'math' : 'text',
             text: line.display || line.latex || line.stack || '',
             latex: line.math || ''
-        }];
+        }]);
 
         parts.forEach(part => {
             if (part.type === 'math' && part.latex) {
@@ -1921,6 +2110,10 @@ define([], function() {
         panel._freeTextHelp.style.display = freeTextMode ? 'block' : 'none';
         panel._appendHint.style.display = 'none';
         panel._actionButtons.style.display = freeTextMode ? 'none' : 'flex';
+        const resultLines = normalizeResultLines(rawLatex, stackResult, lines);
+        const syncDiagnosticProcess = () => syncProcessInput(answerBox, resultLines);
+        // Free-text mode syncs from the submitted text instead (bindFreeTextProcess).
+        if (!freeTextMode) syncDiagnosticProcess();
 
         if (freeTextMode) {
             panel._options.innerHTML = '';
@@ -1956,7 +2149,6 @@ define([], function() {
         panel._applyBtn.style.marginTop = '';
         panel._insertBtn.style.display = 'none';
 
-        const resultLines = normalizeResultLines(rawLatex, stackResult, lines);
         let defaultIndex = Math.max(0, resultLines.length - 1);
         for (let i = resultLines.length - 1; i >= 0; i--) {
             if (resultLines[i].stack) {
@@ -2075,6 +2267,7 @@ define([], function() {
                 field.value = line.ascii;
                 field.style.background = '#fff';
                 fieldHighlighter.reset(line.ascii);
+                syncDiagnosticProcess();
                 window.clearTimeout(line._editTimer);
                 updateEditedControls();
                 refreshCandidateLine(index);
@@ -2093,6 +2286,7 @@ define([], function() {
                     line.edited = line.ascii !== line.originalAscii;
                     line._validatedAscii = '';
                     line._validatedStack = '';
+                    syncDiagnosticProcess();
                     field.style.background = '#fff';
                     updateEditedControls();
                     updateSelectedPreview();
@@ -2351,6 +2545,7 @@ define([], function() {
                 }
                 panel._stackTextarea.value = stackValue;
                 setAnswerValue(answerBox, stackValue);
+                syncDiagnosticProcess();
                 setRequestStatus(panel);
             } catch (error) {
                 if (panel._insertRequestId === requestId) {
@@ -3181,6 +3376,7 @@ define([], function() {
     };
 
     const run = async () => {
+        prepareProcessInputs();
         const mainContent = document.querySelector('.main-inner');
         if (mainContent && (document.body.id === 'page-mod-quiz-attempt'
                 || document.body.id === 'page-question-preview')) {
@@ -3194,6 +3390,7 @@ define([], function() {
         // One capture interaction per question: anchored inputs next to a
         // free-text box are filled from that box's working, not captured alone.
         boxes.forEach(captureAnswerAnchor);
+        boxes.forEach(bindFreeTextProcess);
         const candidates = new Set();
         boxes.filter(isFreeTextInput).forEach(source => {
             findSiblingAnswerBoxes(source).forEach(box => candidates.add(box));

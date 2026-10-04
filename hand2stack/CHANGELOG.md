@@ -5,6 +5,15 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+## 0.3.2-alpha - 2026-10-04
+
+- Add an optional hidden `process`/`processN` STACK textarea that records recognized mathematical steps in order.
+- Keep process data synchronized with algebraic edits, validated values, and editable free-text working.
+- Exclude prose, unpaired free-text delimiters, and generated summary rows from process data.
+- Remove nested Mathpix math delimiters before MathJax rendering.
+- Keep prose and embedded mathematics separate when Mathpix returns mixed-content lines.
+- Normalize layout spacing and Unicode minus/equality characters consistently in structured display parts.
+
 ## 0.3.1-alpha - 2026-10-04
 
 - Recover STACK syntax hints from the server when a saved or empty submission no longer exposes them in the page.

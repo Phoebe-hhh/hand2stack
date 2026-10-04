@@ -4,15 +4,15 @@
 
 Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-> **Current pilot release:** [v0.3.1-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.3.1-alpha)
+> **Current pilot release:** [v0.3.2-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.3.2-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download hand2stack-v0.3.1-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.3.1-alpha/hand2stack-v0.3.1-alpha.zip)**
+**[Download hand2stack-v0.3.2-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.3.2-alpha/hand2stack-v0.3.2-alpha.zip)**
 
-Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.3.1-alpha.zip` and contains the plugin root folder `hand2stack/`.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.3.2-alpha.zip` and contains the plugin root folder `hand2stack/`.
 
 ## Features
 
@@ -25,6 +25,7 @@ Do not upload GitHub's automatically generated **Source code** archives to Moodl
 - Edit the selected ASCII result, inspect its synchronized LaTeX form, and restore the original OCR value.
 - Validate edited algebraic expressions with STACK's parser before insertion.
 - Preserve complete multiline working automatically in STACK 4.13+ free-text inputs.
+- Populate an optional hidden STACK textarea named `process` (or `processN`) with the recognized mathematical steps in order, excluding prose and generated summaries.
 - Preserve prose and every recognized mathematics line during desktop and mobile free-text recognition.
 - Show the uploaded source image beside the editable free-text transcription, with zoom and drag inspection.
 - Match labelled results such as `f(2)=...` to sibling STACK inputs using their syntax hints without overwriting newer results or student edits.
@@ -111,4 +112,4 @@ See the [plugin README](hand2stack/README.md) for development details, configura
 
 ## Status
 
-Version `0.3.1-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, free-text document preservation, guarded sibling-answer matching, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+Version `0.3.2-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.

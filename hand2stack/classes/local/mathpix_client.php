@@ -496,9 +496,15 @@ final class mathpix_client {
         // Remove delimiters only when they wrap the complete row. Mixed prose
         // such as "Therefore, \(x>=1\)" must keep both delimiters until its
         // text and mathematical parts have been separated.
-        $line = preg_replace('/^\$\s*([\s\S]*?)\s*\$$/u', '$1', $line);
-        $line = preg_replace('/^\\\\\(\s*([\s\S]*?)\s*\\\\\)$/u', '$1', $line);
-        $line = preg_replace('/^\\\\\[\s*([\s\S]*?)\s*\\\\\]$/u', '$1', $line);
+        // Mathpix can return nested delimiters such as "\\(\\(x=1\\)\\)".
+        // Remove every complete outer layer before the browser adds its own.
+        do {
+            $previous = $line;
+            $line = preg_replace('/^\$\$?\s*([\s\S]*?)\s*\$\$?$/u', '$1', $line);
+            $line = preg_replace('/^\\\\\(\s*([\s\S]*?)\s*\\\\\)$/u', '$1', $line);
+            $line = preg_replace('/^\\\\\[\s*([\s\S]*?)\s*\\\\\]$/u', '$1', $line);
+            $line = trim($line);
+        } while ($line !== $previous);
         $line = preg_replace('/(?<!\\\\)\btext\s*\{/u', '\\text{', $line);
 
         // In Japanese handwriting Mathpix can read the compact sequence
@@ -521,7 +527,11 @@ final class mathpix_client {
     }
 
     private static function display_parts(string $line, string $math): array {
-        $display = self::display_latex($line);
+        // Apply the same layout clean-up as extract_math(); otherwise a row
+        // containing "\quad" or a Unicode minus cannot be located in the
+        // display text and is shown twice (raw LaTeX plus rendered maths).
+        $display = str_replace(['−', '–', '—', '＝'], ['-', '-', '-', '='], self::display_latex($line));
+        $display = preg_replace('/\\\\q?quad(?![a-zA-Z])/u', ' ', $display);
         if ($math === '') {
             return [[
                 'type' => 'text',
