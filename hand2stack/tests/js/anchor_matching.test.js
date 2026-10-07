@@ -73,9 +73,12 @@ test('extractAnchoredValue requires a relation marker right after the anchor', (
 // applyMatchedAnswers touches the DOM and the network (sibling lookup,
 // server-side validation), so build it with those dependencies stubbed out
 // while keeping the real matching/extraction code it closes over.
-const buildApplyMatchedAnswers = (0, eval)(`(function(isFreeTextInput, findSiblingAnswerBoxes, postLatex, setAnswerValue, flashAutofilledBox) {
+const silentResearch = {log: () => {}, clip: value => (value === null || value === undefined ? '' : String(value))};
+const buildApplyMatchedAnswers = (0, eval)(`(function(isFreeTextInput, findSiblingAnswerBoxes, postLatex, setAnswerValue, flashAutofilledBox,
+        research = ${'{'}log: () => {}, clip: value => (value === null || value === undefined ? '' : String(value))${'}'}) {
     ${extractFunctionSource('normalizeAnchorText')}
     ${extractFunctionSource('matchableLineText')}
+    ${extractFunctionSource('matchableLineTexts')}
     ${extractFunctionSource('extractAnchoredValue')}
     ${extractFunctionSource('extractAnchoredAnswers')}
     ${extractFunctionSource('applyMatchedAnswers')}
@@ -169,6 +172,7 @@ test('applyMatchedAnswers preserves an answer edited during validation', async (
 const extractAnchoredAnswers = (0, eval)(`(function() {
     ${extractFunctionSource('normalizeAnchorText')}
     ${extractFunctionSource('matchableLineText')}
+    ${extractFunctionSource('matchableLineTexts')}
     ${extractFunctionSource('extractAnchoredValue')}
     ${extractFunctionSource('extractAnchoredAnswers')}
     return extractAnchoredAnswers;
@@ -191,16 +195,69 @@ test('applyMatchedAnswers reports filled and missing targets', async () => {
     const reports = [];
     const found = {value: '', dataset: {hand2stackAnchor: 'f(2)='}};
     const missing = {value: '', dataset: {hand2stackAnchor: 'g(1)='}};
+    const events = [];
     const applyMatchedAnswers = buildApplyMatchedAnswers(
         () => true,
         () => [found, missing],
         async latex => latex,
         () => {},
-        () => {}
+        () => {},
+        Object.assign({}, silentResearch, {
+            log: (box, type, payload) => events.push([box === found ? 'f' : 'g', type, payload.status || payload.valid])
+        })
     );
 
     await applyMatchedAnswers('SOURCE', [{math: 'f(2)=1'}], () => true,
         (box, result) => reports.push([box === found ? 'f' : 'g', result.status, result.lineIndex]));
 
     assert.deepEqual(reports, [['f', 'filled', 0], ['g', 'notfound', -1]]);
+    // Research events: validation, then the autofill outcome for each target.
+    assert.deepEqual(events, [
+        ['f', 'validation_completed', true],
+        ['f', 'answer_inserted', 'filled'],
+        ['g', 'answer_inserted', 'notfound']
+    ]);
+});
+
+test('a colon label anchors a value, but ":=" does not', () => {
+    assert.equal(extractAnchoredValue('Answer:', 'Answer: 1<x and x<=5'), '1<x and x<=5');
+    // After a colon the value may itself be an equation.
+    assert.equal(extractAnchoredValue('Answer:', 'answer : x=3'), 'x=3');
+    assert.equal(extractAnchoredValue('f(2)=', 'f(2):=3'), null);
+});
+
+test('a prose label is found in the recognized row when the maths dropped it', () => {
+    const extractAnchoredAnswers = (0, eval)(`(function() {
+        ${extractFunctionSource('normalizeAnchorText')}
+        ${extractFunctionSource('matchableLineText')}
+        ${extractFunctionSource('matchableLineTexts')}
+        ${extractFunctionSource('extractAnchoredValue')}
+        ${extractFunctionSource('extractAnchoredAnswers')}
+        return extractAnchoredAnswers;
+    })()`);
+    // Server rows for "But $x=1$ is not allowed." / "Answer: $1<x \leq 5$".
+    const lines = [
+        {math: 'x=1', raw: 'But $x=1$ is not allowed.'},
+        {math: '1<x \\leq 5', raw: 'Answer: $1<x \\leq 5$'}
+    ];
+    assert.deepEqual(extractAnchoredAnswers(['Answer:'], lines), [
+        {anchor: 'Answer:', expr: '$1<x \\leq 5$', lineIndex: 1}
+    ]);
+});
+
+test('an answer box drops its own label hint from an inserted value', () => {
+    const stripOwnAnchor = (0, eval)(`(function() {
+        ${extractFunctionSource('normalizeAnchorText')}
+        ${extractFunctionSource('extractAnchoredValue')}
+        ${extractFunctionSource('stripOwnAnchor')}
+        return stripOwnAnchor;
+    })()`);
+    assert.equal(stripOwnAnchor('x=', 'x=3'), '3');
+    assert.equal(stripOwnAnchor('x=', 'x = -1/2'), '-1/2');
+    assert.equal(stripOwnAnchor('f(2)=', 'f(2)=1+2*sqrt(2)'), '1+2*sqrt(2)');
+    // Anything that is not "label = value" is inserted unchanged.
+    assert.equal(stripOwnAnchor('x=', 'x=2 or x=3'), 'x=2 or x=3');
+    assert.equal(stripOwnAnchor('x=', 'x^2=9'), 'x^2=9');
+    assert.equal(stripOwnAnchor('x=', '3'), '3');
+    assert.equal(stripOwnAnchor('y=', 'x=3'), 'x=3');
 });

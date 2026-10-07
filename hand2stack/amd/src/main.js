@@ -31,6 +31,8 @@ define([], function() {
         anchorsUrl: '',
         sessionCreateUrl: '',
         sessionResultUrl: '',
+        eventUrl: '',
+        research: {enabled: false, schemaVersion: 1},
         sesskey: '',
         enablemobile: true,
         uploadbtn: 'Upload math image',
@@ -257,6 +259,286 @@ define([], function() {
         return match ? {usage: match[1], slot: match[2], input: match[3]} : null;
     };
 
+    // Research instrumentation (docs/research/event-logging-spec-v1.md). The
+    // core keeps traces, sequence numbers and the send queue; the page wiring
+    // is injected through `env` so the trace logic can be tested outside a
+    // browser. Every entry point is a no-op unless the server enabled logging
+    // for this learner, and none of them may throw into the answering workflow.
+    const createResearchLogger = env => {
+        const SCHEMA = 1;
+        const FLUSH_MS = 5000;
+        const FLUSH_SIZE = 20;
+        const EDIT_IDLE_MS = 1000;
+        const MAX_QUEUE = 500;
+        const BEACON_BYTES = 60000;
+        const FEEDBACK_WINDOW_MS = 5 * 60 * 1000;
+        // Learner actions that, after feedback, begin a revision.
+        const REVISION_TRIGGERS = ['recognition_started', 'candidate_selected'];
+        // Submits after which the next page shows this question's feedback.
+        // Next/Previous/Save only store the response.
+        const FEEDBACK_SUBMITS = ['check', 'finish'];
+        // Actions that end any edit still in progress before they are logged.
+        const EDIT_BOUNDARIES = {recognition_started: 'flush', submit_triggered: 'submit'};
+        const queue = [];
+        const segments = new Map();
+        const memory = new Map();
+        const trackers = new Set();
+        let flushTimer = null;
+        let disabled = false;
+
+        const enabled = () => {
+            const config = env.getConfig();
+            return !disabled && Boolean(config.research && config.research.enabled && config.eventUrl);
+        };
+
+        const clip = (value, max = 4000) => {
+            const text = value === null || value === undefined ? '' : String(value);
+            return text.length > max ? text.slice(0, max) + '…[truncated]' : text;
+        };
+
+        const storageKey = key => 'hand2stack:trace:' + key;
+
+        // A trace lives in sessionStorage so it survives the page reload
+        // that every quiz Check or Next causes; memory is the fallback.
+        const loadTrace = key => {
+            let stored = memory.get(key) || null;
+            try {
+                stored = JSON.parse(env.storage.getItem(storageKey(key)) || 'null') || stored;
+            } catch (error) {
+                // Private mode or blocked storage: keep the in-memory trace.
+            }
+            if (stored && typeof stored.id === 'string' && Number.isInteger(stored.seq)) {
+                return {state: stored, resumed: true};
+            }
+            return {state: {id: env.uuid(), seq: 0, pendingSubmit: null, feedback: null}, resumed: false};
+        };
+
+        const saveTrace = (key, state) => {
+            memory.set(key, state);
+            try {
+                env.storage.setItem(storageKey(key), JSON.stringify(state));
+            } catch (error) {
+                // As above.
+            }
+        };
+
+        const contextFor = (box, options) => {
+            const parsed = parseStackInputName(box && box.name);
+            if (!parsed) return null;
+            return {
+                key: parsed.usage + ':' + parsed.slot,
+                usage: Number(parsed.usage),
+                slot: Number(parsed.slot),
+                // Question-level events pass input/modality null explicitly.
+                input: 'input' in options ? options.input : parsed.input,
+                modality: 'modality' in options ? options.modality : ((box && box._hand2stackModality) || null)
+            };
+        };
+
+        const takeBatch = maxBytes => {
+            const batch = [];
+            let bytes = 2;
+            while (queue.length && batch.length < 100) {
+                const size = JSON.stringify(queue[0]).length + 1;
+                if (batch.length && bytes + size > maxBytes) break;
+                bytes += size;
+                batch.push(queue.shift());
+            }
+            return batch;
+        };
+
+        const requeue = batch => {
+            if (disabled) return;
+            const room = MAX_QUEUE - queue.length;
+            if (room > 0) queue.unshift(...batch.slice(0, room));
+            schedule();
+        };
+
+        const flush = (unloading = false) => {
+            if (flushTimer) {
+                env.clearTimeout(flushTimer);
+                flushTimer = null;
+            }
+            if (!enabled()) {
+                queue.length = 0;
+                return;
+            }
+            while (queue.length) {
+                const batch = takeBatch(unloading ? BEACON_BYTES : 500000);
+                Promise.resolve()
+                    .then(() => env.send(batch, unloading))
+                    .then(result => {
+                        if (result && result.disabled) {
+                            disabled = true;
+                            queue.length = 0;
+                        }
+                    })
+                    .catch(() => requeue(batch));
+            }
+        };
+
+        const schedule = () => {
+            if (queue.length >= FLUSH_SIZE) {
+                flush(false);
+            } else if (!flushTimer && queue.length) {
+                flushTimer = env.setTimeout(() => {
+                    flushTimer = null;
+                    flush(false);
+                }, FLUSH_MS);
+            }
+        };
+
+        // `type` may be null to only mark learner activity: that starts the
+        // page segment and, after feedback, the revision.
+        const record = (box, type, payload, options = {}) => {
+            const ctx = contextFor(box, options);
+            if (!ctx) return;
+            const {state, resumed} = loadTrace(ctx.key);
+            const push = (eventType, eventPayload) => {
+                const now = env.now();
+                state.seq += 1;
+                queue.push({
+                    eventid: env.uuid(),
+                    traceid: state.id,
+                    pageid: env.pageId,
+                    eventseq: state.seq,
+                    type: eventType,
+                    clienttime: now,
+                    elapsedms: Math.max(0, now - segment.startedAt),
+                    usage: ctx.usage,
+                    slot: ctx.slot,
+                    input: ctx.input,
+                    modality: ctx.modality,
+                    schema: SCHEMA,
+                    payload: eventPayload
+                });
+            };
+            let segment = segments.get(ctx.key);
+            if (!segment) {
+                segment = {startedAt: env.now()};
+                segments.set(ctx.key, segment);
+                push('interaction_started', Object.assign({resumed, entry: ctx.modality}, env.describeBox(box)));
+            }
+            const revisionAction = options.activity || (REVISION_TRIGGERS.includes(type) ? type : '');
+            if (state.feedback && revisionAction) {
+                push('revision_started', {
+                    feedbackState: state.feedback.state,
+                    previousSubmitted: state.feedback.answers || {},
+                    msSinceFeedback: Math.max(0, env.now() - state.feedback.at),
+                    firstAction: revisionAction
+                });
+                state.feedback = null;
+            }
+            if (type) {
+                push(type, payload || {});
+            }
+            if (type === 'submit_triggered') {
+                state.pendingSubmit = payload && FEEDBACK_SUBMITS.includes(payload.submitterKind)
+                    ? {answers: payload.answers || {}, at: env.now()}
+                    : null;
+            } else if (type === 'feedback_observed') {
+                state.feedback = {
+                    state: payload.state,
+                    answers: state.pendingSubmit ? state.pendingSubmit.answers : {},
+                    at: env.now()
+                };
+                state.pendingSubmit = null;
+            }
+            saveTrace(ctx.key, state);
+            schedule();
+        };
+
+        const commitEdits = trigger => trackers.forEach(tracker => tracker.commit(trigger));
+
+        const guard = fn => (...args) => {
+            if (!enabled()) return undefined;
+            try {
+                return fn(...args);
+            } catch (error) {
+                env.warn(error);
+                return undefined;
+            }
+        };
+
+        const log = guard((box, type, payload = {}, options = {}) => {
+            if (EDIT_BOUNDARIES[type]) commitEdits(EDIT_BOUNDARIES[type]);
+            record(box, type, payload, options);
+        });
+
+        // One edit burst becomes one edit_committed with the value before the
+        // first keystroke and after the last; keystrokes are never logged.
+        // `rebase` adopts a value Hand2STACK itself wrote as the new baseline.
+        const editTracker = (box, getValue, describe, options = {}) => {
+            const max = options.max || 4000;
+            const logOptions = () => (options.logOptions ? options.logOptions() : {});
+            let baseline = getValue();
+            let burst = null;
+            let timer = null;
+            const tracker = {
+                input: guard(() => {
+                    if (!burst) {
+                        burst = {before: baseline, startedAt: env.now(), count: 0};
+                        record(box, null, null, Object.assign({}, logOptions(), {activity: 'edit_committed'}));
+                    }
+                    burst.count++;
+                    env.clearTimeout(timer);
+                    timer = env.setTimeout(() => tracker.commit('idle'), EDIT_IDLE_MS);
+                }),
+                commit: guard(trigger => {
+                    env.clearTimeout(timer);
+                    timer = null;
+                    if (!burst) return;
+                    const current = burst;
+                    burst = null;
+                    const after = getValue();
+                    baseline = after;
+                    if (after === current.before) return;
+                    record(box, 'edit_committed', Object.assign({}, describe(), {
+                        trigger,
+                        before: clip(current.before, max),
+                        after: clip(after, max),
+                        burstMs: Math.max(0, env.now() - current.startedAt),
+                        inputEvents: current.count
+                    }), logOptions());
+                }),
+                rebase: () => {
+                    if (!burst) baseline = getValue();
+                },
+                dispose: () => {
+                    env.clearTimeout(timer);
+                    trackers.delete(tracker);
+                }
+            };
+            trackers.add(tracker);
+            return tracker;
+        };
+
+        // The submit that this page load is the answer to, if recent enough.
+        const pendingSubmit = guard(box => {
+            const ctx = contextFor(box, {});
+            if (!ctx) return null;
+            const {state, resumed} = loadTrace(ctx.key);
+            if (!resumed || !state.pendingSubmit) return null;
+            if (env.now() - state.pendingSubmit.at > FEEDBACK_WINDOW_MS) {
+                state.pendingSubmit = null;
+                saveTrace(ctx.key, state);
+                return null;
+            }
+            return state.pendingSubmit;
+        });
+
+        return {
+            enabled,
+            clip,
+            log,
+            editTracker,
+            commitEdits: guard(commitEdits),
+            pendingSubmit,
+            flush: guard(flush),
+            _queue: queue
+        };
+    };
+
     // STACK drops the Syntax hint from the page once an empty answer has been
     // submitted, so fill in any missing anchors from the question definition.
     const fetchMissingAnchors = async boxes => {
@@ -281,7 +563,7 @@ define([], function() {
                 });
                 const data = await parseJsonResponse(response);
                 if (!response.ok || !data.success) {
-                    throw new Error(data.error || ('HTTP ' + response.status));
+                    throw requestError(data, response);
                 }
                 missing.forEach(box => {
                     const parsed = parseStackInputName(box.name);
@@ -319,6 +601,13 @@ define([], function() {
         return String((line && (line.math || line.raw || line.latex)) || '');
     };
 
+    // The extracted maths of "Answer: $1<x \\leq 5$" no longer contains its
+    // prose label, so a label is also looked for in the recognized row.
+    const matchableLineTexts = line => {
+        const texts = [matchableLineText(line), String((line && line.raw) || ''), String((line && line.latex) || '')];
+        return texts.filter((text, index) => text && texts.indexOf(text) === index);
+    };
+
     // Find the anchor (e.g. "g(1)") at the start of a recognized line and
     // return just the value after it. The value stops at the next relation
     // marker, so a restated decimal is dropped. Recognized lines are LaTeX,
@@ -334,13 +623,17 @@ define([], function() {
             .map(char => char.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&'))
             .join('\\s*');
         const text = String(lineText || '').replace(/\\(?:left|right)(?![a-zA-Z])/g, '');
-        const head = text.match(new RegExp('^\\s*' + anchorPattern + '\\s*(?:~~|≈|\\\\approx|\\\\simeq|=)\\s*', 'i'));
+        // "Answer: ..." labels a value as well as "f(2) = ..." does; ":=" does not.
+        const head = text.match(new RegExp('^\\s*' + anchorPattern + '\\s*(?:~~|≈|\\\\approx|\\\\simeq|=|:(?!=))\\s*', 'i'));
         if (!head) {
             return null;
         }
         let rest = text.slice(head[0].length);
+        // After "f(2) =" a further "=" restates the value; after "Answer:"
+        // the value itself may be an equation such as "x=3".
+        const labelled = /:\s*$/.test(head[0]);
         // "<=", ">=", "!=" and "#=" are part of the value, not a new relation.
-        const next = /(^|[^<>!#:])(?:~~|≈|\\approx|\\simeq|=)/.exec(rest);
+        const next = labelled ? null : /(^|[^<>!#:])(?:~~|≈|\\approx|\\simeq|=)/.exec(rest);
         if (next) {
             rest = rest.slice(0, next.index + next[1].length);
         }
@@ -363,10 +656,23 @@ define([], function() {
     // Scan from the end: when a label is restated after an earlier derivation
     // step (e.g. "g(1)=..." mid-working, then "g(1)~~..." as the final
     // answer), the later line is the intended answer.
+    // A box whose own Syntax hint is a label ("x=") expects only what follows
+    // it, so a recognized "x=3" is inserted as "3". A value that goes on to
+    // another relation or connective ("x=2 or x=3") is inserted whole.
+    const stripOwnAnchor = (anchor, value) => {
+        const rest = extractAnchoredValue(anchor, value);
+        if (!rest || /[=<>#]/.test(rest) || /(^|[^A-Za-z])(?:or|and)([^A-Za-z]|$)/.test(rest)) {
+            return value;
+        }
+        return rest;
+    };
+
     const extractAnchoredAnswers = (anchors, lines) => {
         return anchors.map(anchor => {
             for (let i = lines.length - 1; i >= 0; i--) {
-                const expr = extractAnchoredValue(anchor, matchableLineText(lines[i]));
+                const expr = matchableLineTexts(lines[i])
+                    .map(text => extractAnchoredValue(anchor, text))
+                    .find(Boolean);
                 if (expr) {
                     return {anchor, expr, lineIndex: i};
                 }
@@ -391,29 +697,62 @@ define([], function() {
             if (!isCurrent()) return extracted;
             const box = targets[index];
             const result = extracted[index];
+            const logOptions = {modality: sourceBox._hand2stackModality || null};
+            const logAnchor = (status, value, previousValue) => research.log(box, 'answer_inserted', {
+                via: 'anchor_autofill',
+                status,
+                value: value === null ? null : research.clip(value),
+                previousValue: research.clip(previousValue),
+                anchor: normalizeAnchorText(result.anchor),
+                recognized: research.clip(result.expr),
+                lineIndex: result.lineIndex === undefined ? null : result.lineIndex
+            }, logOptions);
             if (!result.expr) {
                 report(box, Object.assign({status: 'notfound'}, result));
+                logAnchor('notfound', null, box.value);
                 continue;
             }
             const valueBeforeValidation = box.value;
+            const validationStartedAt = Date.now();
             try {
                 const cleanStack = await postLatex(result.expr);
                 // Recognition and STACK validation are asynchronous. Never let
                 // an older result, or a result validated while the learner was
                 // typing, replace the current answer.
                 if (!isCurrent()) return extracted;
+                research.log(box, 'validation_completed', {
+                    source: 'h2s_convert',
+                    expression: research.clip(result.expr),
+                    stack: research.clip(cleanStack),
+                    valid: Boolean(cleanStack),
+                    errorCode: null,
+                    message: '',
+                    latencyMs: Date.now() - validationStartedAt
+                }, logOptions);
                 result.stack = cleanStack || '';
                 if (!cleanStack) {
                     report(box, Object.assign({status: 'convertfailed'}, result));
+                    logAnchor('convertfailed', null, valueBeforeValidation);
                 } else if (box.value === valueBeforeValidation) {
                     setAnswerValue(box, cleanStack);
                     flashAutofilledBox(box);
                     report(box, Object.assign({status: 'filled'}, result));
+                    logAnchor('filled', cleanStack, valueBeforeValidation);
                 }
             } catch (error) {
                 window.console.warn('[hand2stack] anchor match could not be validated:', result.anchor, error);
                 if (isCurrent()) {
+                    research.log(box, 'validation_completed', {
+                        source: 'h2s_convert',
+                        expression: research.clip(result.expr),
+                        stack: '',
+                        valid: false,
+                        errorCode: error.code || null,
+                        message: research.clip(error.message, 300),
+                        latencyMs: Date.now() - validationStartedAt
+                    }, logOptions);
                     report(box, Object.assign({status: 'convertfailed'}, result));
+                    logAnchor('convertfailed', null, valueBeforeValidation);
                 }
             }
         }
@@ -537,7 +876,7 @@ define([], function() {
         const data = await parseJsonResponse(response);
 
         if (!response.ok || !data.success) {
-            throw new Error(data.error || ('HTTP ' + response.status));
+            throw requestError(data, response);
         }
 
         return data;
@@ -560,7 +899,7 @@ define([], function() {
         const data = await parseJsonResponse(response);
 
         if (!response.ok || !data.success) {
-            throw new Error(data.error || ('HTTP ' + response.status));
+            throw requestError(data, response);
         }
 
         return data.stack || '';
@@ -580,7 +919,7 @@ define([], function() {
         });
         const data = await parseJsonResponse(response);
         if (!response.ok || !data.success || !data.valid) {
-            throw new Error(data.error || ('HTTP ' + response.status));
+            throw requestError(data, response);
         }
         return data.stack || '';
     };
@@ -596,9 +935,15 @@ define([], function() {
         });
         const data = await parseJsonResponse(response);
         if (!response.ok || !data.success) {
-            throw new Error(data.error || ('HTTP ' + response.status));
+            throw requestError(data, response);
         }
         return data;
+    };
+
+    const requestError = (data, response) => {
+        const error = new Error((data && data.error) || ('HTTP ' + response.status));
+        error.code = (data && data.error_code) || null;
+        return error;
     };
 
     const parseJsonResponse = async response => {
@@ -1648,6 +1993,19 @@ define([], function() {
         return tokens;
     };
 
+    // A token or formula range the learner selected instead of a whole line.
+    const logPartialSelection = (panel, lineIndex, latex, value) => {
+        const answerBox = panel._hand2stackAnswerBox;
+        if (!answerBox || !value || panel._hand2stackLastPartial === value) return;
+        panel._hand2stackLastPartial = value;
+        research.log(answerBox, 'candidate_selected', {
+            kind: 'partial',
+            lineIndex: Number.isInteger(lineIndex) && lineIndex >= 0 ? lineIndex : null,
+            latex: research.clip(latex),
+            value: research.clip(value)
+        }, {modality: panel._hand2stackSource || null});
+    };
+
     const convertSelectedLatex = async (panel, latex) => {
         const requestId = (panel._selectionRequestId || 0) + 1;
         panel._selectionRequestId = requestId;
@@ -1658,6 +2016,8 @@ define([], function() {
             const stack = await postLatex(latex);
             if (panel._selectionRequestId === requestId) {
                 panel._stackTextarea.value = stack || fallback || latex;
+                logPartialSelection(panel, panel._partialSelection ? panel._partialSelection.lineIndex : null,
+                    latex, panel._stackTextarea.value);
             }
         } catch (error) {
             window.console.warn('[hand2stack] partial selection conversion failed:', error);
@@ -1776,6 +2136,7 @@ define([], function() {
                     panel._stackTextarea.value = isPartial && stack === fullLineStack
                         ? fallback : (stack || fallback);
                     panel._partialSelection.value = panel._stackTextarea.value;
+                    logPartialSelection(panel, lineIndex, selectedLatex, panel._partialSelection.value);
                 } catch (error) {
                     window.console.warn('[hand2stack] partial selection conversion failed:', error);
                     if (panel._selectionRequestId === requestId) {
@@ -2111,6 +2472,41 @@ define([], function() {
         panel._appendHint.style.display = 'none';
         panel._actionButtons.style.display = freeTextMode ? 'none' : 'flex';
         const resultLines = normalizeResultLines(rawLatex, stackResult, lines);
+        const recognition = panel._hand2stackRecognition || null;
+        panel._hand2stackRecognition = null;
+        panel._hand2stackAnswerBox = answerBox;
+        panel._hand2stackLastPartial = '';
+        if (recognition) panel._hand2stackSource = recognition.source;
+        (panel._hand2stackTrackers || []).forEach(tracker => tracker.dispose());
+        panel._hand2stackTrackers = [];
+        const logOptions = () => ({modality: panel._hand2stackSource || null});
+        const logRecognition = defaultIndex => {
+            if (!recognition) return;
+            research.log(answerBox, 'recognition_completed', {
+                requestId: recognition.requestId,
+                source: recognition.source,
+                ok: true,
+                errorCode: null,
+                latencyMs: recognition.latencyMs,
+                mode: freeTextMode ? 'freetext' : 'lines',
+                ocr: {
+                    rawLatex: research.clip(rawLatex, 8000),
+                    rawAscii: research.clip(rawAscii, 8000),
+                    text: research.clip(recognizedText, 8000)
+                },
+                converted: {stack: research.clip(stackResult)},
+                lines: resultLines.slice(0, 50).map((line, index) => ({
+                    index,
+                    type: line.type,
+                    latex: research.clip(line.originalLatex),
+                    ascii: research.clip(line.originalAscii),
+                    stack: research.clip(line.stack),
+                    synthetic: Boolean(line.synthetic)
+                })),
+                truncatedLines: resultLines.length > 50,
+                defaultIndex
+            }, logOptions());
+        };
         const syncDiagnosticProcess = () => syncProcessInput(answerBox, resultLines);
         // Free-text mode syncs from the submitted text instead (bindFreeTextProcess).
         if (!freeTextMode) syncDiagnosticProcess();
@@ -2125,16 +2521,28 @@ define([], function() {
                 panel._answerBoxDisplay = answerBox.style.display;
             }
             answerBox.style.display = 'none';
+            logRecognition(null);
+            const previousValue = answerBox.value;
             setAnswerValue(answerBox, panel._stackTextarea.value);
+            research.log(answerBox, 'answer_inserted', {
+                via: 'freetext_recognition',
+                value: research.clip(panel._stackTextarea.value, 8000),
+                previousValue: research.clip(previousValue, 8000)
+            }, logOptions());
+            const freeTextTracker = research.editTracker(answerBox, () => panel._stackTextarea.value,
+                () => ({target: 'freetext'}), {max: 8000, logOptions});
+            panel._hand2stackTrackers.push(freeTextTracker);
             if (panel._freeTextSyncHandler) {
                 panel._stackTextarea.removeEventListener('input', panel._freeTextSyncHandler);
             }
             panel._freeTextSyncHandler = () => {
+                freeTextTracker.input();
                 answerBox.value = panel._stackTextarea.value;
                 answerBox.dispatchEvent(new Event('input', {bubbles: true}));
             };
             panel._stackTextarea.addEventListener('input', panel._freeTextSyncHandler);
             panel._stackTextarea.onblur = () => {
+                freeTextTracker.commit('blur');
                 answerBox.dispatchEvent(new Event('change', {bubbles: true}));
             };
             return;
@@ -2157,7 +2565,21 @@ define([], function() {
             }
         }
         panel._rawTextarea.style.display = 'none';
+        logRecognition(defaultIndex);
         let selectedIndex = defaultIndex;
+        // Created when a line's row is first rendered, so its baseline is the
+        // value before the learner's first keystroke.
+        const lineTracker = (line, index) => {
+            if (!line._hand2stackTracker) {
+                line._hand2stackTracker = research.editTracker(answerBox, () => line.ascii, () => ({
+                    target: 'line',
+                    lineIndex: index,
+                    ocrOriginal: research.clip(line.originalAscii)
+                }), {logOptions});
+                panel._hand2stackTrackers.push(line._hand2stackTracker);
+            }
+            return line._hand2stackTracker;
+        };
         let selectedFormat = 'ascii';
         const stackValueForLine = line => {
             if (!line) return stackResult || '';
@@ -2253,12 +2675,15 @@ define([], function() {
             reset.type = 'button';
             reset.textContent = config.restoreocr || 'Restore original';
             reset.style.cssText = 'border:0;background:transparent;color:#0f6cbf;cursor:pointer;padding:2px 0;font-size:11px';
+            const tracker = lineTracker(line, index);
             const updateEditedControls = () => {
                 const visible = line.edited && selectedFormat === 'ascii';
                 action.style.display = visible ? 'flex' : 'none';
             };
             reset.addEventListener('click', event => {
                 event.stopPropagation();
+                tracker.commit('flush');
+                const valueBeforeRestore = line.ascii;
                 line.ascii = line.originalAscii;
                 line.latex = line.originalLatex || asciiToLatexPreview(line.ascii);
                 line.edited = false;
@@ -2267,6 +2692,19 @@ define([], function() {
                 field.value = line.ascii;
                 field.style.background = '#fff';
                 fieldHighlighter.reset(line.ascii);
+                tracker.rebase();
+                if (valueBeforeRestore !== line.ascii) {
+                    research.log(answerBox, 'edit_committed', {
+                        target: 'line',
+                        lineIndex: index,
+                        ocrOriginal: research.clip(line.originalAscii),
+                        trigger: 'restore',
+                        before: research.clip(valueBeforeRestore),
+                        after: research.clip(line.ascii),
+                        burstMs: 0,
+                        inputEvents: 0
+                    }, logOptions());
+                }
                 syncDiagnosticProcess();
                 window.clearTimeout(line._editTimer);
                 updateEditedControls();
@@ -2282,6 +2720,7 @@ define([], function() {
                 field.addEventListener('input', () => {
                     panel._partialSelection = null;
                     line.ascii = field.value;
+                    tracker.input();
                     line.latex = asciiToLatexPreview(line.ascii);
                     line.edited = line.ascii !== line.originalAscii;
                     line._validatedAscii = '';
@@ -2295,6 +2734,7 @@ define([], function() {
                         refreshCandidateLine(index);
                     }, 250);
                 });
+                field.addEventListener('blur', () => tracker.commit('blur'));
             }
             row.append(selectionMarker, heading, fieldHighlighter.wrapper, action);
             panel._formatRows.appendChild(row);
@@ -2342,6 +2782,21 @@ define([], function() {
             clearFormulaSelections(panel);
             showSelectionBoxes(index);
             showSelectedLine(index);
+            // Both the radio and its wrapper report the same choice; only a
+            // change of line is a selection.
+            if (index !== selectedIndex) {
+                const previous = resultLines[selectedIndex];
+                if (previous && previous._hand2stackTracker) previous._hand2stackTracker.commit('flush');
+                research.log(answerBox, 'candidate_selected', {
+                    kind: 'line',
+                    lineIndex: index,
+                    previousIndex: selectedIndex,
+                    isDefault: index === defaultIndex,
+                    value: research.clip(stackValueForLine(line)),
+                    ocrValue: research.clip(line && line.stack),
+                    lineEdited: Boolean(line && line.edited)
+                }, logOptions());
+            }
             selectedIndex = index;
             updateSelectedPreview();
             window.clearTimeout(panel._renderSelectedTimer);
@@ -2525,6 +2980,7 @@ define([], function() {
             panel._insertRequestId = requestId;
             const lineIndex = selectedIndex;
             const line = resultLines[lineIndex];
+            if (line && line._hand2stackTracker) line._hand2stackTracker.commit('apply');
             const ascii = line ? line.ascii : '';
             panel._applyBtn.disabled = true;
             setRequestStatus(panel, config.conversioninprogress || 'Converting and validating...');
@@ -2532,19 +2988,50 @@ define([], function() {
                 let stackValue = panel._partialSelection && panel._partialSelection.value
                     ? panel._partialSelection.value
                     : stackValueForLine(line);
-                if (line && line.edited && !(panel._partialSelection && panel._partialSelection.value)) {
-                    stackValue = await postAscii(ascii);
+                const partial = Boolean(panel._partialSelection && panel._partialSelection.value);
+                if (line && line.edited && !partial) {
+                    const validationStartedAt = Date.now();
+                    const logValidation = (valid, stack, error = null) => research.log(answerBox, 'validation_completed', {
+                        source: 'h2s_convert',
+                        expression: research.clip(ascii),
+                        stack: research.clip(stack),
+                        valid,
+                        errorCode: error ? (error.code || null) : null,
+                        message: error ? research.clip(error.message, 300) : '',
+                        latencyMs: Date.now() - validationStartedAt
+                    }, logOptions());
+                    try {
+                        stackValue = await postAscii(ascii);
+                    } catch (error) {
+                        if (panel._insertRequestId === requestId) logValidation(false, '', error);
+                        throw error;
+                    }
                     if (panel._insertRequestId !== requestId || selectedIndex !== lineIndex || line.ascii !== ascii) {
                         return;
                     }
+                    logValidation(Boolean(stackValue), stackValue);
                     line._validatedAscii = ascii;
                     line._validatedStack = stackValue;
                 }
                 if (!stackValue) {
                     throw new Error(config.recognizefailed || 'Conversion failed.');
                 }
-                panel._stackTextarea.value = stackValue;
-                setAnswerValue(answerBox, stackValue);
+                const ownAnchor = answerBox.dataset.hand2stackAnchor || '';
+                const insertedValue = ownAnchor ? stripOwnAnchor(ownAnchor, stackValue) : stackValue;
+                panel._stackTextarea.value = insertedValue;
+                const previousValue = answerBox.value;
+                setAnswerValue(answerBox, insertedValue);
+                research.log(answerBox, 'answer_inserted', {
+                    via: 'apply',
+                    value: research.clip(insertedValue),
+                    converted: research.clip(stackValue),
+                    strippedAnchor: insertedValue !== stackValue ? normalizeAnchorText(ownAnchor) : null,
+                    previousValue: research.clip(previousValue),
+                    lineIndex,
+                    partial,
+                    lineEdited: Boolean(line && line.edited),
+                    ocrValue: research.clip(line && line.stack)
+                }, logOptions());
                 syncDiagnosticProcess();
                 setRequestStatus(panel);
             } catch (error) {
@@ -2574,6 +3061,17 @@ define([], function() {
         });
     };
 
+    const logRecognitionFailure = (answerBox, recognition, error) => {
+        research.log(answerBox, 'recognition_completed', {
+            requestId: recognition.requestId,
+            source: recognition.source,
+            ok: false,
+            errorCode: (error && error.code) || null,
+            message: research.clip(error && error.message, 300),
+            latencyMs: recognition.latencyMs
+        }, {modality: recognition.source});
+    };
+
     const createMobileSession = async () => {
         const formData = new FormData();
         formData.append('sesskey', config.sesskey);
@@ -2586,7 +3084,7 @@ define([], function() {
         const data = await parseJsonResponse(response);
 
         if (!response.ok || !data.success) {
-            throw new Error(data.error || ('HTTP ' + response.status));
+            throw requestError(data, response);
         }
 
         return data;
@@ -2600,7 +3098,7 @@ define([], function() {
         const data = await parseJsonResponse(response);
 
         if (!response.ok || !data.success) {
-            throw new Error(data.error || ('HTTP ' + response.status));
+            throw requestError(data, response);
         }
 
         return data;
@@ -2756,6 +3254,29 @@ define([], function() {
             x: stroke.x.slice(), y: stroke.y.slice(), drawn: stroke.x.length, width: stroke.width
         }));
         const saveHistory = () => history.push(cloneStrokes());
+        // Aggregate writing behaviour since the last recognition; coordinates
+        // are never logged (spec §4.2).
+        const PAUSE_MS = 2000;
+        let writing = null;
+        const resetWriting = () => {
+            writing = {strokes: 0, erases: 0, undos: 0, clears: 0, firstAt: 0, lastEndAt: 0, pauses: 0, longestPause: 0};
+        };
+        resetWriting();
+        const takeWritingStats = () => {
+            const stats = {
+                strokeCount: strokes.length,
+                newStrokeCount: writing.strokes,
+                pointCount: strokes.reduce((total, stroke) => total + stroke.x.length, 0),
+                eraseCount: writing.erases,
+                undoCount: writing.undos,
+                clearCount: writing.clears,
+                writingDurationMs: writing.firstAt ? Math.max(0, writing.lastEndAt - writing.firstAt) : 0,
+                pauseCount: writing.pauses,
+                longestPauseMs: writing.longestPause
+            };
+            resetWriting();
+            return stats;
+        };
         const setTool = nextTool => {
             tool = nextTool;
             const drawing = tool === 'draw';
@@ -2896,6 +3417,15 @@ define([], function() {
             syncEmptyCanvasBackingStore();
             canvasRect = canvas.getBoundingClientRect();
             saveHistory();
+            const strokeStartedAt = Date.now();
+            if (writing.lastEndAt) {
+                const pause = strokeStartedAt - writing.lastEndAt;
+                if (pause >= PAUSE_MS) writing.pauses++;
+                writing.longestPause = Math.max(writing.longestPause, pause);
+            }
+            writing.firstAt = writing.firstAt || strokeStartedAt;
+            if (tool === 'eraser') writing.erases++;
+            else writing.strokes++;
             if (tool === 'eraser') {
                 active = {pointerId, erasing: true, changed: false};
                 addSamples(event);
@@ -2911,6 +3441,7 @@ define([], function() {
             if (event) addSamples(event, active);
             flushPendingDrawing();
             if (active.erasing && !active.changed) history.pop();
+            writing.lastEndAt = Date.now();
             active = null;
             canvasRect = null;
         };
@@ -2983,12 +3514,14 @@ define([], function() {
         }));
         undo.addEventListener('click', () => {
             if (!history.length) return;
+            writing.undos++;
             strokes.splice(0, strokes.length, ...history.pop());
             redraw();
             status.textContent = '';
         });
         clear.addEventListener('click', () => {
             if (!strokes.length) return;
+            writing.clears++;
             saveHistory();
             strokes.length = 0;
             redraw();
@@ -2998,6 +3531,12 @@ define([], function() {
         recognize.addEventListener('click', async () => {
             if (!strokes.length) { status.textContent = config.nostrokes; return; }
             const requestId = requestCoordinator.begin();
+            const startedAt = Date.now();
+            research.log(answerBox, 'recognition_started', {
+                requestId,
+                source: 'handwrite',
+                handwriting: takeWritingStats()
+            }, {modality: 'handwrite'});
             recognize.disabled = true;
             status.textContent = config.uploading;
             setRequestStatus(resultPanel);
@@ -3005,6 +3544,7 @@ define([], function() {
                 const result = await postStrokes({x: strokes.map(s => s.x), y: strokes.map(s => s.y)});
                 if (!requestCoordinator.isCurrent(requestId)) return;
                 const stackResult = result.stack || result.text || '';
+                resultPanel._hand2stackRecognition = {requestId, source: 'handwrite', latencyMs: Date.now() - startedAt};
                 updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
                     answerBox, result.lines || [], result.freetext || result.raw_text || '', canvas.toDataURL('image/png'));
                 applyMatchedAnswers(answerBox, result.lines || [],
@@ -3014,6 +3554,7 @@ define([], function() {
                 status.textContent = '';
             } catch (error) {
                 if (requestCoordinator.isCurrent(requestId)) {
+                    logRecognitionFailure(answerBox, {requestId, source: 'handwrite', latencyMs: Date.now() - startedAt}, error);
                     status.textContent = (config.recognizefailed || 'Recognition failed.') + ' ' + error.message;
                 }
             } finally {
@@ -3123,6 +3664,7 @@ define([], function() {
                 requestCoordinator.invalidate();
             }
             inputMode = mode;
+            answerBox._hand2stackModality = mode;
             handwritingPanel.style.display = mode === 'handwrite' ? 'block' : 'none';
             mobilePanel.style.display = mode === 'mobile' ? 'block' : 'none';
 
@@ -3155,6 +3697,13 @@ define([], function() {
             if (!file) return;
 
             const requestId = requestCoordinator.begin();
+            const source = button === uploadBtn ? 'image' : 'camera';
+            const startedAt = Date.now();
+            research.log(answerBox, 'recognition_started', {
+                requestId,
+                source,
+                image: {mime: file.type || '', bytes: file.size || 0}
+            }, {modality: source});
             const sourceUrl = URL.createObjectURL(file);
             button.disabled = true;
             setIconButtonLabel(button, config.uploading || 'Recognizing...');
@@ -3171,6 +3720,7 @@ define([], function() {
 
                 if (resultPanel._sourceObjectUrl) URL.revokeObjectURL(resultPanel._sourceObjectUrl);
                 resultPanel._sourceObjectUrl = sourceUrl;
+                resultPanel._hand2stackRecognition = {requestId, source, latencyMs: Date.now() - startedAt};
                 updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
                     answerBox, result.lines || [], result.freetext || result.raw_text || '', sourceUrl);
                 applyMatchedAnswers(answerBox, result.lines || [],
@@ -3179,6 +3729,7 @@ define([], function() {
                 });
             } catch (error) {
                 if (!requestCoordinator.isCurrent(requestId)) return;
+                logRecognitionFailure(answerBox, {requestId, source, latencyMs: Date.now() - startedAt}, error);
                 window.console.error('[hand2stack] recognition failed:', error);
                 resultPanel.style.display = 'block';
                 setRequestStatus(resultPanel, (config.recognizefailed || 'Recognition failed.') + ' ' + error.message, true);
@@ -3227,6 +3778,11 @@ define([], function() {
                     return;
                 }
                 const sessionId = data.session_id;
+                research.log(answerBox, 'recognition_started', {
+                    requestId,
+                    source: 'mobile',
+                    mobileSession: true
+                }, {modality: 'mobile'});
 
                 mobilePanel.style.display = 'block';
                 mobilePanel._link.href = data.mobile_url;
@@ -3270,6 +3826,7 @@ define([], function() {
                             if (resultVersion !== lastMobileResultVersion) {
                                 lastMobileResultVersion = resultVersion;
                                 mobilePanel._status.textContent = config.mobileuploadreceived || 'Successfully received mobile result. You can upload another photo with the same QR code.';
+                                resultPanel._hand2stackRecognition = {requestId, source: 'mobile', latencyMs: null};
                                 updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
                                     answerBox, result.lines || [], result.freetext || result.raw_text || '');
                                 applyMatchedAnswers(answerBox, result.lines || [],
@@ -3375,6 +3932,211 @@ define([], function() {
         cleanupObserver.observe(document.body, {childList: true, subtree: true});
     };
 
+    const randomUuid = () => {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+        }
+        const bytes = new Uint8Array(16);
+        window.crypto.getRandomValues(bytes);
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+    };
+
+    const research = createResearchLogger({
+        pageId: randomUuid(),
+        uuid: randomUuid,
+        now: () => Date.now(),
+        getConfig: () => config,
+        storage: {
+            getItem: key => window.sessionStorage.getItem(key),
+            setItem: (key, value) => window.sessionStorage.setItem(key, value)
+        },
+        setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+        clearTimeout: timer => window.clearTimeout(timer),
+        warn: error => window.console.warn('[hand2stack] research logging failed:', error),
+        describeBox: box => ({
+            inputType: String((box && box.dataset.stackInputType) || ''),
+            hasSavedAnswer: Boolean(String((box && box._hand2stackInitialValue) || '').trim()),
+            hasProcessInput: Boolean(findProcessInput(box)),
+            device: {
+                mobileOrTablet: isMobileOrTablet,
+                ipadWebKit: isIPadWebKit,
+                viewportWidth: window.innerWidth
+            }
+        }),
+        send: (batch, unloading) => {
+            const formData = new FormData();
+            formData.append('sesskey', config.sesskey);
+            formData.append('events', JSON.stringify(batch));
+            if (unloading && navigator.sendBeacon && navigator.sendBeacon(config.eventUrl, formData)) {
+                return null;
+            }
+            return fetch(config.eventUrl, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                keepalive: unloading
+            }).then(response => {
+                if (response.status >= 500) throw new Error('HTTP ' + response.status);
+                return response.json().catch(() => null);
+            });
+        }
+    });
+
+    // Every STACK input of the answer box's question, by input name.
+    const questionAnswers = box => {
+        const question = box && box.closest('.que');
+        const answers = {};
+        if (!question) return answers;
+        findStackInputs().filter(input => question.contains(input)).forEach(input => {
+            answers[processInputName(input)] = research.clip(input.value, isFreeTextInput(input) ? 8000 : 4000);
+        });
+        return answers;
+    };
+
+    // Moodle's question state classes (question_state::get_state_class).
+    const questionState = question => {
+        const states = [
+            'correct', 'partiallycorrect', 'incorrect', 'notyetanswered', 'answersaved', 'invalidanswer',
+            'complete', 'incomplete', 'notanswered', 'requiresgrading'
+        ];
+        return states.find(state => question.classList.contains(state)) || 'unknown';
+    };
+
+    // A question's own Check button is named "q<usage>:<slot>_-submit"; it
+    // submits the whole form but only grades that question.
+    const classifySubmitter = name => {
+        const check = /^q(\d+):(\d+)_-submit$/.exec(name);
+        if (check) return {kind: 'check', key: check[1] + ':' + check[2]};
+        if (name === 'next') return {kind: 'next', key: null};
+        if (name === 'previous') return {kind: 'previous', key: null};
+        if (name === 'save') return {kind: 'save', key: null};
+        if (/finish/i.test(name)) return {kind: 'finish', key: null};
+        return {kind: 'other', key: null};
+    };
+
+    const researchBoxes = [];
+
+    // STACK's own validation is rendered into "<input name>_val", both by its
+    // instant-validation AJAX and on the page after a submit.
+    const observeStackValidation = box => {
+        const element = document.getElementById(box.name + '_val');
+        if (!element) return null;
+        // MathJax typesets the validation after STACK renders it, so the
+        // text changes without a new validation. Key on the validated value
+        // and outcome instead; only an error's own text is kept as message.
+        const flatten = node => String((node && node.textContent) || '').replace(/\s+/g, ' ').trim();
+        // STACK renders the value it validated as a hidden "<name>_val" input
+        // inside the validation; the box may already hold later keystrokes.
+        const read = () => {
+            const error = element.querySelector('.stackinputerror');
+            const validated = element.querySelector('input[type="hidden"][name$="_val"]');
+            return {
+                shown: Boolean(flatten(element)),
+                expression: validated ? String(validated.value) : box.value,
+                valid: !error,
+                message: error ? research.clip(flatten(error), 1000) : ''
+            };
+        };
+        const keyFor = result => result.expression + '\u0000' + result.valid;
+        let last = read().shown ? keyFor(read()) : '';
+        let timer = null;
+        const report = (source, force = false) => {
+            const result = read();
+            if (!result.shown) return;
+            const key = keyFor(result);
+            if (!force && key === last) return;
+            last = key;
+            research.log(box, 'validation_completed', {
+                source,
+                expression: research.clip(result.expression),
+                typed: result.expression === box.value ? null : research.clip(box.value),
+                valid: result.valid,
+                errorCode: null,
+                message: result.message,
+                latencyMs: null
+            });
+        };
+        new MutationObserver(() => {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => report('stack_instant'), 300);
+        }).observe(element, {childList: true, subtree: true, characterData: true});
+        return {reportNow: () => report('stack_page', true)};
+    };
+
+    const bindResearchAnswerBox = box => {
+        if (box.dataset.hand2stackResearchBound === '1') return;
+        box.dataset.hand2stackResearchBound = '1';
+        box._hand2stackInitialValue = box.value;
+        researchBoxes.push(box);
+        const tracker = research.editTracker(box, () => box.value, () => ({target: 'answer'}), {
+            max: isFreeTextInput(box) ? 8000 : 4000,
+            logOptions: () => ({modality: 'keyboard'})
+        });
+        // Hand2STACK's own writes are untrusted events and move the baseline.
+        box.addEventListener('input', event => (event.isTrusted ? tracker.input() : tracker.rebase()));
+        box.addEventListener('change', event => {
+            if (!event.isTrusted) tracker.rebase();
+        });
+        box.addEventListener('blur', () => tracker.commit('blur'));
+        box._hand2stackValidation = observeStackValidation(box);
+    };
+
+    const startResearch = boxes => {
+        if (!research.enabled()) return;
+        boxes.forEach(bindResearchAnswerBox);
+
+        // One representative box per question carries question-level events.
+        const questions = new Map();
+        researchBoxes.forEach(box => {
+            const parsed = parseStackInputName(box.name);
+            const key = parsed ? parsed.usage + ':' + parsed.slot : '';
+            if (key && !questions.has(key)) questions.set(key, box);
+        });
+
+        questions.forEach(box => {
+            const question = box.closest('.que');
+            if (!question || !research.pendingSubmit(box)) return;
+            const feedback = question.querySelector('.outcome, .stackprtfeedback');
+            const grade = question.querySelector('.grade');
+            research.log(box, 'feedback_observed', {
+                state: questionState(question),
+                queClasses: Array.from(question.classList),
+                hasPrtFeedback: Boolean(question.querySelector('.stackprtfeedback')),
+                feedbackText: research.clip(feedback ? feedback.textContent.replace(/\s+/g, ' ').trim() : '', 1000),
+                gradeText: grade ? grade.textContent.replace(/\s+/g, ' ').trim() : '',
+                answers: questionAnswers(box)
+            }, {input: null, modality: null});
+            researchBoxes.filter(other => question.contains(other) && other._hand2stackValidation)
+                .forEach(other => other._hand2stackValidation.reportNow());
+        });
+
+        const forms = new Set(researchBoxes.map(box => box.form).filter(Boolean));
+        forms.forEach(form => form.addEventListener('submit', event => {
+            const submitter = event.submitter ? String(event.submitter.name || '') : '';
+            const classified = classifySubmitter(submitter);
+            questions.forEach((box, key) => {
+                if (box.form !== form || (classified.key && classified.key !== key)) return;
+                research.log(box, 'submit_triggered', {
+                    submitter,
+                    submitterKind: classified.kind,
+                    answers: questionAnswers(box)
+                }, {input: null, modality: null});
+            });
+            research.flush(true);
+        }));
+
+        window.addEventListener('pagehide', () => {
+            research.commitEdits('flush');
+            research.flush(true);
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') research.flush(true);
+        });
+    };
+
     const run = async () => {
         prepareProcessInputs();
         const mainContent = document.querySelector('.main-inner');
@@ -3398,6 +4160,7 @@ define([], function() {
         boxes.filter(box => !candidates.has(box)).forEach(attachButton);
         await fetchMissingAnchors(Array.from(candidates));
         candidates.forEach(box => (box.dataset.hand2stackAnchor ? setupTargetBox(box) : attachButton(box)));
+        startResearch(boxes);
     };
 
     const init = suppliedConfig => {
@@ -3406,6 +4169,7 @@ define([], function() {
         config.strokesUrl = replaceLegacyNodeUrl(config.strokesUrl, pluginUrl('strokes.php'));
         config.convertUrl = replaceLegacyNodeUrl(config.convertUrl, pluginUrl('convert.php'));
         config.anchorsUrl = config.anchorsUrl || pluginUrl('anchors.php');
+        config.eventUrl = config.eventUrl || pluginUrl('event.php');
         config.sessionCreateUrl = replaceLegacyNodeUrl(config.sessionCreateUrl, pluginUrl('session_create.php'));
         config.sessionResultUrl = replaceLegacyNodeUrl(
             config.sessionResultUrl || config.sessionResultBaseUrl,

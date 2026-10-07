@@ -229,7 +229,9 @@ test('insert recomputes the current selected value in STACK format', () => {
     assert.match(source, /let stackValue = panel\._partialSelection[\s\S]*stackValueForLine\(line\)/);
     assert.match(source, /stackValue = await postAscii\(ascii\)/);
     assert.match(source, /line\._validatedAscii = ascii/);
-    assert.match(source, /panel\._stackTextarea\.value = stackValue;[\s\S]*setAnswerValue\(answerBox, stackValue\)/);
+    // The inserted value is the validated STACK value, less the box's own label hint.
+    assert.match(source, /const insertedValue = ownAnchor \? stripOwnAnchor\(ownAnchor, stackValue\) : stackValue;/);
+    assert.match(source, /panel\._stackTextarea\.value = insertedValue;[\s\S]*setAnswerValue\(answerBox, insertedValue\)/);
     assert.match(source, /updateEditedControls\(\);\s*updateSelectedPreview\(\);/);
 });
 
