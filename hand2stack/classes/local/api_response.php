@@ -19,7 +19,7 @@ final class api_response {
         'missingmathpixcredentials', 'invaliduploadedfile', 'curlrequired', 'mathpixrequestfailed',
         'mathpixinvalidresponse', 'pluginnotenabled', 'mobilenotenabled', 'sessionexpired',
         'invalidstrokes', 'emptylatex', 'invalidstackexpression', 'stackvalidationunavailable',
-        'ratelimitexceeded',
+        'ratelimitexceeded', 'invalidevents',
     ];
 
     /**

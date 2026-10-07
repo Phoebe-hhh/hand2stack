@@ -28,4 +28,6 @@ function xmldb_local_hand2stack_install(): void {
             set_config($name, $legacyvalue, 'local_hand2stack');
         }
     }
+
+    \local_hand2stack\local\research_logger::ensure_secret();
 }

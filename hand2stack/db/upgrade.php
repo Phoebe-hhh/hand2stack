@@ -80,5 +80,47 @@ function xmldb_local_hand2stack_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026100400, 'local', 'hand2stack');
     }
 
+    if ($oldversion < 2026100500) {
+        $table = new xmldb_table('local_hand2stack_event');
+
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('eventid', XMLDB_TYPE_CHAR, '36', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('studyid', XMLDB_TYPE_CHAR, '64', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('anonuserid', XMLDB_TYPE_CHAR, '64', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('traceid', XMLDB_TYPE_CHAR, '36', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('pageid', XMLDB_TYPE_CHAR, '36', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('eventseq', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('eventtype', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('usageid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('slot', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('inputname', XMLDB_TYPE_CHAR, '100', null, null, null, null);
+            $table->add_field('modality', XMLDB_TYPE_CHAR, '20', null, null, null, null);
+            $table->add_field('questionid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+            $table->add_field('qbankentryid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+            $table->add_field('questionversion', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+            $table->add_field('pluginversion', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('schemaversion', XMLDB_TYPE_INTEGER, '4', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('clienttime', XMLDB_TYPE_INTEGER, '15', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('elapsedms', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+            $table->add_field('servertime', XMLDB_TYPE_INTEGER, '15', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('payload', XMLDB_TYPE_TEXT, null, null, null, null, null);
+
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_index('eventid_uix', XMLDB_INDEX_UNIQUE, ['eventid']);
+            $table->add_index('trace_seq_ix', XMLDB_INDEX_NOTUNIQUE, ['traceid', 'eventseq']);
+            $table->add_index('study_user_ix', XMLDB_INDEX_NOTUNIQUE, ['studyid', 'anonuserid']);
+            $table->add_index('usage_slot_ix', XMLDB_INDEX_NOTUNIQUE, ['usageid', 'slot']);
+            $table->add_index('eventtype_ix', XMLDB_INDEX_NOTUNIQUE, ['eventtype']);
+            $table->add_index('servertime_ix', XMLDB_INDEX_NOTUNIQUE, ['servertime']);
+
+            $dbman->create_table($table);
+        }
+
+        \local_hand2stack\local\research_logger::ensure_secret();
+
+        upgrade_plugin_savepoint(true, 2026100500, 'local', 'hand2stack');
+    }
+
     return true;
 }

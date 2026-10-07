@@ -21,7 +21,7 @@ final class hook_callbacks {
     public static function before_standard_top_of_body_html_generation(
         \core\hook\output\before_standard_top_of_body_html_generation $hook
     ): void {
-        global $PAGE, $SCRIPT;
+        global $PAGE, $SCRIPT, $USER;
 
         if (during_initial_install()) {
             return;
@@ -46,6 +46,7 @@ final class hook_callbacks {
             return;
         }
 
+        $research = research_logger::enabled_for_context($PAGE->context, (int)$USER->id);
         $config = [
             'recognizeUrl' => (new \moodle_url('/local/hand2stack/recognize.php'))->out(false),
             'strokesUrl' => (new \moodle_url('/local/hand2stack/strokes.php'))->out(false),
@@ -53,6 +54,11 @@ final class hook_callbacks {
             'anchorsUrl' => (new \moodle_url('/local/hand2stack/anchors.php'))->out(false),
             'sessionCreateUrl' => (new \moodle_url('/local/hand2stack/session_create.php'))->out(false),
             'sessionResultUrl' => (new \moodle_url('/local/hand2stack/session_result.php'))->out(false),
+            'eventUrl' => (new \moodle_url('/local/hand2stack/event.php'))->out(false),
+            'research' => [
+                'enabled' => $research,
+                'schemaVersion' => research_logger::SCHEMA_VERSION,
+            ],
             'sesskey' => sesskey(),
             'enablemobile' => (bool)get_config('local_hand2stack', 'enablemobile'),
             'uploadbtn' => get_string('uploadbtn', 'local_hand2stack'),

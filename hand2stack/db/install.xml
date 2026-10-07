@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/hand2stack/db" VERSION="2026100400" COMMENT="XMLDB file for local_hand2stack"
+<XMLDB PATH="local/hand2stack/db" VERSION="2026100500" COMMENT="XMLDB file for local_hand2stack"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -25,6 +25,42 @@
         <INDEX NAME="sessionid_uix" UNIQUE="true" FIELDS="sessionid"/>
         <INDEX NAME="userid_ix" UNIQUE="false" FIELDS="userid"/>
         <INDEX NAME="expiresat_ix" UNIQUE="false" FIELDS="expiresat"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_hand2stack_event" COMMENT="Pseudonymised research interaction events for Hand2STACK">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="eventid" TYPE="char" LENGTH="36" NOTNULL="true" SEQUENCE="false" COMMENT="Client-generated UUID used for idempotent retries"/>
+        <FIELD NAME="studyid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="anonuserid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="HMAC-SHA256 of studyid and Moodle user id"/>
+        <FIELD NAME="traceid" TYPE="char" LENGTH="36" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="pageid" TYPE="char" LENGTH="36" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="eventseq" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="eventtype" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="usageid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="slot" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="inputname" TYPE="char" LENGTH="100" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="modality" TYPE="char" LENGTH="20" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="qbankentryid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="questionversion" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="pluginversion" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="schemaversion" TYPE="int" LENGTH="4" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="clienttime" TYPE="int" LENGTH="15" NOTNULL="true" SEQUENCE="false" COMMENT="Browser epoch milliseconds"/>
+        <FIELD NAME="elapsedms" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="servertime" TYPE="int" LENGTH="15" NOTNULL="true" SEQUENCE="false" COMMENT="Server receive epoch milliseconds"/>
+        <FIELD NAME="payload" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Event-specific JSON"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="eventid_uix" UNIQUE="true" FIELDS="eventid"/>
+        <INDEX NAME="trace_seq_ix" UNIQUE="false" FIELDS="traceid, eventseq"/>
+        <INDEX NAME="study_user_ix" UNIQUE="false" FIELDS="studyid, anonuserid"/>
+        <INDEX NAME="usage_slot_ix" UNIQUE="false" FIELDS="usageid, slot"/>
+        <INDEX NAME="eventtype_ix" UNIQUE="false" FIELDS="eventtype"/>
+        <INDEX NAME="servertime_ix" UNIQUE="false" FIELDS="servertime"/>
       </INDEXES>
     </TABLE>
   </TABLES>

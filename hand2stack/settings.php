@@ -74,6 +74,27 @@ if ($hassiteconfig) {
             '',
             PARAM_URL
         ));
+
+        $settings->add(new admin_setting_heading(
+            'local_hand2stack/researchheading',
+            get_string('researchheading', 'local_hand2stack'),
+            get_string('researchheading_desc', 'local_hand2stack')
+        ));
+
+        $settings->add(new admin_setting_configcheckbox(
+            'local_hand2stack/researchlogging',
+            get_string('researchlogging', 'local_hand2stack'),
+            get_string('researchlogging_desc', 'local_hand2stack'),
+            0
+        ));
+
+        $settings->add(new admin_setting_configtext(
+            'local_hand2stack/researchstudyid',
+            get_string('researchstudyid', 'local_hand2stack'),
+            get_string('researchstudyid_desc', 'local_hand2stack'),
+            '',
+            PARAM_ALPHANUMEXT
+        ));
     }
 
     $ADMIN->add('localplugins', $settings);

@@ -24,4 +24,11 @@ $capabilities = [
             'user' => CAP_ALLOW,
         ],
     ],
+    // Granted only to learners who have consented to a research study. No
+    // archetype has it, so nobody is recorded until a role is configured.
+    'local/hand2stack:researchparticipant' => [
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes' => [],
+    ],
 ];
