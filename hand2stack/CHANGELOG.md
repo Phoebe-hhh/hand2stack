@@ -5,6 +5,19 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+## 0.4.0-alpha - 2026-10-07
+
+- Add research instrumentation v1 backend: a pseudonymised `local_hand2stack_event` table, the `event.php` batch endpoint, and server-side resolution of question, question-bank entry, question version and plugin version.
+- Add site settings for research event logging (off by default) and a study ID, plus the `local/hand2stack:researchparticipant` capability for consenting learners.
+- Declare research events in the privacy provider, with export and deletion by pseudonymous participant ID.
+- Add the browser research logger: recognition, candidate selection, debounced edit commits, Hand2STACK and STACK validation, answer insertion, submission, observed feedback and revision events, batched and flushed with `sendBeacon` on submit and page hide.
+- Record aggregate handwriting metrics (strokes, erases, undos, clears, pauses, writing time) without coordinates.
+- Scope a question's Check to that question's trace, record Next/Previous/Save as saves that do not wait for feedback, recognise all Moodle question state classes, and log STACK validation once per validated value instead of on every MathJax repaint.
+- Insert a recognized "x=3" as "3" when the answer box's own Syntax hint is the label "x="; values with a further relation or connective are inserted unchanged.
+- Accept colon labels such as "Answer:" as anchors, matching them in the recognized row when the extracted maths has dropped the label.
+- Convert "x=2 \\text{or} x=3" to "x=2 or x=3", treat unknown `\\operatorname{...}` words as prose, drop leading implication arrows from candidate rows, and keep the closing "$" of a document's last inline formula.
+- Fix the privacy provider reporting contexts through a non-existent `contextlist::add_context()` method, and implement the user list provider.
+
 ## 0.3.2-alpha - 2026-10-04
 
 - Add an optional hidden `process`/`processN` STACK textarea that records recognized mathematical steps in order.

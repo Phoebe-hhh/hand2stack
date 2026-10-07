@@ -4,15 +4,15 @@
 
 Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-> **Current pilot release:** [v0.3.2-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.3.2-alpha)
+> **Current pilot release:** [v0.4.0-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.4.0-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download hand2stack-v0.3.2-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.3.2-alpha/hand2stack-v0.3.2-alpha.zip)**
+**[Download hand2stack-v0.4.0-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.4.0-alpha/hand2stack-v0.4.0-alpha.zip)**
 
-Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.3.2-alpha.zip` and contains the plugin root folder `hand2stack/`.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.4.0-alpha.zip` and contains the plugin root folder `hand2stack/`.
 
 ## Features
 
@@ -28,11 +28,13 @@ Do not upload GitHub's automatically generated **Source code** archives to Moodl
 - Populate an optional hidden STACK textarea named `process` (or `processN`) with the recognized mathematical steps in order, excluding prose and generated summaries.
 - Preserve prose and every recognized mathematics line during desktop and mobile free-text recognition.
 - Show the uploaded source image beside the editable free-text transcription, with zoom and drag inspection.
-- Match labelled results such as `f(2)=...` to sibling STACK inputs using their syntax hints without overwriting newer results or student edits.
+- Match labelled results such as `f(2)=...` or `Answer: ...` to sibling STACK inputs using their syntax hints without overwriting newer results or student edits.
+- Insert only the value when an answer field's own syntax hint is a label, so a recognized `x=3` goes into an `x=` field as `3`.
 - Select part of a recognized formula and insert only the confirmed STACK expression.
 - Prevent stale recognition requests from replacing newer results and limit recognition requests per user.
 - Keep Mathpix credentials on the Moodle server rather than in browser JavaScript.
 - Automatically remove expired mobile-upload sessions with a Moodle scheduled task.
+- Optional research event logging (off by default) that records pseudonymised recognition, editing, validation, insertion, and submission events for consenting participants only.
 
 ## Requirements
 
@@ -91,6 +93,8 @@ The plugin does not submit the quiz answer automatically.
 
 Uploaded images and handwriting coordinates are sent to Mathpix for recognition. Uploaded image files are not permanently stored by this plugin. Temporary mobile-upload sessions expire and are removed by a scheduled task. Administrators should confirm that external recognition complies with institutional policies.
 
+Research event logging is disabled by default. When an administrator enables it and sets a study ID, it records interaction events only for users who hold the `local/hand2stack:researchparticipant` capability in the quiz context; no role has this capability by default and site administrators are not included automatically. Events are stored with a pseudonymous participant ID instead of the Moodle user ID, never include images or handwriting coordinates, and are covered by Moodle's privacy export and deletion requests. Enable it only under an approved study protocol.
+
 ## Repository Layout
 
 - [`hand2stack/`](hand2stack/) — the Moodle plugin source and detailed documentation.
@@ -112,4 +116,4 @@ See the [plugin README](hand2stack/README.md) for development details, configura
 
 ## Status
 
-Version `0.3.2-alpha` is intended for controlled pilot testing. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+Version `0.4.0-alpha` is intended for controlled pilot testing. It adds optional research event logging, label-aware answer insertion, and conversion fixes for written connectives, prose in formulas, and implication arrows. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, research event logging and its privacy provider, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.

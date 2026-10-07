@@ -1,0 +1,7 @@
+# Release packages (scripts/build-release.sh uses git archive) contain only
+# what a Moodle site needs. Tests and Node build tooling stay in the source
+# repository for developers.
+/tests              export-ignore
+/package.json       export-ignore
+/package-lock.json  export-ignore
+/.gitattributes     export-ignore

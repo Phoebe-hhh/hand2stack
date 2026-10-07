@@ -19,4 +19,4 @@ $plugin->component = 'local_hand2stack';
 $plugin->version   = 2026100500;
 $plugin->requires  = 2024042200;
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release = '0.3.2-alpha';
+$plugin->release = '0.4.0-alpha';

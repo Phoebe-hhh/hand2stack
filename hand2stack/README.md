@@ -43,7 +43,8 @@ Migrating from 0.2.x is a component migration rather than an ordinary upgrade. D
 - Keeps the Free-text review compact by showing the original work and one complete editable transcription, without a redundant candidate list.
 - Preserves complete Mathpix document text, including prose and every mathematical line, across mobile-upload polling.
 - Shows the uploaded source image beside free-text recognition with zoom, reset, and drag inspection.
-- Matches labelled results such as `f(2)=...` to sibling STACK fields through their syntax hints while protecting newer recognition results and concurrent student edits.
+- Matches labelled results such as `f(2)=...` or `Answer: ...` to sibling STACK fields through their syntax hints while protecting newer recognition results and concurrent student edits.
+- Inserts only the value when an answer field's own syntax hint is a label (`x=`), so a recognized `x=3` is inserted as `3`; values with a further relation or connective are inserted unchanged.
 - Classifies recognized lines as text, equation, expression, approximation, or condition without inferring which is the answer.
 - Preserves approximate values as normalized candidates with an `approximate` relation instead of discarding them.
 - Lets users choose a different line, drag-select part of a line, or edit the selected recognized ASCII expression.
@@ -56,6 +57,7 @@ Migrating from 0.2.x is a component migration rather than an ordinary upgrade. D
 - Applies a configurable per-user recognition request limit.
 - Supports QR-code mobile upload using a Moodle-managed temporary session and Moodle's local QR generator.
 - Stores Mathpix App ID and App Key in Moodle admin settings, not in browser JavaScript.
+- Optionally records pseudonymised research interaction events for consenting participants (see [Research Event Logging](#research-event-logging)).
 
 ## Recognition Review Workflow
 
@@ -126,6 +128,19 @@ Optional settings:
 - Recognition requests allowed per user per minute.
 - Enable/disable mobile upload.
 - Mobile public base URL. Leave this empty for normal installations.
+- Research event logging and Study ID (see below). Logging is off by default.
+
+## Research Event Logging
+
+Hand2STACK can record how learners move from recognition to submission, for educational research. It is disabled by default and records nothing unless all of the following hold:
+
+1. **Enable research event logging** is turned on in the plugin settings.
+2. **Study ID** is set (for example `pilot2026a`). Participant pseudonyms differ between study IDs.
+3. The learner holds `local/hand2stack:researchparticipant` in the quiz context. No role has this capability by default, and site administrators are not included automatically. Grant it through a role assigned only to consenting participants.
+
+For each question, the browser sends batches of events to `local/hand2stack/event.php`: recognition started and completed, candidate selection, edits (the value before and after each edit, not individual keystrokes), Hand2STACK and STACK validation, answer insertion, submission, observed feedback, and revision. Handwriting is summarised as counts and durations; coordinates and images are never stored.
+
+Events are stored in the `local_hand2stack_event` table. The server checks every event again, accepts it only for the learner's own attempt, and fills in the question, question version, and plugin version itself. Learners are identified by an HMAC of the study ID and user ID, keyed by a site secret that is generated on installation and never sent to the browser. Grades and official submissions remain in Moodle's own question attempt tables.
 
 ## Mobile Upload URL
 
@@ -161,6 +176,8 @@ For the ILAS Nagoya University STACK testing environment:
 - Mobile upload sessions are temporary and expire automatically.
 - Uploaded image files are not permanently stored by this plugin.
 - Browser-provided filenames and MIME types are not trusted. Moodle verifies the actual file type, dimensions, and decodability before sending an image to Mathpix.
+
+- Research event logging is off by default and limited to consenting participants. Its events use pseudonymous IDs, are included in Moodle privacy exports, and are removed by privacy deletion requests.
 
 Site administrators should confirm that Mathpix use complies with institutional privacy and data handling policies.
 
@@ -206,13 +223,13 @@ amd/build/main.min.js
 Update `version.php` and `CHANGELOG.md`, merge the change into the release branch, and push a matching version tag:
 
 ```bash
-git tag v0.3.2-alpha
-git push origin v0.3.2-alpha
+git tag v0.4.0-alpha
+git push origin v0.4.0-alpha
 ```
 
 The GitHub Actions workflow then checks PHP syntax and creates a GitHub Release containing:
 
-- a Moodle-installable ZIP whose root folder is `hand2stack/`;
+- a Moodle-installable ZIP whose root folder is `hand2stack/` (tests and Node build files are excluded through `.gitattributes`);
 - a changelog generated from commits since the previous version tag;
 - GitHub-generated release notes with merged pull requests and contributors.
 
@@ -223,5 +240,5 @@ The workflow refuses to publish if the tag does not match `$plugin->release` in 
 Current version:
 
 ```text
-0.3.2-alpha
+0.4.0-alpha
 ```
