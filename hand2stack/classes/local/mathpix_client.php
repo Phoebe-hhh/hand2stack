@@ -216,8 +216,10 @@ final class mathpix_client {
         ];
         foreach ($patterns as $pattern) {
             $text = preg_replace_callback($pattern, static function(array $match): string {
-                $math = self::freetext_math_to_ascii(trim($match[1]));
-                return $math === '' ? trim($match[1]) : self::wrap_freetext_math($math);
+                [$prose, $latex] = stack_converter::split_leading_prose(trim($match[1]));
+                $math = $latex === '' ? '' : self::freetext_math_to_ascii($latex);
+                $converted = $math === '' ? $latex : self::wrap_freetext_math($math);
+                return trim($prose . ' ' . $converted);
             }, $text);
         }
 
@@ -307,10 +309,14 @@ final class mathpix_client {
         }
 
         $normalized = str_replace(["\r\n", "\r"], "\n", $latex);
-        $normalized = preg_replace('/^\$\s*/', '', $normalized);
-        $normalized = preg_replace('/\s*\$$/', '', $normalized);
-        $normalized = preg_replace('/^\\\\\[\s*/', '', $normalized);
-        $normalized = preg_replace('/\s*\\\\\]$/', '', $normalized);
+        // Unwrap the document only when a single delimiter pair encloses all
+        // of it. A text document such as "... the larger one is $x=3$" ends
+        // with an inline formula whose closing "$" belongs to that row.
+        if (preg_match('/^\$(?!\$)([^$]*)\$$/u', $normalized, $match)) {
+            $normalized = trim($match[1]);
+        } else if (preg_match('/^\\\\\[((?:(?!\\\\[\[\]])[\s\S])*)\\\\\]$/u', $normalized, $match)) {
+            $normalized = trim($match[1]);
+        }
 
         $multiline = self::extract_multiline_body($normalized);
         if ($multiline !== null) {
@@ -506,6 +512,14 @@ final class mathpix_client {
             $line = trim($line);
         } while ($line !== $previous);
         $line = preg_replace('/(?<!\\\\)\btext\s*\{/u', '\\text{', $line);
+        // A row that opens with an implication arrow ("\\Rightarrow f(2)=...")
+        // continues the working; the arrow is not part of the expression.
+        $line = preg_replace(
+            '/^(?:\s|\\\\[,;:! ]|\\\\q?quad)*\\\\(?:Rightarrow|Longrightarrow|implies|Leftrightarrow|'
+                . 'Longleftrightarrow|iff)(?![A-Za-z])\s*/u',
+            '',
+            $line
+        );
 
         // In Japanese handwriting Mathpix can read the compact sequence
         // "x=-" as the katakana-looking "メニー". Restrict the repair to

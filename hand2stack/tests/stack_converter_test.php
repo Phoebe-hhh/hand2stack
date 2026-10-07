@@ -291,6 +291,44 @@ final class stack_converter_test extends \advanced_testcase {
     }
 
     /**
+     * Rows recorded by research instrumentation in a real attempt
+     * (2026-10-05, usage 50), with the conversion they must now produce.
+     *
+     * @dataProvider research_trace_line_cases
+     */
+    public function test_research_trace_lines_convert_without_prose_products(string $latex, string $expected): void {
+        $this->assertSame($expected, stack_converter::normalize_selection($latex));
+    }
+
+    public static function research_trace_line_cases(): array {
+        return [
+            'written or joins two solutions' => ['x=2 \\quad \\text { or } \\quad x=3', 'x=2 or x=3'],
+            'written and joins two conditions' => ['y \\leq 2 \\text{ and } y>0', 'y<=2 and y>0'],
+            'unknown operatorname is prose' => ['\\operatorname{cuz} \\quad x=-1', 'x=-1'],
+            'known operatorname is still a function' => ['\\operatorname{det}(A)', 'determinant(A)'],
+        ];
+    }
+
+    public function test_document_keeps_the_closing_dollar_of_its_last_row(): void {
+        $text = "\$\$\n\\begin{array}{l}\nx^{2}-5 x+6=0 \\\\\n(x-2)(x-3)=0 \\\\\n"
+            . "x=2 \\quad \\text { or } \\quad x=3\n\\end{array}\n\$\$\n\nthe larger one is \$x=3\$";
+        $lines = mathpix_client::build_document_lines($text);
+        $this->assertSame(['x^2-5*x+6=0', '(x-2)*(x-3)=0', 'x=2 or x=3', 'x=3'], array_column($lines, 'stack'));
+        $this->assertSame('the larger one is $x=3$', $lines[3]['latex']);
+    }
+
+    public function test_document_lines_drop_leading_implication_arrows(): void {
+        $text = "\$\\Rightarrow f(2)=1+2 \\sqrt{2} \\approx 3.82\$\n"
+            . "\$\$\n\\begin{aligned}\n& \\Leftrightarrow x^{2}-6 x+5 \\leq 0\n\\end{aligned}\n\$\$";
+        $this->assertSame(['f(2)=1+2*sqrt(2)', 'x^2-6*x+5<=0'],
+            array_column(mathpix_client::build_document_lines($text), 'stack'));
+    }
+
+    public function test_freetext_keeps_operatorname_prose_outside_the_formula(): void {
+        $this->assertSame("cuz `x=-1`", mathpix_client::build_freetext("\$\\operatorname{cuz} \\quad x=-1\$"));
+    }
+
+    /**
      * @dataProvider edited_ascii_cases
      */
     public function test_normalize_edited_ascii(string $ascii, string $expected): void {

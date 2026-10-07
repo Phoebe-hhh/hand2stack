@@ -19,6 +19,76 @@ defined('MOODLE_INTERNAL') || die();
 
 final class stack_converter {
     /**
+     * Words that \\operatorname{...} may name as a function. Mathpix also
+     * wraps handwritten prose such as "cuz" in \\operatorname; any other
+     * word is prose, never a product of single-letter variables.
+     */
+    private const OPERATOR_FUNCTIONS = [
+        'sin', 'cos', 'tan', 'sec', 'csc', 'cot', 'sinh', 'cosh', 'tanh', 'arcsin', 'arccos', 'arctan',
+        'arcsinh', 'arccosh', 'arctanh', 'asin', 'acos', 'atan', 'log', 'ln', 'lg', 'exp', 'det', 'sgn',
+        'sign', 'signum', 'arg', 'max', 'min', 'gcd', 'lcm', 'deg', 'dim', 'ker', 'rank', 'tr', 'trace',
+        'Re', 'Im', 'lim', 'mod', 'abs', 'floor', 'ceil', 'erf', 'grad', 'div', 'curl',
+    ];
+
+    /** Logical connectives a handwritten line may join two relations with. */
+    private const CONNECTIVES = ['or' => 'or', 'and' => 'and', 'または' => 'or', 'かつ' => 'and'];
+
+    /** Turn \\operatorname{word} into \\text{word} unless word is a known function. */
+    private static function prose_operatornames(string $input): string {
+        return preg_replace_callback('/\\\\operatorname\s*\{\s*([A-Za-z]{2,})\s*\}/u', static function(array $match): string {
+            return in_array($match[1], self::OPERATOR_FUNCTIONS, true) ? $match[0] : '\\text{' . $match[1] . '}';
+        }, $input);
+    }
+
+    /**
+     * Split prose that opens a formula, e.g. Mathpix's "\\operatorname{cuz} \\quad x=-1",
+     * into the prose ("cuz") and the remaining mathematics ("x=-1").
+     *
+     * @return array{0:string,1:string}
+     */
+    public static function split_leading_prose(string $latex): array {
+        $latex = self::prose_operatornames($latex);
+        $prose = [];
+        $pattern = '/^\s*\\\\(?:text|mathrm)\s*\{\s*([^{}]*?)\s*\}(?:\s|\\\\q?quad|\\\\[,;: ])*/u';
+        while (preg_match($pattern, $latex, $match)) {
+            // A lone "e" or "i" is a constant, not a word.
+            if (preg_match('/^[ei]$/', $match[1])) {
+                break;
+            }
+            $prose[] = $match[1];
+            $latex = substr($latex, strlen($match[0]));
+        }
+        return [trim(implode(' ', $prose)), trim($latex)];
+    }
+
+    /**
+     * "x=2 \\text{or} x=3": relations joined by a written connective. Returns
+     * "x=2 or x=3", or null when the line is not exactly that shape.
+     */
+    private static function join_connected_relations(string $input): ?string {
+        $words = implode('|', array_map('preg_quote', array_keys(self::CONNECTIVES)));
+        $separator = '/(?:\s|\\\\q?quad|\\\\[,;: ])*\\\\(?:text|mathrm)\s*\{\s*(' . $words . ')\s*\}(?:\s|\\\\q?quad|\\\\[,;: ])*/u';
+        if (!preg_match_all($separator, $input, $matches)) {
+            return null;
+        }
+        $parts = preg_split($separator, $input);
+        $connectives = array_map(static function(string $word): string {
+            return self::CONNECTIVES[$word];
+        }, $matches[1]);
+        foreach ($parts as $part) {
+            if (trim($part) === '' || preg_match('/\\\\(?:text|mathrm)\s*\{|\$/u', $part)
+                    || !preg_match('/(?:=|<|>|\\\\(?:leq?|geq?|neq?|ne)(?![A-Za-z]))/u', $part)) {
+                return null;
+            }
+        }
+        $joined = trim($parts[0]);
+        foreach ($connectives as $index => $connective) {
+            $joined .= ' ' . $connective . ' ' . trim($parts[$index + 1]);
+        }
+        return $joined;
+    }
+
+    /**
      * Normalize user-edited ASCII/STACK-like input on the server.
      *
      * @param string $input Edited input.
@@ -269,6 +339,11 @@ final class stack_converter {
         }
 
         $s = str_replace(['−', '–', '—', '＝'], ['-', '-', '-', '='], $s);
+        $s = self::prose_operatornames($s);
+        $connected = self::join_connected_relations($s);
+        if ($connected !== null) {
+            return $connected;
+        }
         $s = str_replace(['\\quad', '\\qquad', '\\therefore', '\\because'], '', $s);
         if (preg_match('/(?:答え|解答)/u', $s)) {
             $s = preg_replace('/[xｘメ]\s*[ニ二]\s*[ー-]\s*(\d+(?:\.\d+)?)/u', 'x=-$1', $s);
