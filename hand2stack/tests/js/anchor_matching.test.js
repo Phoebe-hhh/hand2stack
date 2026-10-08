@@ -81,6 +81,7 @@ const buildApplyMatchedAnswers = (0, eval)(`(function(isFreeTextInput, findSibli
     ${extractFunctionSource('matchableLineTexts')}
     ${extractFunctionSource('isProseAnchor')}
     ${extractFunctionSource('isMathLine')}
+    ${extractFunctionSource('finalClause')}
     ${extractFunctionSource('extractAnchoredValue')}
     ${extractFunctionSource('extractAnchoredAnswers')}
     ${extractFunctionSource('applyMatchedAnswers')}
@@ -177,6 +178,7 @@ const extractAnchoredAnswers = (0, eval)(`(function() {
     ${extractFunctionSource('matchableLineTexts')}
     ${extractFunctionSource('isProseAnchor')}
     ${extractFunctionSource('isMathLine')}
+    ${extractFunctionSource('finalClause')}
     ${extractFunctionSource('extractAnchoredValue')}
     ${extractFunctionSource('extractAnchoredAnswers')}
     return extractAnchoredAnswers;
@@ -240,6 +242,7 @@ test('a prose label is found in the recognized row when the maths dropped it', (
         ${extractFunctionSource('matchableLineTexts')}
     ${extractFunctionSource('isProseAnchor')}
     ${extractFunctionSource('isMathLine')}
+    ${extractFunctionSource('finalClause')}
         ${extractFunctionSource('extractAnchoredValue')}
         ${extractFunctionSource('extractAnchoredAnswers')}
         return extractAnchoredAnswers;
@@ -278,6 +281,7 @@ test('a missing prose label falls back to the last mathematical line', () => {
         ${extractFunctionSource('matchableLineTexts')}
         ${extractFunctionSource('isProseAnchor')}
         ${extractFunctionSource('isMathLine')}
+        ${extractFunctionSource('finalClause')}
         ${extractFunctionSource('extractAnchoredValue')}
         ${extractFunctionSource('extractAnchoredAnswers')}
         return extractAnchoredAnswers;
@@ -309,6 +313,34 @@ test('a missing prose label falls back to the last mathematical line', () => {
     assert.deepEqual([twoLabels[1].lineIndex, twoLabels[1].fallback], [4, true]);
 });
 
+test('a last-line fallback takes the conclusion after its conditions', () => {
+    const extract = (0, eval)(`(function() {
+        ${extractFunctionSource('normalizeAnchorText')}
+        ${extractFunctionSource('matchableLineText')}
+        ${extractFunctionSource('matchableLineTexts')}
+        ${extractFunctionSource('isProseAnchor')}
+        ${extractFunctionSource('isMathLine')}
+        ${extractFunctionSource('finalClause')}
+        ${extractFunctionSource('extractAnchoredValue')}
+        ${extractFunctionSource('extractAnchoredAnswers')}
+        return extractAnchoredAnswers;
+    })()`);
+    const lastLine = math => extract(['Answer:'], [
+        {type: 'equation', math: 'x=-2 \\text { or } x=4'},
+        {type: 'equation', math, raw: 'Since $' + math + '$'}
+    ])[0].expr;
+    // 2026-10-08 attempt: "Since x>2, x=4" with the answer underlined.
+    assert.equal(lastLine('x>2, x=4'), 'x=4');
+    assert.equal(lastLine('x>2, \\quad x=4'), 'x=4');
+    assert.equal(lastLine('x \\geq 0, x \\neq 1, x=3'), 'x=3');
+    // Two solutions, a list, a point or a bare condition stay whole.
+    assert.equal(lastLine('x=2, x=3'), 'x=2, x=3');
+    assert.equal(lastLine('x=2, 3'), 'x=2, 3');
+    assert.equal(lastLine('(x, y)=(1,2)'), '(x, y)=(1,2)');
+    assert.equal(lastLine('x>2, x<5'), 'x>2, x<5');
+    assert.equal(lastLine('x \\leq 5'), 'x \\leq 5');
+});
+
 test('only prose labels are allowed to fall back', () => {
     const isProseAnchor = (0, eval)(`(function() {
         ${extractFunctionSource('normalizeAnchorText')}
@@ -336,4 +368,53 @@ test('applyMatchedAnswers marks a last-line fallback for checking', async () => 
     assert.equal(box.value, '1<x and x<=5');
     assert.deepEqual(reports, [['fallback_last_line', 0]]);
     assert.deepEqual(events.at(-1), ['answer_inserted', 'fallback_last_line']);
+});
+
+test('linesFromFreeText reads the edited working line by line', () => {
+    const linesFromFreeText = (0, eval)(`(function() {
+        ${extractFunctionSource('linesFromFreeText')}
+        return linesFromFreeText;
+    })()`);
+    assert.deepEqual(linesFromFreeText('`x^2-2*x-3=0`\n\nSince `x>2`,\n`x=4`\nAnswer: `x=4`\n`x>0`, so `x>2`.\nThank you'), [
+        {type: 'expression', math: 'x^2-2*x-3=0', raw: 'x^2-2*x-3=0'},
+        {type: 'expression', math: 'x>2', raw: 'Since x>2,'},
+        {type: 'expression', math: 'x=4', raw: 'x=4'},
+        {type: 'expression', math: 'x=4', raw: 'Answer: x=4'},
+        {type: 'expression', math: 'x>2', raw: 'x>0, so x>2.'},
+        {type: 'text', math: '', raw: 'Thank you'}
+    ]);
+    // A backtick block over several lines, and an unpaired backtick mid-edit.
+    assert.deepEqual(linesFromFreeText('`\nx=1\nx=2\n`').map(line => line.math), ['x=1', 'x=2']);
+    assert.deepEqual(linesFromFreeText('`x=1`\n`x=').map(line => line.math), ['x=1', '']);
+});
+
+test('editing the working updates a box only while the learner has not typed in it', async () => {
+    const linesFromFreeText = (0, eval)(`(function() {
+        ${extractFunctionSource('linesFromFreeText')}
+        return linesFromFreeText;
+    })()`);
+    const converted = [];
+    const box = {value: 'x=3', dataset: {hand2stackAnchor: 'Answer:'},
+        _hand2stackExtraction: {recognized: 'x=3'}};
+    const applyMatchedAnswers = buildApplyMatchedAnswers(
+        () => true,
+        () => [box],
+        async () => { throw new Error('the LaTeX converter must not be used for edited working'); },
+        (target, value) => { target.value = value; },
+        () => {}
+    );
+    const edit = text => applyMatchedAnswers('SOURCE', linesFromFreeText(text), () => true,
+        (target, result) => { target._hand2stackExtraction = {recognized: result.expr}; },
+        {convert: async ascii => { converted.push(ascii); return ascii; }, via: 'freetext_edit', followEdits: true});
+
+    // The screenshot case: the learner corrects the last line from x=3 to x=4.
+    await edit('`x^2-2*x-3=0`\n\nSince `x>2`,\n`x=4`');
+    assert.equal(box.value, 'x=4');
+    // Editing another line leaves the unchanged answer alone (no re-validation).
+    await edit('`x^2-2*x-8=0`\n\nSince `x>2`,\n`x=4`');
+    assert.deepEqual(converted, ['x=4']);
+    // Once the learner types in the answer box, it is theirs.
+    box.dataset.hand2stackStudentEdited = '1';
+    await edit('`x^2-2*x-8=0`\n\nSince `x>2`,\n`x=5`');
+    assert.equal(box.value, 'x=4');
 });

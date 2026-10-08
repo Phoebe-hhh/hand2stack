@@ -682,6 +682,61 @@ define([], function() {
             && String(line.type || 'expression').toLowerCase() !== 'text');
     };
 
+    // "Since x>2, x=4": conditions first, then the conclusion. When every
+    // earlier comma-separated part is a condition and the last one is an
+    // equation, the conclusion alone is the answer. "x=2, x=3" lists two
+    // solutions and stays whole. Brace characters are written as escapes so
+    // the source stays brace-balanced for the tests that extract it.
+    const finalClause = expr => {
+        const opening = '([\u007b';
+        const closing = ')]\u007d';
+        const parts = [];
+        let depth = 0;
+        let start = 0;
+        for (let i = 0; i < expr.length; i++) {
+            if (opening.includes(expr[i])) {
+                depth++;
+            } else if (closing.includes(expr[i])) {
+                depth--;
+            } else if (expr[i] === ',' && depth === 0) {
+                parts.push(expr.slice(start, i));
+                start = i + 1;
+            }
+        }
+        parts.push(expr.slice(start));
+        const isCondition = part => /[<>≤≥≦≧≠]|\\(?:le|ge|leq|geq|leqq|geqq|leqslant|geqslant|neq|ne|lt|gt)(?![A-Za-z])/.test(part);
+        const last = parts[parts.length - 1].replace(/^(?:\s|\\q?quad|\\[,;: ])+/, '').trim();
+        const isEquation = /(^|[^<>!#:])=/.test(last) && !isCondition(last);
+        return parts.length > 1 && isEquation && parts.slice(0, -1).every(isCondition) ? last : expr;
+    };
+
+    // The edited Free-text working as recognized-line objects. Each text line
+    // is one line; its maths is the backticked part (the last one when a line
+    // holds several statements, e.g. "`x>0`, so `x>2`"), its raw text the line
+    // without backticks, so "Answer: `x=4`" still matches the label.
+    const linesFromFreeText = text => {
+        const lines = [];
+        let current = {raw: '', segments: []};
+        const parts = String(text || '').replace(/\r\n?/g, '\n').split('`');
+        parts.forEach((part, index) => {
+            // An unpaired final backtick (mid-edit) leaves its tail as prose.
+            const isMath = index % 2 === 1 && index < parts.length - 1;
+            part.split('\n').forEach((piece, pieceIndex) => {
+                if (pieceIndex > 0) {
+                    lines.push(current);
+                    current = {raw: '', segments: []};
+                }
+                current.raw += piece;
+                if (isMath && piece.trim()) current.segments.push(piece.trim());
+            });
+        });
+        lines.push(current);
+        return lines.filter(line => line.raw.trim()).map(line => {
+            const math = line.segments.length ? line.segments[line.segments.length - 1] : '';
+            return {type: math ? 'expression' : 'text', math, raw: line.raw.trim()};
+        });
+    };
+
     const extractAnchoredAnswers = (anchors, lines) => {
         const results = anchors.map(anchor => {
             for (let i = lines.length - 1; i >= 0; i--) {
@@ -701,7 +756,7 @@ define([], function() {
             if (result.expr || !isProseAnchor(result.anchor)) return;
             for (let i = lines.length - 1; i >= 0; i--) {
                 if (used.has(i) || !isMathLine(lines[i])) continue;
-                const expr = matchableLineText(lines[i]).trim();
+                const expr = finalClause(matchableLineText(lines[i]).trim());
                 if (!expr) continue;
                 used.add(i);
                 Object.assign(result, {expr, lineIndex: i, fallback: true});
@@ -714,11 +769,18 @@ define([], function() {
     // Generic across questions: it never hardcodes which answers a question
     // needs, it only matches whatever Syntax hints the teacher already set.
     // The free-text box is the source; its anchored sibling boxes are targets.
-    const applyMatchedAnswers = async (sourceBox, lines, isCurrent = () => true, onTargetResult = null) => {
+    // options (used when the learner edits the recognized working):
+    //   convert      - converts a found value; ASCII working needs postAscii.
+    //   via          - research label of the insertion.
+    //   followEdits  - only update a box the learner has not typed in, and
+    //                  only when its source value actually changed.
+    const applyMatchedAnswers = async (sourceBox, lines, isCurrent = () => true, onTargetResult = null, options = null) => {
         if (!isFreeTextInput(sourceBox) || !Array.isArray(lines) || !lines.length) {
             return [];
         }
         const report = onTargetResult || (() => null);
+        const settings = options || {};
+        const convert = settings.convert || postLatex;
         const targets = findSiblingAnswerBoxes(sourceBox)
             .filter(box => box.dataset.hand2stackAnchor);
         const extracted = extractAnchoredAnswers(targets.map(box => box.dataset.hand2stackAnchor), lines);
@@ -728,8 +790,15 @@ define([], function() {
             const box = targets[index];
             const result = extracted[index];
             const logOptions = {modality: sourceBox._hand2stackModality || null};
+            if (settings.followEdits) {
+                const previous = box._hand2stackExtraction;
+                if (box.dataset.hand2stackStudentEdited === '1'
+                        || (previous && previous.recognized === result.expr)) {
+                    continue;
+                }
+            }
             const logAnchor = (status, value, previousValue) => research.log(box, 'answer_inserted', {
-                via: 'anchor_autofill',
+                via: settings.via || 'anchor_autofill',
                 status,
                 value: value === null ? null : research.clip(value),
                 previousValue: research.clip(previousValue),
@@ -745,7 +814,7 @@ define([], function() {
             const valueBeforeValidation = box.value;
             const validationStartedAt = Date.now();
             try {
-                const cleanStack = await postLatex(result.expr);
+                const cleanStack = await convert(result.expr);
                 // Recognition and STACK validation are asynchronous. Never let
                 // an older result, or a result validated while the learner was
                 // typing, replace the current answer.
@@ -831,7 +900,8 @@ define([], function() {
             setTargetStatus(box, 'warning', (config.filledfromlastline
                 || 'No line starting with {$a} was found, so this was filled from the last line of your working. Please check it.')
                 .replace('{$a}', label));
-        } else if (result.status === 'notfound') {
+        } else if (result.status === 'notfound' || result.fallback) {
+            // A failed last-line guess did not find the label either.
             setTargetStatus(box, 'warning', (config.anchornotfound
                 || 'Could not find {$a} in the recognized working. Please enter it manually.').replace('{$a}', label));
         } else {
@@ -2576,6 +2646,18 @@ define([], function() {
                 freeTextTracker.input();
                 answerBox.value = panel._stackTextarea.value;
                 answerBox.dispatchEvent(new Event('input', {bubbles: true}));
+                // The answer boxes were extracted from this working, so they
+                // follow the learner's corrections to it, unless the learner
+                // has typed in a box or a newer edit or recognition arrived.
+                window.clearTimeout(panel._reextractTimer);
+                panel._reextractTimer = window.setTimeout(() => {
+                    const text = panel._stackTextarea.value;
+                    const isCurrent = () => panel._stackTextarea.value === text && answerBox.value === text;
+                    applyMatchedAnswers(answerBox, linesFromFreeText(text), isCurrent, reportTargetResult,
+                        {convert: postAscii, via: 'freetext_edit', followEdits: true}).catch(error => {
+                        window.console.error('[hand2stack] re-extraction failed:', error);
+                    });
+                }, 700);
             };
             panel._stackTextarea.addEventListener('input', panel._freeTextSyncHandler);
             panel._stackTextarea.onblur = () => {

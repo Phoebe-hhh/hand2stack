@@ -7,6 +7,8 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 - When a prose label such as `Answer:` is missing from the recognized working, fill its answer box from the last mathematical line and ask the learner to check it. Specific labels such as `f(2)=` never guess.
 - Accept full-width `：` and `＝` after anchor labels.
+- Answer boxes filled from the recognized working now follow the learner's corrections to that working: editing `x=3` to `x=4` in the review text updates the final-answer box. A box the learner has typed in is never overwritten.
+- When the last-line fallback reads a line such as `Since x>2, x=4`, fill only the conclusion `x=4`; two solutions such as `x=2, x=3` stay whole. A fallback that cannot be converted now says the label was not found, instead of "Found Answer: … but could not convert it".
 - Convert based logarithms with nested arguments, e.g. `\log_{2}(x(x-2))` and the typed `log_2(x(x-2))`, to `log(x*(x-2))/log(2)` instead of the invalid product `log_2*(x*(x-2))`.
 - Keep a written `or`/`and` when one side is not a complete relation (often an OCR error such as `x-3` for `x=3`), so `x=-1 or x-3` stays visibly wrong instead of silently becoming `x=-1*x-3`.
 - Read unbracketed function arguments as handwriting means them: `\sin 2x` is `sin(2*x)` (was `sin(2)*x`), `\sin\frac{\pi}{6}` is `sin(%pi/6)` (was `sin(%pi)/6`), `\sin x^{2}` and `\ln x^{2}` keep the power inside, and `\tan\theta`, `\ln|x|` and `\sin 30^{\circ}` are valid.
