@@ -56,6 +56,14 @@ final class stack_converter_test extends \advanced_testcase {
             ],
             'inverse trigonometric fraction' => ['\\tan ^{-1} \\frac{x}{2}', 'atan(x/2)'],
             'logarithm base' => ['\\log _{10} x', 'log(x)/log(10)'],
+            'logarithm base with nested argument' => [
+                '\\log _{2}(x(x-2))=3',
+                '(log(x*(x-2))/log(2))=3',
+            ],
+            'logarithm base with left-right nested argument' => [
+                '\\log_{3}\\left((x+1)(x-1)\\right)',
+                '(log((x+1)*(x-1))/log(3))',
+            ],
             'text e constant' => ['\\text { e }', '%e'],
             'text i constant' => ['\\text { i }', '%i'],
             'absolute value' => ['\\left|x^{2}-1\\right|', 'abs(x^2-1)'],
@@ -300,6 +308,59 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame($expected, stack_converter::normalize_selection($latex));
     }
 
+    /**
+     * Each expected value was checked against STACK 4.13 validation and an
+     * AlgEquiv answer test with the intended teacher answer.
+     *
+     * @dataProvider stack_audit_cases
+     */
+    public function test_stack_audit_regressions(string $latex, string $expected): void {
+        $this->assertSame($expected, stack_converter::normalize_selection($latex));
+    }
+
+    public static function stack_audit_cases(): array {
+        return [
+            'unbracketed product argument' => ['\\sin 2 x', 'sin(2*x)'],
+            'unbracketed Greek product argument' => ['\\sin 2 \\theta', 'sin(2*theta)'],
+            'fraction argument' => ['\\sin \\frac{\\pi}{6}', 'sin((%pi)/6)'],
+            'power inside argument' => ['\\sin x^{2}', 'sin(x^2)'],
+            'logarithm of a power' => ['\\ln x^{2}', 'ln(x^2)'],
+            'based logarithm of a power' => ['\\log _{3} x^{2}', 'log(x^2)/log(3)'],
+            'Greek argument' => ['\\tan \\theta', 'tan(theta)'],
+            'logarithm of absolute value' => ['\\ln |x|+C', 'ln(abs(x))+C'],
+            'degrees inside trigonometric function' => ['\\sin 30^{\\circ}=\\frac{1}{2}', 'sin((30)*%pi/180)=1/2'],
+            'degrees alone' => ['30^{\\circ}', '30'],
+            'display fraction' => ['\\dfrac{3}{4}', '3/4'],
+            'Japanese leqq' => ['x \\leqq 2', 'x<=2'],
+            'Japanese leqq chain' => ['0 \\leqq x \\leqq 2 \\pi', '0<=x and x<=2*%pi'],
+            'plus-minus before a root' => ['x=\\pm \\sqrt{3}', 'x=+-sqrt(3)'],
+            'plus-minus inside quadratic formula' => ['\\frac{-b \\pm \\sqrt{b^{2}-4 a c}}{2 a}', '(-b+-sqrt(b^2-4*a*c))/(2*a)'],
+            'leading implication arrow' => ['\\Rightarrow x=3', 'x=3'],
+            'bare prime' => ['y^{\\prime}=2 y', 'diff(y,x)=2*y'],
+            'limit keeps its right-hand side' => ['\\lim _{x \\rightarrow 0} \\frac{\\sin x}{x}=1', 'limit(sin(x)/x,x,0)=1'],
+            'sum keeps its right-hand side' => ['\\sum_{k=1}^{n} k=\\frac{n(n+1)}{2}', 'sum(k,k,1,n)=(n*(n+1))/(2)'],
+            'determinant keeps its right-hand side' => ['\\left|\\begin{array}{ll}a & b \\\\ c & d\\end{array}\\right|=a d-b c', 'determinant(matrix([a,b],[c,d]))=a*d-b*c'],
+            'brace system is a list' => ['\\left\\{\\begin{array}{l}x+y=3 \\\\ x-y=1\\end{array}\\right.', '[x+y=3,x-y=1]'],
+            'cases system is a list' => ['\\begin{cases}x+y=3 \\\\ x-y=1\\end{cases}', '[x+y=3,x-y=1]'],
+            'set' => ['\\{1,2,3\\}', '{1,2,3}'],
+            'named set is not two solutions' => ['A=\\{1,2\\}', 'A={1,2}'],
+            'open interval' => ['x \\in(-1,3)', '-1<x and x<3'],
+            'combination' => ['{ }_{5} C_{2}', 'binomial(5,2)'],
+            'combination with mathrm' => ['{ }_{6} \\mathrm{C}_{3}=20', 'binomial(6,3)=20'],
+            'point equation' => ['(x, y)=(1,2)', '[x,y]=[1,2]'],
+            'several assignments' => ['\\mu=50, \\sigma=10', '[mu=50,sigma=10]'],
+            'OCR-damaged second solution stays invalid' => ['x=-1, x-3', 'x=-1,x-3'],
+            'integrand of two functions' => ['\\int \\sin x \\cos x d x', 'int(sin(x)*cos(x),x)'],
+        ];
+    }
+
+    public function test_malformed_connected_relations_remain_visible_without_false_products(): void {
+        $this->assertSame('x=-1 or x-3', stack_converter::normalize_selection('x=-1 \\text { or } x-3'));
+        $this->assertSame('x=-1 or x-3', stack_converter::normalize_selection('x=-1 \\quad \\text { or } \\quad x-3'));
+        $this->assertSame('x-3 and x=-1', stack_converter::normalize_selection('x-3 \\text { かつ } x=-1'));
+        $this->assertSame('x=-1 or x-3', stack_converter::normalize_ascii('x=-1 or x-3'));
+    }
+
     public static function research_trace_line_cases(): array {
         return [
             'written or joins two solutions' => ['x=2 \\quad \\text { or } \\quad x=3', 'x=2 or x=3'],
@@ -337,10 +398,21 @@ final class stack_converter_test extends \advanced_testcase {
 
     public static function edited_ascii_cases(): array {
         return [
+            'function typed without brackets' => ['sinx', 'sin(x)'],
+            'power on function name' => ['sin^2(x)', 'sin(x)^2'],
+            'typed logarithm of absolute value' => ['ln|x|+C', 'ln(abs(x))+C'],
+            'STACK base logarithm' => ['lg(x,2)', 'lg(x,2)'],
+            'two-argument logarithm' => ['log(x,2)', 'log(x)/log(2)'],
+            'full-width relation' => ['x≧2', 'x>=2'],
+            'full-width letters' => ['ｘ＝３', 'x=3'],
+            'superscript digit' => ['x²+1', 'x^2+1'],
+            'typed set' => ['{1,2,3}', '{1,2,3}'],
             'adjacent groups' => ['(x+1)(x-1)', '(x+1)*(x-1)'],
             'number before group' => ['2(x+1)', '2*(x+1)'],
             'absolute value' => ['|x-1|', 'abs(x-1)'],
             'unicode minus' => ['x=−1', 'x=-1'],
+            'logarithm base with nested argument' => ['log_2(x(x-2))=3', '(log(x*(x-2))/log(2))=3'],
+            'logarithm base inside a word is not a logarithm' => ['catalog_2', 'c*a*t*a*l*o*g_2'],
             'logical interval with implicit multiplication' => [
                 '1<=x and x<=3*2x',
                 '1<=x and x<=3*2*x',

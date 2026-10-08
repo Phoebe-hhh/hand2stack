@@ -7,6 +7,14 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 - When a prose label such as `Answer:` is missing from the recognized working, fill its answer box from the last mathematical line and ask the learner to check it. Specific labels such as `f(2)=` never guess.
 - Accept full-width `：` and `＝` after anchor labels.
+- Convert based logarithms with nested arguments, e.g. `\log_{2}(x(x-2))` and the typed `log_2(x(x-2))`, to `log(x*(x-2))/log(2)` instead of the invalid product `log_2*(x*(x-2))`.
+- Keep a written `or`/`and` when one side is not a complete relation (often an OCR error such as `x-3` for `x=3`), so `x=-1 or x-3` stays visibly wrong instead of silently becoming `x=-1*x-3`.
+- Read unbracketed function arguments as handwriting means them: `\sin 2x` is `sin(2*x)` (was `sin(2)*x`), `\sin\frac{\pi}{6}` is `sin(%pi/6)` (was `sin(%pi)/6`), `\sin x^{2}` and `\ln x^{2}` keep the power inside, and `\tan\theta`, `\ln|x|` and `\sin 30^{\circ}` are valid.
+- Convert `\leqq`/`\geqq` (≦/≧), `\dfrac`, `\pm` inside an expression (STACK's `+-`), a leading `\Rightarrow`/`∴`, `y'`, `{}_{n}C_{r}`/`{}_{n}P_{r}`, sets `\{1,2\}`, open intervals `x\in(a,b)`, `(x,y)=(1,2)` and several assignments such as `\mu=50, \sigma=10`.
+- Keep the right-hand side of a limit, sum or derivative (`\lim ... =1` was swallowed into the limit), and the text around a matrix (`|A|=ad-bc`).
+- Treat a `cases` or `\left\{` block without conditions as a system of equations; it previously kept only its last equation or became a one-column matrix.
+- Never turn `x=-1, x-3` (an OCR-damaged second solution) or `A=\{1,2\}` into a plausible list.
+- Typed answers: fold full-width characters (`ｘ＝３`), `≧`/`≦` and superscript digits (`x²`), and accept `sinx`, `sin^2(x)`, `ln|x|`, `lg(x,2)` and `log(x,2)`.
 
 ## 0.4.0-alpha - 2026-10-07
 
