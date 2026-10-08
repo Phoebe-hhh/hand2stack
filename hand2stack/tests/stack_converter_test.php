@@ -385,6 +385,24 @@ final class stack_converter_test extends \advanced_testcase {
             array_column(mathpix_client::build_document_lines($text), 'stack'));
     }
 
+    public function test_statements_in_one_row_are_not_one_expression(): void {
+        // 2026-10-08 attempts: a gap or a prose word separates two statements.
+        // Read as one expression, the gap became the false chain x-2>0*x and 0*x>2.
+        $this->assertSame('x-2>0,x>2', stack_converter::normalize_selection('x-2>0 \\quad x>2'));
+        $this->assertSame('x>0 and x-2>0,x>2',
+            stack_converter::normalize_selection('x>0 \\text { and } x-2>0, \\text { so } x>2 .'));
+        // A connective, a gap inside one expression and a real chain stay whole.
+        $this->assertSame('x=2 or x=3', stack_converter::normalize_selection('x=2 \\quad \\text { or } \\quad x=3'));
+        $this->assertSame('2*x+3', stack_converter::normalize_selection('2 x \\quad+3'));
+        $this->assertSame('1<2*x and 2*x<3', stack_converter::normalize_selection('1<2 x<3'));
+    }
+
+    public function test_freetext_keeps_prose_between_statements_outside_the_maths(): void {
+        $latex = "\\begin{array}{l}\nx>0 \\text { and } x-2>0, \\text { so } x>2 . \\\\\nx(x-2)=8\n\\end{array}";
+        $this->assertSame("`x>0 and x-2>0`, so `x>2`.\n`x*(x-2)=8`", mathpix_client::build_freetext($latex));
+        $this->assertSame("because `x-2>0`\n`x>2`", mathpix_client::build_freetext('because $x-2>0 \\quad x>2$'));
+    }
+
     public function test_freetext_keeps_operatorname_prose_outside_the_formula(): void {
         $this->assertSame("cuz `x=-1`", mathpix_client::build_freetext("\$\\operatorname{cuz} \\quad x=-1\$"));
     }

@@ -248,8 +248,35 @@ final class mathpix_client {
             return $row !== '';
         }));
         return implode("\n", array_map(static function(string $row): string {
-            return '`' . $row . '`';
+            // A row split into statements already marks its own maths.
+            return strpos($row, '`') === false ? '`' . $row . '`' : $row;
         }, $rows));
+    }
+
+    /**
+     * Mark each statement of a row separately and keep the prose between them
+     * as text: "x>0 \\text{and} x-2>0, \\text{so} x>2" becomes
+     * "`x>0 and x-2>0`, so `x>2`". Null when the row is a single statement.
+     */
+    private static function freetext_statements(string $latex): ?string {
+        $segments = stack_converter::split_statements($latex);
+        if (count($segments) < 2) {
+            return null;
+        }
+        $row = '';
+        foreach ($segments as [$type, $text]) {
+            if ($type === 'math') {
+                $math = stack_converter::normalize_selection($text);
+                if ($math === '') {
+                    continue;
+                }
+                $piece = '`' . $math . '`';
+            } else {
+                $piece = $text;
+            }
+            $row .= ($row === '' || preg_match('/^[,.;:]/', $piece) ? '' : ' ') . $piece;
+        }
+        return $row;
     }
 
     /** Convert one Free-text maths region without treating TeX layout as algebra. */
@@ -290,6 +317,10 @@ final class mathpix_client {
                 $stack = implode('~~', array_map(static function(string $side): string {
                     return trim($side) === '' ? '' : stack_converter::normalize_selection($side);
                 }, $sides));
+            }
+            $statements = self::freetext_statements($linelatex);
+            if ($statements !== null) {
+                $stack = $statements;
             }
             if ($stack !== '') {
                 $converted[] = ($numbering[$rowindex] ?? '') . $stack;

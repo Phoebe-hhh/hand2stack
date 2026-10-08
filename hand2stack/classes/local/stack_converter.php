@@ -33,6 +33,72 @@ final class stack_converter {
     /** Logical connectives a handwritten line may join two relations with. */
     private const CONNECTIVES = ['or' => 'or', 'and' => 'and', 'または' => 'or', 'かつ' => 'and'];
 
+    /** A relation symbol: a statement such as "x>2" has one, a term such as "0 x" has none. */
+    private const RELATION = '/=|<|>|\\\\(?:leqq?|geqq?|leqslant|geqslant|le|ge|neq|ne|lt|gt)(?![A-Za-z])|[≤≥≦≧≠]/u';
+
+    /**
+     * Split one formula row into statements and the prose between them.
+     * "x>0 \\text{and} x-2>0, \\text{so} x>2" is two statements joined by
+     * "so"; "x-2>0 \\quad x>2" is two statements side by side. Without the
+     * split, the gap becomes a product and a false chain: x-2>0*x and 0*x>2.
+     * A connective (or/and) stays inside its statement, and a gap splits only
+     * when every side is a complete relation.
+     *
+     * @return array<int,array{0:string,1:string}> ['math'|'prose', text] segments.
+     */
+    public static function split_statements(string $latex): array {
+        $connectives = '/^(?:' . implode('|', array_map('preg_quote', array_keys(self::CONNECTIVES))) . ')$/u';
+        $chunks = [];
+        $start = 0;
+        $depth = 0;
+        $length = strlen($latex);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $latex[$i];
+            if ($char === '{') {
+                $depth++;
+            } else if ($char === '}') {
+                $depth--;
+            } else if ($char === '\\' && $depth === 0
+                    && preg_match('/\G\\\\(?:text|mathrm)\s*\{\s*([^{}]*?)\s*\}/u', $latex, $match, 0, $i)
+                    && preg_match('/\pL.*\pL/u', $match[1]) && !preg_match($connectives, $match[1])) {
+                $chunks[] = ['math', substr($latex, $start, $i - $start)];
+                $chunks[] = ['prose', $match[1]];
+                $i += strlen($match[0]) - 1;
+                $start = $i + 1;
+            }
+        }
+        $chunks[] = ['math', substr($latex, $start)];
+
+        $segments = [];
+        foreach ($chunks as [$type, $text]) {
+            if ($type === 'prose') {
+                $segments[] = ['prose', $text];
+                continue;
+            }
+            $parts = preg_split('/(?:\s*\\\\q?quad(?![A-Za-z])\s*)+/', $text);
+            $complete = count($parts) > 1 && !array_filter($parts, static function(string $part): bool {
+                return trim($part, " \t,.;") !== '' && !preg_match(self::RELATION, $part);
+            });
+            foreach ($complete ? $parts : [$text] as $part) {
+                // Punctuation between statements belongs to the prose.
+                preg_match('/^([\s,.;:]*)(.*?)([\s,.;:]*)$/su', $part, $edge);
+                if (trim($edge[1]) !== '') {
+                    $segments[] = ['prose', trim($edge[1])];
+                }
+                if ($edge[2] !== '') {
+                    $segments[] = ['math', $edge[2]];
+                }
+                if (trim($edge[3]) !== '') {
+                    $segments[] = ['prose', trim($edge[3])];
+                }
+            }
+        }
+        $maths = array_filter($segments, static function(array $segment): bool {
+            return $segment[0] === 'math';
+        });
+        return count($maths) > 1 ? $segments : [['math', $latex]];
+    }
+
     /** Turn \\operatorname{word} into \\text{word} unless word is a known function. */
     private static function prose_operatornames(string $input): string {
         return preg_replace_callback('/\\\\operatorname\s*\{\s*([A-Za-z]{2,})\s*\}/u', static function(array $match): string {
@@ -376,6 +442,16 @@ final class stack_converter {
             return '';
         }
 
+        $statements = array_filter(self::split_statements($s), static function(array $segment): bool {
+            return $segment[0] === 'math';
+        });
+        if (count($statements) > 1) {
+            // Separate statements are not one expression: list them visibly.
+            return implode(',', array_map(static function(array $segment): string {
+                return self::normalize($segment[1]);
+            }, $statements));
+        }
+
         // Layout/proof commands are not part of a STACK expression. When a
         // final expression is followed by a domain restriction, keep the
         // expression as the answer candidate; the restriction remains visible
@@ -641,7 +717,7 @@ final class stack_converter {
             }, $s);
             return trim(str_replace(['\\quad', '\\qquad'], ' ', $s));
         }
-        $s = str_replace(['\\quad', '\\qquad', '\\therefore', '\\because'], '', $s);
+        $s = str_replace(['\\therefore', '\\because'], '', $s);
         if (preg_match('/(?:答え|解答)/u', $s)) {
             $s = preg_replace('/[xｘメ]\s*[ニ二]\s*[ー-]\s*(\d+(?:\.\d+)?)/u', 'x=-$1', $s);
             $s = preg_replace('/たす\s*$/u', 'です', $s);

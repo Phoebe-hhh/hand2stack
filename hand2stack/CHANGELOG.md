@@ -13,6 +13,7 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 - Convert `\leqq`/`\geqq` (≦/≧), `\dfrac`, `\pm` inside an expression (STACK's `+-`), a leading `\Rightarrow`/`∴`, `y'`, `{}_{n}C_{r}`/`{}_{n}P_{r}`, sets `\{1,2\}`, open intervals `x\in(a,b)`, `(x,y)=(1,2)` and several assignments such as `\mu=50, \sigma=10`.
 - Keep the right-hand side of a limit, sum or derivative (`\lim ... =1` was swallowed into the limit), and the text around a matrix (`|A|=ad-bc`).
 - Treat a `cases` or `\left\{` block without conditions as a system of equations; it previously kept only its last equation or became a one-column matrix.
+- Split a row holding two statements instead of reading it as one expression: `x-2>0 \quad x>2` was the false chain `x-2>0*x and 0*x>2`, and `x-2>0, \text{so} x>2` gave `s*o*x>2`. In Free text the prose word stays outside the maths: `` `x>0 and x-2>0`, so `x>2` ``.
 - Never turn `x=-1, x-3` (an OCR-damaged second solution) or `A=\{1,2\}` into a plausible list.
 - Typed answers: fold full-width characters (`ｘ＝３`), `≧`/`≦` and superscript digits (`x²`), and accept `sinx`, `sin^2(x)`, `ln|x|`, `lg(x,2)` and `log(x,2)`.
 
