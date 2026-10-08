@@ -44,6 +44,7 @@ Migrating from 0.2.x is a component migration rather than an ordinary upgrade. D
 - Preserves complete Mathpix document text, including prose and every mathematical line, across mobile-upload polling.
 - Shows the uploaded source image beside free-text recognition with zoom, reset, and drag inspection.
 - Matches labelled results such as `f(2)=...` or `Answer: ...` to sibling STACK fields through their syntax hints while protecting newer recognition results and concurrent student edits.
+- When a prose label such as `Answer:` is not written, fills that field from the last mathematical line of the working (a common "underlined final answer" habit) and asks the learner to check it; specific labels such as `f(2)=` never guess.
 - Inserts only the value when an answer field's own syntax hint is a label (`x=`), so a recognized `x=3` is inserted as `3`; values with a further relation or connective are inserted unchanged.
 - Classifies recognized lines as text, equation, expression, approximation, or condition without inferring which is the answer.
 - Preserves approximate values as normalized candidates with an `approximate` relation instead of discarding them.

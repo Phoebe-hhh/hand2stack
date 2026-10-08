@@ -115,6 +115,7 @@ final class hook_callbacks {
             'eraser' => get_string('eraser', 'local_hand2stack'),
             'extractedfromworking' => get_string('extractedfromworking', 'local_hand2stack'),
             'anchornotfound' => get_string('anchornotfound', 'local_hand2stack'),
+            'filledfromlastline' => get_string('filledfromlastline', 'local_hand2stack'),
             'anchorconvertfailed' => get_string('anchorconvertfailed', 'local_hand2stack'),
             'pensize' => get_string('pensize', 'local_hand2stack'),
             'penthin' => get_string('penthin', 'local_hand2stack'),

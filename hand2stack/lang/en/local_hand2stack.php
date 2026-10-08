@@ -110,6 +110,7 @@ $string['draw'] = 'Pen';
 $string['eraser'] = 'Eraser';
 $string['extractedfromworking'] = 'Extracted from your working';
 $string['anchornotfound'] = 'Could not find {$a} in the recognized working. Please enter it manually.';
+$string['filledfromlastline'] = 'No line starting with {$a} was found, so this was filled from the last line of your working. Please check it.';
 $string['anchorconvertfailed'] = 'Found {$a} in the recognized working, but could not convert it. Please enter it manually.';
 $string['pensize'] = 'Pen size';
 $string['penthin'] = 'Thin pen';

@@ -101,6 +101,7 @@ $string['handwriteinstructions'] = 'Apple Pencil、指、またはマウスで�
 $string['resizehandwriting'] = 'ドラッグして手書き領域の大きさを変更';
 $string['extractedfromworking'] = '作答から抽出しました';
 $string['anchornotfound'] = '認識結果に {$a} が見つかりませんでした。手動で入力してください。';
+$string['filledfromlastline'] = '{$a} で始まる行が見つからなかったため、作答の最後の行から入力しました。正しいか確認してください。';
 $string['anchorconvertfailed'] = '認識結果に {$a} は見つかりましたが、変換できませんでした。手動で入力してください。';
 $string['pensize'] = 'ペンの太さ';
 $string['penthin'] = '細いペン';

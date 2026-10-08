@@ -87,6 +87,7 @@ define([], function() {
         eraser: 'Eraser',
         extractedfromworking: 'Extracted from your working',
         anchornotfound: 'Could not find {$a} in the recognized working. Please enter it manually.',
+        filledfromlastline: 'No line starting with {$a} was found, so this was filled from the last line of your working. Please check it.',
         anchorconvertfailed: 'Found {$a} in the recognized working, but could not convert it. Please enter it manually.',
         pensize: 'Pen size',
         penthin: 'Thin pen',
@@ -594,7 +595,8 @@ define([], function() {
         return String(value || '')
             .replace(/\\\(|\\\)|\$/g, '')
             .replace(/\s+/g, '')
-            .replace(/[=:]+$/, '');
+            // Japanese input often uses the full-width "：" and "＝".
+            .replace(/[=:：＝]+$/, '');
     };
 
     const matchableLineText = line => {
@@ -624,14 +626,14 @@ define([], function() {
             .join('\\s*');
         const text = String(lineText || '').replace(/\\(?:left|right)(?![a-zA-Z])/g, '');
         // "Answer: ..." labels a value as well as "f(2) = ..." does; ":=" does not.
-        const head = text.match(new RegExp('^\\s*' + anchorPattern + '\\s*(?:~~|≈|\\\\approx|\\\\simeq|=|:(?!=))\\s*', 'i'));
+        const head = text.match(new RegExp('^\\s*' + anchorPattern + '\\s*(?:~~|≈|\\\\approx|\\\\simeq|[=＝]|[:：](?!=))\\s*', 'i'));
         if (!head) {
             return null;
         }
         let rest = text.slice(head[0].length);
         // After "f(2) =" a further "=" restates the value; after "Answer:"
         // the value itself may be an equation such as "x=3".
-        const labelled = /:\s*$/.test(head[0]);
+        const labelled = /[:：]\s*$/.test(head[0]);
         // "<=", ">=", "!=" and "#=" are part of the value, not a new relation.
         const next = labelled ? null : /(^|[^<>!#:])(?:~~|≈|\\approx|\\simeq|=)/.exec(rest);
         if (next) {
@@ -667,8 +669,21 @@ define([], function() {
         return rest;
     };
 
+    // A prose label such as "Answer:" or "答え:" (no digits, brackets or
+    // operators) names the final result rather than a specific quantity like
+    // "f(2)=". Learners often just underline that result instead of writing
+    // the label.
+    const isProseAnchor = anchor => {
+        return /^[A-Za-z\u3040-\u30ff\u3400-\u9fff\s]{2,}$/u.test(normalizeAnchorText(anchor));
+    };
+
+    const isMathLine = line => {
+        return Boolean(line && !line.synthetic && (line.math || line.stack)
+            && String(line.type || 'expression').toLowerCase() !== 'text');
+    };
+
     const extractAnchoredAnswers = (anchors, lines) => {
-        return anchors.map(anchor => {
+        const results = anchors.map(anchor => {
             for (let i = lines.length - 1; i >= 0; i--) {
                 const expr = matchableLineTexts(lines[i])
                     .map(text => extractAnchoredValue(anchor, text))
@@ -679,6 +694,21 @@ define([], function() {
             }
             return {anchor, expr: null, lineIndex: -1};
         });
+        // A missing prose label falls back to the last mathematical line not
+        // already claimed by another label. The caller marks it for checking.
+        const used = new Set(results.filter(result => result.expr).map(result => result.lineIndex));
+        results.forEach(result => {
+            if (result.expr || !isProseAnchor(result.anchor)) return;
+            for (let i = lines.length - 1; i >= 0; i--) {
+                if (used.has(i) || !isMathLine(lines[i])) continue;
+                const expr = matchableLineText(lines[i]).trim();
+                if (!expr) continue;
+                used.add(i);
+                Object.assign(result, {expr, lineIndex: i, fallback: true});
+                return;
+            }
+        });
+        return results;
     };
 
     // Generic across questions: it never hardcodes which answers a question
@@ -734,10 +764,11 @@ define([], function() {
                     report(box, Object.assign({status: 'convertfailed'}, result));
                     logAnchor('convertfailed', null, valueBeforeValidation);
                 } else if (box.value === valueBeforeValidation) {
+                    const status = result.fallback ? 'fallback_last_line' : 'filled';
                     setAnswerValue(box, cleanStack);
                     flashAutofilledBox(box);
-                    report(box, Object.assign({status: 'filled'}, result));
-                    logAnchor('filled', cleanStack, valueBeforeValidation);
+                    report(box, Object.assign({}, result, {status}));
+                    logAnchor(status, cleanStack, valueBeforeValidation);
                 }
             } catch (error) {
                 window.console.warn('[hand2stack] anchor match could not be validated:', result.anchor, error);
@@ -787,13 +818,19 @@ define([], function() {
             recognized: result.expr,
             stack: result.stack || '',
             sourceLine: result.lineIndex,
-            autoFilled: result.status === 'filled',
+            autoFilled: result.status === 'filled' || result.status === 'fallback_last_line',
+            fallback: result.status === 'fallback_last_line',
             studentEdited: false
         };
-        box.dataset.hand2stackAutoFilled = result.status === 'filled' ? '1' : '0';
+        box.dataset.hand2stackAutoFilled = box._hand2stackExtraction.autoFilled ? '1' : '0';
         delete box.dataset.hand2stackStudentEdited;
         if (result.status === 'filled') {
             setTargetStatus(box, 'success', '✓ ' + (config.extractedfromworking || 'Extracted from your working'));
+        } else if (result.status === 'fallback_last_line') {
+            // A guess, not a match: keep the request to check it on screen.
+            setTargetStatus(box, 'warning', (config.filledfromlastline
+                || 'No line starting with {$a} was found, so this was filled from the last line of your working. Please check it.')
+                .replace('{$a}', label));
         } else if (result.status === 'notfound') {
             setTargetStatus(box, 'warning', (config.anchornotfound
                 || 'Could not find {$a} in the recognized working. Please enter it manually.').replace('{$a}', label));

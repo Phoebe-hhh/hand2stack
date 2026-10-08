@@ -5,6 +5,9 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+- When a prose label such as `Answer:` is missing from the recognized working, fill its answer box from the last mathematical line and ask the learner to check it. Specific labels such as `f(2)=` never guess.
+- Accept full-width `：` and `＝` after anchor labels.
+
 ## 0.4.0-alpha - 2026-10-07
 
 - Add research instrumentation v1 backend: a pseudonymised `local_hand2stack_event` table, the `event.php` batch endpoint, and server-side resolution of question, question-bank entry, question version and plugin version.

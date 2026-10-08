@@ -79,6 +79,8 @@ const buildApplyMatchedAnswers = (0, eval)(`(function(isFreeTextInput, findSibli
     ${extractFunctionSource('normalizeAnchorText')}
     ${extractFunctionSource('matchableLineText')}
     ${extractFunctionSource('matchableLineTexts')}
+    ${extractFunctionSource('isProseAnchor')}
+    ${extractFunctionSource('isMathLine')}
     ${extractFunctionSource('extractAnchoredValue')}
     ${extractFunctionSource('extractAnchoredAnswers')}
     ${extractFunctionSource('applyMatchedAnswers')}
@@ -173,6 +175,8 @@ const extractAnchoredAnswers = (0, eval)(`(function() {
     ${extractFunctionSource('normalizeAnchorText')}
     ${extractFunctionSource('matchableLineText')}
     ${extractFunctionSource('matchableLineTexts')}
+    ${extractFunctionSource('isProseAnchor')}
+    ${extractFunctionSource('isMathLine')}
     ${extractFunctionSource('extractAnchoredValue')}
     ${extractFunctionSource('extractAnchoredAnswers')}
     return extractAnchoredAnswers;
@@ -221,6 +225,9 @@ test('applyMatchedAnswers reports filled and missing targets', async () => {
 
 test('a colon label anchors a value, but ":=" does not', () => {
     assert.equal(extractAnchoredValue('Answer:', 'Answer: 1<x and x<=5'), '1<x and x<=5');
+    // Full-width punctuation from Japanese input.
+    assert.equal(extractAnchoredValue('答え：', '答え：x=3'), 'x=3');
+    assert.equal(extractAnchoredValue('f(2)=', 'f(2)＝5'), '5');
     // After a colon the value may itself be an equation.
     assert.equal(extractAnchoredValue('Answer:', 'answer : x=3'), 'x=3');
     assert.equal(extractAnchoredValue('f(2)=', 'f(2):=3'), null);
@@ -231,6 +238,8 @@ test('a prose label is found in the recognized row when the maths dropped it', (
         ${extractFunctionSource('normalizeAnchorText')}
         ${extractFunctionSource('matchableLineText')}
         ${extractFunctionSource('matchableLineTexts')}
+    ${extractFunctionSource('isProseAnchor')}
+    ${extractFunctionSource('isMathLine')}
         ${extractFunctionSource('extractAnchoredValue')}
         ${extractFunctionSource('extractAnchoredAnswers')}
         return extractAnchoredAnswers;
@@ -260,4 +269,71 @@ test('an answer box drops its own label hint from an inserted value', () => {
     assert.equal(stripOwnAnchor('x=', 'x^2=9'), 'x^2=9');
     assert.equal(stripOwnAnchor('x=', '3'), '3');
     assert.equal(stripOwnAnchor('y=', 'x=3'), 'x=3');
+});
+
+test('a missing prose label falls back to the last mathematical line', () => {
+    const extract = (0, eval)(`(function() {
+        ${extractFunctionSource('normalizeAnchorText')}
+        ${extractFunctionSource('matchableLineText')}
+        ${extractFunctionSource('matchableLineTexts')}
+        ${extractFunctionSource('isProseAnchor')}
+        ${extractFunctionSource('isMathLine')}
+        ${extractFunctionSource('extractAnchoredValue')}
+        ${extractFunctionSource('extractAnchoredAnswers')}
+        return extractAnchoredAnswers;
+    })()`);
+    // Server rows for the 2026-10-07 attempt: the final answer is underlined,
+    // not labelled, and the working ends with a prose-only row.
+    const lines = [
+        {type: 'expression', math: 'x-1', raw: 'Multiply both side by $x-1$'},
+        {type: 'condition', math: 'x+3 \\geq 2(x-1)', raw: 'x+3 \\geq 2(x-1)'},
+        {type: 'condition', math: 'x \\leq 5', raw: 'x \\leq 5'},
+        {type: 'equation', math: 'x=1', raw: 'But $x=1$ not allowed,'},
+        {type: 'condition', math: '1<x \\leq 5', raw: '1<x \\leq 5'},
+        {type: 'text', math: '', raw: 'Thank you'}
+    ];
+    assert.deepEqual(extract(['Answer:'], lines), [
+        {anchor: 'Answer:', expr: '1<x \\leq 5', lineIndex: 4, fallback: true}
+    ]);
+
+    // A specific label such as f(2) never guesses.
+    assert.deepEqual(extract(['f(2)='], lines), [{anchor: 'f(2)=', expr: null, lineIndex: -1}]);
+
+    // A written label still wins, and its line is not reused by a fallback.
+    const labelled = lines.concat([{type: 'condition', math: '1<x \\leq 5', raw: 'Answer: $1<x \\leq 5$'}]);
+    assert.deepEqual(extract(['Answer:'], labelled), [
+        {anchor: 'Answer:', expr: '$1<x \\leq 5$', lineIndex: 6}
+    ]);
+    const twoLabels = extract(['Answer:', 'Final answer:'], labelled);
+    assert.equal(twoLabels[0].lineIndex, 6);
+    assert.deepEqual([twoLabels[1].lineIndex, twoLabels[1].fallback], [4, true]);
+});
+
+test('only prose labels are allowed to fall back', () => {
+    const isProseAnchor = (0, eval)(`(function() {
+        ${extractFunctionSource('normalizeAnchorText')}
+        ${extractFunctionSource('isProseAnchor')}
+        return isProseAnchor;
+    })()`);
+    ['Answer:', 'Final answer:', 'answer =', '答え：', '解答:'].forEach(anchor => assert.equal(isProseAnchor(anchor), true, anchor));
+    ['f(2)=', 'g(1)=', 'x=', 'x_1=', 'a+b='].forEach(anchor => assert.equal(isProseAnchor(anchor), false, anchor));
+});
+
+test('applyMatchedAnswers marks a last-line fallback for checking', async () => {
+    const reports = [];
+    const events = [];
+    const box = {value: '', dataset: {hand2stackAnchor: 'Answer:'}};
+    const applyMatchedAnswers = buildApplyMatchedAnswers(
+        () => true,
+        () => [box],
+        async () => '1<x and x<=5',
+        (target, value) => { target.value = value; },
+        () => {},
+        Object.assign({}, silentResearch, {log: (target, type, payload) => events.push([type, payload.status])})
+    );
+    await applyMatchedAnswers('SOURCE', [{type: 'condition', math: '1<x \\leq 5'}], () => true,
+        (target, result) => reports.push([result.status, result.lineIndex]));
+    assert.equal(box.value, '1<x and x<=5');
+    assert.deepEqual(reports, [['fallback_last_line', 0]]);
+    assert.deepEqual(events.at(-1), ['answer_inserted', 'fallback_last_line']);
 });
