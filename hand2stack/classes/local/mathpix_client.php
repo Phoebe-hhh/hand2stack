@@ -281,9 +281,6 @@ final class mathpix_client {
         }
         $rowindex = 0;
         foreach (self::build_lines($latex) as $line) {
-            if (!empty($line['synthetic'])) {
-                continue;
-            }
             $stack = trim((string)($line['stack'] ?? ''));
             $linelatex = (string)($line['latex'] ?? '');
             $withoutproofarrow = preg_replace(
@@ -385,11 +382,6 @@ final class mathpix_client {
             $lines[] = self::candidate_line($part, $math, self::display_parts($part, $math));
         }
 
-        $summary = self::assignment_summary($lines);
-        if ($summary !== null) {
-            $lines[] = $summary;
-        }
-
         return $lines;
     }
 
@@ -428,9 +420,7 @@ final class mathpix_client {
             if ($type === 'display') {
                 $flush();
                 foreach (self::build_math_lines($value) as $line) {
-                    if (empty($line['synthetic'])) {
-                        $lines[] = $line;
-                    }
+                    $lines[] = $line;
                 }
                 continue;
             }
@@ -449,11 +439,6 @@ final class mathpix_client {
             }
         }
         $flush();
-
-        $summary = self::assignment_summary($lines);
-        if ($summary !== null) {
-            $lines[] = $summary;
-        }
         return $lines;
     }
 
@@ -521,7 +506,25 @@ final class mathpix_client {
                 $merged[] = $segment;
             }
         }
-        return $merged;
+
+        // "\\(x=4\\) or \\(x=-2\\)": two relations with only a connective between
+        // them state one thing. As two formulas, the last one alone would be
+        // read as the answer. "\\(x\\) and \\(y\\) are positive" is prose, and
+        // formulas on separate rows stay on their rows.
+        $joined = [];
+        foreach ($merged as $segment) {
+            $count = count($joined);
+            if ($segment[0] === 'inline' && $count >= 2 && $joined[$count - 2][0] === 'inline'
+                    && $joined[$count - 1][0] === 'text' && strpos($joined[$count - 1][1], "\n") === false
+                    && stack_converter::connective($joined[$count - 1][1]) !== null
+                    && stack_converter::has_relation($joined[$count - 2][1]) && stack_converter::has_relation($segment[1])) {
+                $word = trim(array_pop($joined)[1]);
+                $joined[$count - 2][1] .= ' \\text{' . $word . '} ' . $segment[1];
+                continue;
+            }
+            $joined[] = $segment;
+        }
+        return $joined;
     }
 
     /** A review row from its prose and maths parts, or null for an empty row. */
@@ -626,44 +629,6 @@ final class mathpix_client {
             }
         }
         return '';
-    }
-
-    private static function assignment_summary(array $lines): ?array {
-        $assignments = [];
-        $variables = [];
-        for ($i = count($lines) - 1; $i >= 0; $i--) {
-            $stack = trim($lines[$i]['stack'] ?? '');
-            if (!preg_match('/^([a-zA-Z])=([^=,]+)$/', $stack, $match)) {
-                if ($assignments) {
-                    break;
-                }
-                continue;
-            }
-            if (isset($variables[$match[1]])) {
-                break;
-            }
-            $variables[$match[1]] = true;
-            $assignments[] = $match[1] . '=' . $match[2];
-        }
-        if (count($assignments) < 2) {
-            return null;
-        }
-
-        $stack = '[' . implode(',', $assignments) . ']';
-        $latex = implode(',\\ ', $assignments);
-        return [
-            'raw' => $latex,
-            'latex' => $latex,
-            'display' => $latex,
-            'display_parts' => [['type' => 'math', 'latex' => $latex]],
-            'math' => $latex,
-            'stack' => $stack,
-            'ascii' => $stack,
-            'normalized' => $stack,
-            'type' => 'expression',
-            'relation' => null,
-            'synthetic' => true,
-        ];
     }
 
     private static function extract_multiline_body(string $latex): ?string {

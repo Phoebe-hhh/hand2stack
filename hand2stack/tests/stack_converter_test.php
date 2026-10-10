@@ -108,8 +108,8 @@ final class stack_converter_test extends \advanced_testcase {
                 '\\frac{ax^2+bxy+cy^2}{\\sqrt{a^2+b^2+c^2}}',
                 '(a*x^2+b*x*y+c*y^2)/(sqrt(a^2+b^2+c^2))',
             ],
-            'two solutions' => ['x=1,2', '[1,2]'],
-            'therefore two solutions' => ['\\therefore x=2,3', '[2,3]'],
+            'two solutions keep their variable' => ['x=1,2', 'x=1,2'],
+            'therefore two solutions' => ['\\therefore x=2,3', 'x=2,3'],
             'trailing restriction' => ['x-1,\\qquad x\\ne1', 'x-1'],
             'not equal' => ['x \\neq 0', 'not(x=0)'],
             'English prose and unmatched math delimiter' => [
@@ -214,14 +214,13 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame('x+1', $lines[1]['stack']);
     }
 
-    public function test_equation_system_adds_complete_assignment_summary(): void {
+    public function test_equation_system_rows_are_not_combined_into_an_answer(): void {
+        // The learner decides how to state the answer; no [x=2,y=1] is added.
         $lines = mathpix_client::build_lines(
             '\\begin{aligned}2x+3y&=7\\\\y&=1\\\\x&=2\\end{aligned}'
         );
-
-        $last = $lines[count($lines) - 1];
-        $this->assertTrue($last['synthetic']);
-        $this->assertSame('[x=2,y=1]', $last['stack']);
+        $this->assertSame(['2*x+3*y=7', 'y=1', 'x=2'], array_column($lines, 'stack'));
+        $this->assertSame('x=1,y=2', stack_converter::normalize_selection('x=1, y=2'));
     }
 
     public function test_lines_are_candidates_not_automatic_answers(): void {
@@ -354,7 +353,7 @@ final class stack_converter_test extends \advanced_testcase {
             'combination' => ['{ }_{5} C_{2}', 'binomial(5,2)'],
             'combination with mathrm' => ['{ }_{6} \\mathrm{C}_{3}=20', 'binomial(6,3)=20'],
             'point equation' => ['(x, y)=(1,2)', '[x,y]=[1,2]'],
-            'several assignments' => ['\\mu=50, \\sigma=10', '[mu=50,sigma=10]'],
+            'several assignments stay as written' => ['\\mu=50, \\sigma=10', 'mu=50,sigma=10'],
             'OCR-damaged second solution stays invalid' => ['x=-1, x-3', 'x=-1,x-3'],
             'integrand of two functions' => ['\\int \\sin x \\cos x d x', 'int(sin(x)*cos(x),x)'],
         ];
@@ -390,7 +389,7 @@ final class stack_converter_test extends \advanced_testcase {
             'definite integral with value' => ['latex', '\\int_0^{\\pi} \\sin x dx = 2', 'int(sin(x),x,0,%pi)=2'],
             'integral inside a fraction' => ['latex', '\\frac{\\int_0^1(x+1)\\,dx}{(x+3)}', '(int((x+1),x,0,1))/((x+3))'],
             'matrix inside a fraction' => ['latex', '\\frac{\\begin{pmatrix}3 & x \\\\ x & 3\\end{pmatrix}}{2}', '(matrix([3,x],[x,3]))/2'],
-            'equivalence arrow splits statements' => ['latex', 'x^2=4 \\Leftrightarrow x=\\pm 2', 'x^2=4,[2,-2]'],
+            'equivalence arrow splits statements' => ['latex', 'x^2=4 \\Leftrightarrow x=\\pm 2', 'x^2=4,x=+-2'],
             'therefore splits statements' => ['latex', '2x+3=7 \\therefore x=2', '2*x+3=7,x=2'],
             'union stays invalid' => ['latex', 'A \\cup B', 'A\\cup*B'],
             'arg stays invalid' => ['latex', '\\arg z', '\\arg*z'],
@@ -458,6 +457,21 @@ final class stack_converter_test extends \advanced_testcase {
         $latex = "\\begin{array}{l}\nx>0 \\text { and } x-2>0, \\text { so } x>2 . \\\\\nx(x-2)=8\n\\end{array}";
         $this->assertSame("`x>0 and x-2>0`, so `x>2`.\n`x*(x-2)=8`", mathpix_client::build_freetext($latex));
         $this->assertSame("because `x-2>0`\n`x>2`", mathpix_client::build_freetext('because $x-2>0 \\quad x>2$'));    }
+
+    public function test_relations_mathpix_joins_with_a_connective_word_stay_one_statement(): void {
+        // Read as two formulas, only the last one (x=-2) would be the answer.
+        $this->assertSame('`x=4 or x=-2`', mathpix_client::build_freetext('\\(x=4\\) or \\(x=-2\\)'));
+        $this->assertSame('so `x<1 or x>3 or x=5`', mathpix_client::build_freetext('so $x<1$ or $x>3$ または $x=5$'));
+        $this->assertSame(['x=4 or x=-2'], array_column(mathpix_client::build_document_lines('$x=4$ or $x=-2$'), 'stack'));
+        // Handwriting and OCR capitalise the word; STACK reads only lowercase.
+        $this->assertSame('`x=4 or x=-2`', mathpix_client::build_freetext('$x=4$ OR $x=-2$'));
+        $this->assertSame('x=4 or x=-2', stack_converter::normalize_selection('x=4 \\text { Or } x=-2'));
+        $this->assertSame('`x=4`. Or `x=-2`', mathpix_client::build_freetext('$x=4$. Or $x=-2$'));
+        // Other prose, and terms that are not relations, keep Mathpix's split.
+        $this->assertSame('`x>0`, so `x>2`', mathpix_client::build_freetext('\\(x>0\\), so \\(x>2\\)'));
+        $this->assertSame('`x` and `y` are positive', mathpix_client::build_freetext('$x$ and $y$ are positive'));
+        $this->assertSame("`x=4` or\n`x=-2`", mathpix_client::build_freetext("\$x=4\$ or\n\$x=-2\$"));
+    }
 
     public function test_freetext_keeps_operatorname_prose_outside_the_formula(): void {
         $this->assertSame("cuz `x=-1`", mathpix_client::build_freetext("\$\\operatorname{cuz} \\quad x=-1\$"));

@@ -30,7 +30,7 @@ final class stack_converter {
         'Re', 'Im', 'lim', 'mod', 'abs', 'floor', 'ceil', 'ceiling', 'erf', 'grad', 'div', 'curl',
     ];
 
-    /** Logical connectives a handwritten line may join two relations with. */
+    /** Logical connectives a handwritten line may join two relations with, in any case ("Or", "OR"). */
     private const CONNECTIVES = ['or' => 'or', 'and' => 'and', 'または' => 'or', 'かつ' => 'and'];
 
     /** Arrows and signs that join two statements, with the prose shown for each. */
@@ -54,7 +54,7 @@ final class stack_converter {
      * @return array<int,array{0:string,1:string}> ['math'|'prose', text] segments.
      */
     public static function split_statements(string $latex): array {
-        $connectives = '/^(?:' . implode('|', array_map('preg_quote', array_keys(self::CONNECTIVES))) . ')$/u';
+        $connectives = '/^(?:' . implode('|', array_map('preg_quote', array_keys(self::CONNECTIVES))) . ')$/iu';
         $chunks = [];
         $start = 0;
         $depth = 0;
@@ -116,6 +116,16 @@ final class stack_converter {
         return count($maths) > 1 ? $segments : [['math', $latex]];
     }
 
+    /** Whether a formula states a relation (=, <, \\leq, ...) rather than a term. */
+    public static function has_relation(string $latex): bool {
+        return (bool)preg_match(self::RELATION, $latex);
+    }
+
+    /** The STACK connective ("or"/"and") a piece of prose is exactly, or null. */
+    public static function connective(string $text): ?string {
+        return self::CONNECTIVES[strtolower(trim($text))] ?? null;
+    }
+
     /** Turn \\operatorname{word} into \\text{word} unless word is a known function. */
     private static function prose_operatornames(string $input): string {
         return preg_replace_callback('/\\\\operatorname\s*\{\s*([A-Za-z]{2,})\s*\}/u', static function(array $match): string {
@@ -150,13 +160,13 @@ final class stack_converter {
      */
     private static function join_connected_relations(string $input): ?string {
         $words = implode('|', array_map('preg_quote', array_keys(self::CONNECTIVES)));
-        $separator = '/(?:\s|\\\\q?quad|\\\\[,;: ])*\\\\(?:text|mathrm)\s*\{\s*(' . $words . ')\s*\}(?:\s|\\\\q?quad|\\\\[,;: ])*/u';
+        $separator = '/(?:\s|\\\\q?quad|\\\\[,;: ])*\\\\(?:text|mathrm)\s*\{\s*(' . $words . ')\s*\}(?:\s|\\\\q?quad|\\\\[,;: ])*/iu';
         if (!preg_match_all($separator, $input, $matches)) {
             return null;
         }
         $parts = preg_split($separator, $input);
         $connectives = array_map(static function(string $word): string {
-            return self::CONNECTIVES[$word];
+            return self::CONNECTIVES[strtolower($word)];
         }, $matches[1]);
         foreach ($parts as $part) {
             if (trim($part) === '' || preg_match('/\\\\(?:text|mathrm)\s*\{|\$/u', $part)
@@ -584,24 +594,9 @@ final class stack_converter {
         $s = preg_replace('/\\\\lt(?![a-zA-Z])/', '<', $s);
         $s = str_replace(['\\neq', '\\ne'], '#', $s);
 
-        $s = preg_replace('/[a-zA-Z]\s*=\s*(?:\\\\pm|±)\s*([A-Za-z0-9%.\[\]\^()+\-*\/]+)\s*$/u', '[$1,-$1]', $s);
-        // Elsewhere, e.g. "1 \pm \sqrt{2}" or the quadratic formula, STACK's
-        // own +- operator keeps both values.
+        // STACK's own +- operator keeps both values and the variable:
+        // "x=\pm 2" is x=+-2, never the bare list [2,-2].
         $s = preg_replace('/\s*(?:\\\\pm(?![A-Za-z])|±)\s*/u', '+-', $s);
-        // "x=2, 3" lists two solutions. "x=-1, x-3" is not one: the second
-        // item still contains x, typically an OCR-damaged "x=3". Leave it
-        // visibly invalid rather than inventing the list [-1,x-3].
-        $s = preg_replace_callback('/^([a-zA-Z])\s*=\s*([^,=]+)\s*(?<!\\\\),\s*([^,=]+)$/', static function(array $m): string {
-            $variable = '/(?<![A-Za-z\\\\])' . $m[1] . '(?![A-Za-z])/';
-            foreach ([$m[2], $m[3]] as $item) {
-                if (preg_match($variable, $item) || substr_count($item, '(') !== substr_count($item, ')')
-                        || substr_count($item, '{') !== substr_count($item, '}')
-                        || substr_count($item, '[') !== substr_count($item, ']')) {
-                    return $m[0];
-                }
-            }
-            return '[' . $m[2] . ',' . $m[3] . ']';
-        }, $s);
 
         $s = preg_replace('/([a-zA-Z])\s*\\\\in\s*\\\\mathbb\s*\{\s*([A-Z])\s*\}/', '__ALL__$1__IN__$2__', $s);
         $s = preg_replace_callback(
@@ -728,10 +723,6 @@ final class stack_converter {
         $s = preg_replace('/\b([a-df-zA-DF-Z])x(?=(\^|\+|\-|\*|\/|\)|$))/', '$1*x', $s);
         $s = preg_replace('/^(.+?)\s+in\s+(\[[^\]]+\])$/', 'elementp($1,$2)', $s);
         $s = str_replace(["\x01", "\x02"], ['{', '}'], $s);
-        // "\\mu=50, \\sigma=10" states several values at once.
-        if (preg_match('/^[A-Za-z]\w*=[^,=<>]+(?:,[A-Za-z]\w*=[^,=<>]+)+$/', $s)) {
-            $s = '[' . $s . ']';
-        }
         // log(x,2) is not Maxima; it means the base-2 logarithm.
         $s = preg_replace('/\blog\(([^(),]+),([^(),]+)\)/', '(log($1)/log($2))', $s);
         $s = self::protect_functions($s);
@@ -824,10 +815,10 @@ final class stack_converter {
         // `or`/`and` from implicit multiplication. Thus `x=-1 \text{or} x-3`
         // remains visibly incomplete instead of becoming `x=-1*x-3`.
         $connectivewords = implode('|', array_map('preg_quote', array_keys(self::CONNECTIVES)));
-        $malformedseparator = '/\\\\(?:text|mathrm)\s*\{\s*(' . $connectivewords . ')\s*\}/u';
+        $malformedseparator = '/\\\\(?:text|mathrm)\s*\{\s*(' . $connectivewords . ')\s*\}/iu';
         if (preg_match($malformedseparator, $s)) {
             $s = preg_replace_callback($malformedseparator, static function(array $match): string {
-                return ' ' . self::CONNECTIVES[$match[1]] . ' ';
+                return ' ' . self::CONNECTIVES[strtolower($match[1])] . ' ';
             }, $s);
             return trim(str_replace(['\\quad', '\\qquad'], ' ', $s));
         }
