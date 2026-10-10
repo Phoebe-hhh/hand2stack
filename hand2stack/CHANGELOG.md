@@ -18,6 +18,7 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 - Split a row holding two statements instead of reading it as one expression: `x-2>0 \quad x>2` was the false chain `x-2>0*x and 0*x>2`, and `x-2>0, \text{so} x>2` gave `s*o*x>2`. In Free text the prose word stays outside the maths: `` `x>0 and x-2>0`, so `x>2` ``.
 - Never turn `x=-1, x-3` (an OCR-damaged second solution) or `A=\{1,2\}` into a plausible list.
 - Typed answers: fold full-width characters (`ｘ＝３`), `≧`/`≦` and superscript digits (`x²`), and accept `sinx`, `sin^2(x)`, `ln|x|`, `lg(x,2)` and `log(x,2)`.
+- The release script refuses a release whose Moodle version number is not greater than the previous release's.
 
 ## 0.4.0-alpha - 2026-10-07
 
