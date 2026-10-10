@@ -29,7 +29,8 @@ final class hook_callbacks {
 
         $targets = [
             '/mod/quiz/attempt.php',
-            '/question/preview.php',
+            // Moodle 4.x moved question preview into the previewquestion plugin.
+            '/question/bank/previewquestion/preview.php',
         ];
         $path = $SCRIPT ?: (!empty($PAGE->url)
             ? $PAGE->url->get_path()
@@ -117,6 +118,7 @@ final class hook_callbacks {
             'anchornotfound' => get_string('anchornotfound', 'local_hand2stack'),
             'filledfromlastline' => get_string('filledfromlastline', 'local_hand2stack'),
             'anchorconvertfailed' => get_string('anchorconvertfailed', 'local_hand2stack'),
+            'fallbackconvertfailed' => get_string('fallbackconvertfailed', 'local_hand2stack'),
             'pensize' => get_string('pensize', 'local_hand2stack'),
             'penthin' => get_string('penthin', 'local_hand2stack'),
             'penmedium' => get_string('penmedium', 'local_hand2stack'),

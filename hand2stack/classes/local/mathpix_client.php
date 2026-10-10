@@ -45,6 +45,8 @@ final class mathpix_client {
                 'include_latex' => true,
                 'include_asciimath' => true,
             ],
+            // Learners' handwriting must not be kept to train Mathpix models.
+            'metadata' => ['improve_mathpix' => false],
         ];
 
         $postfields = [
@@ -99,6 +101,8 @@ final class mathpix_client {
                 'include_latex' => true,
                 'include_asciimath' => true,
             ],
+            // Learners' handwriting must not be kept to train Mathpix models.
+            'metadata' => ['improve_mathpix' => false],
         ]);
         if ($payload === false || strlen($payload) > 512 * 1024) {
             throw new \moodle_exception('invalidstrokes', 'local_hand2stack');
@@ -203,39 +207,20 @@ final class mathpix_client {
         }
 
         // Mathpix's text format keeps prose as text and marks mathematics with
-        // TeX delimiters. Replace each mathematical fragment independently so a
-        // paragraph such as "Therefore, \\(x=3\\)." remains readable prose.
-        $patterns = [
-            '/\\\\\[([\\s\\S]*?)\\\\\]/u',
-            '/\\$\\$([\\s\\S]*?)\\$\\$/u',
-            '/(?<!\\$)\\$\\s*(\\\\begin\\{(?:aligned|gathered|split|align|array)\\*?\\}'
-                . '(?:\\{[^}]*\\})?[\\s\\S]*?\\\\end\\{(?:aligned|gathered|split|align|array)\\*?\\})'
-                . '\\s*\\$(?!\\$)/u',
-            '/\\\\\(([\\s\\S]*?)\\\\\)/u',
-            '/(?<!\\$)\\$([^$\\n]+?)\\$(?!\\$)/u',
-        ];
-        foreach ($patterns as $pattern) {
-            $text = preg_replace_callback($pattern, static function(array $match): string {
-                [$prose, $latex] = stack_converter::split_leading_prose(trim($match[1]));
-                $math = $latex === '' ? '' : self::freetext_math_to_ascii($latex);
-                $converted = $math === '' ? $latex : self::wrap_freetext_math($math);
-                return trim($prose . ' ' . $converted);
-            }, $text);
+        // TeX delimiters, read by the same document_segments() as the review
+        // rows. Only the maths is converted, so a paragraph such as
+        // "Therefore, \\(x=3\\)." remains readable prose.
+        $converted = '';
+        foreach (self::document_segments($text) as [$type, $value]) {
+            if ($type === 'text') {
+                $converted .= $value;
+                continue;
+            }
+            [$prose, $latex] = stack_converter::split_leading_prose($value);
+            $math = $latex === '' ? '' : self::freetext_math_to_ascii($latex);
+            $converted .= trim($prose . ' ' . ($math === '' ? $latex : self::wrap_freetext_math($math)));
         }
-
-        // Some Mathpix responses contain a bare display environment rather
-        // than wrapping it in \[...\]. Treat it as one maths region, but
-        // convert its rows independently so environment names and prose
-        // commands can never become implicit products such as b*e*g*i*n.
-        $text = preg_replace_callback(
-            '/\\\\begin\{(aligned|gathered|split|align|array)\*?\}(?:\{[^}]*\})?([\s\S]*?)'
-                . '\\\\end\{\1\*?\}/u',
-            static function(array $match): string {
-                $math = self::freetext_math_to_ascii($match[0]);
-                return $math === '' ? trim($match[0]) : self::wrap_freetext_math($math);
-            },
-            $text
-        );
+        $text = $converted;
 
         $text = preg_replace('/`[ \t]*`/u', "`\n`", $text);
         return trim(preg_replace("/\\n{3,}/", "\n\n", $text));
@@ -333,7 +318,21 @@ final class mathpix_client {
         return stack_converter::normalize_selection($latex);
     }
 
+    /**
+     * Candidate rows for review. A Mathpix document (its text format, where
+     * every formula sits inside $...$, \\(...\\) or \\[...\\]) is split by those
+     * delimiters; a bare LaTeX formula is maths throughout.
+     */
     public static function build_lines(string $latex): array {
+        // "\\(" is a LaTeX line break before "(", not an opening \(.
+        if (preg_match('/\$|(?<!\\\\)\\\\[(\[]/u', $latex)) {
+            return self::build_document_rows($latex);
+        }
+        return self::build_math_lines($latex);
+    }
+
+    /** Rows of a bare LaTeX formula: every row is maths; prose is only \\text{...}. */
+    private static function build_math_lines(string $latex): array {
         $latex = trim($latex);
         if ($latex === '') {
             return [];
@@ -383,22 +382,7 @@ final class mathpix_client {
             }
 
             $math = stack_converter::extract_math($part);
-            $math = self::remove_prose_boundary_artifact($part, $math);
-            $metadata = self::classify_candidate($part, $math);
-            $stack = $math === '' ? '' : stack_converter::normalize($math);
-            $normalized = $math === '' ? '' : stack_converter::normalize($metadata['value']);
-            $lines[] = [
-                'raw' => $part,
-                'latex' => $part,
-                'display' => self::display_latex($part),
-                'display_parts' => self::display_parts($part, $math),
-                'math' => $math,
-                'ascii' => $stack,
-                'normalized' => $normalized,
-                'stack' => $stack,
-                'type' => $metadata['type'],
-                'relation' => $metadata['relation'],
-            ];
+            $lines[] = self::candidate_line($part, $math, self::display_parts($part, $math));
         }
 
         $summary = self::assignment_summary($lines);
@@ -409,29 +393,202 @@ final class mathpix_client {
         return $lines;
     }
 
-    /**
-     * Remove an OCR letter left between a prose cue and the real expression.
-     * Example: "\\text{Finall} y. 1<=x<=3" must yield "1<=x<=3", not y.1...
-     */
-    private static function remove_prose_boundary_artifact(string $raw, string $math): string {
-        if ($math === '' || preg_match('/(?:finall?|therefore|hence|thus|so)[^A-Za-z]/iu', $raw) !== 1) {
-            return $math;
-        }
-        return trim(preg_replace('/^[A-Za-z]\s*[.,:]\s*(?=[0-9(])/u', '', $math));
-    }
-
     /** Build every visible document row, retaining prose around its maths. */
     public static function build_document_lines(string $text, string $latex = ''): array {
         $text = trim(str_replace(["\r\n", "\r"], "\n", $text));
         if ($text === '') {
-            return self::build_lines($latex);
+            return self::build_math_lines($latex);
         }
 
-        $lines = self::build_lines($text);
-        if (!$lines && trim($latex) !== '') {
-            return self::build_lines($latex);
+        $lines = self::build_document_rows($text);
+        $hasmath = array_filter($lines, static function(array $line): bool {
+            return $line['math'] !== '';
+        });
+        if (!$hasmath && trim($latex) !== '') {
+            return self::build_math_lines($latex);
         }
         return $lines;
+    }
+
+    /**
+     * One review row per document row. Mathpix decides what is prose: text
+     * outside the formula delimiters is shown as text and never converted.
+     */
+    private static function build_document_rows(string $text): array {
+        $lines = [];
+        $row = [];
+        $flush = static function() use (&$row, &$lines): void {
+            $line = self::document_row_line($row);
+            if ($line !== null) {
+                $lines[] = $line;
+            }
+            $row = [];
+        };
+        foreach (self::document_segments($text) as [$type, $value]) {
+            if ($type === 'display') {
+                $flush();
+                foreach (self::build_math_lines($value) as $line) {
+                    if (empty($line['synthetic'])) {
+                        $lines[] = $line;
+                    }
+                }
+                continue;
+            }
+            if ($type === 'inline') {
+                $row[] = ['math', $value];
+                continue;
+            }
+            $pieces = explode("\n", $value);
+            foreach ($pieces as $index => $piece) {
+                if ($index > 0) {
+                    $flush();
+                }
+                if ($piece !== '') {
+                    $row[] = ['text', $piece];
+                }
+            }
+        }
+        $flush();
+
+        $summary = self::assignment_summary($lines);
+        if ($summary !== null) {
+            $lines[] = $summary;
+        }
+        return $lines;
+    }
+
+    /**
+     * Split Mathpix's text output into prose and formulas by its delimiters.
+     * Display maths is $$...$$, \\[...\\] or a bare \\begin{aligned}... block;
+     * inline maths is $...$ or \\(...\\). A "$" that Mathpix left unclosed opens
+     * maths to the end of its row.
+     *
+     * @return array<int,array{0:string,1:string}> ['text'|'inline'|'display', content]
+     */
+    private static function document_segments(string $text): array {
+        // Mathpix sometimes nests a delimiter pair: \\(\\(x=9\\)\\).
+        do {
+            $previous = $text;
+            $text = preg_replace('/\\\\\(\s*\\\\\(([\s\S]*?)\\\\\)\s*\\\\\)/u', '\\\\($1\\\\)', $text);
+            $text = preg_replace('/\\\\\[\s*\\\\\(([\s\S]*?)\\\\\)\s*\\\\\]/u', '\\\\[$1\\\\]', $text);
+        } while ($text !== $previous);
+
+        $pattern = '/\$\$([\s\S]+?)\$\$|(?<!\\\\)\\\\\[([\s\S]+?)\\\\\]|(?<!\\\\)\\\\\(([\s\S]+?)\\\\\)|\$([^$\n]+?)\$'
+            . '|(\\\\begin\{(aligned|gathered|split|align|array|cases)\*?\}[\s\S]*?\\\\end\{\6\*?\})/u';
+        $segments = [];
+        $offset = 0;
+        $addtext = static function(string $value) use (&$segments): void {
+            // An unclosed "$" still marks where Mathpix's formula starts. A
+            // LaTeX line break "\\\\" ends a row like a newline.
+            foreach (preg_split('/\n|\\\\\\\\/', $value) as $index => $piece) {
+                if ($index > 0) {
+                    $segments[] = ['text', "\n"];
+                }
+                $dollar = strpos($piece, '$');
+                if ($dollar === false) {
+                    $segments[] = ['text', $piece];
+                    continue;
+                }
+                $segments[] = ['text', substr($piece, 0, $dollar)];
+                $math = trim(substr($piece, $dollar + 1), " \t$");
+                if ($math !== '') {
+                    $segments[] = ['inline', $math];
+                }
+            }
+        };
+        while (preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
+            $start = $match[0][1];
+            $addtext(substr($text, $offset, $start - $offset));
+            $group = static function(int $index) use ($match): ?string {
+                return isset($match[$index]) && $match[$index][1] !== -1 ? $match[$index][0] : null;
+            };
+            if ($group(3) !== null || $group(4) !== null) {
+                $segments[] = ['inline', trim($group(3) ?? $group(4))];
+            } else {
+                $segments[] = ['display', trim($group(1) ?? $group(2) ?? $match[0][0])];
+            }
+            $offset = $start + strlen($match[0][0]);
+        }
+        $addtext(substr($text, $offset));
+
+        // Merge adjacent text pieces so a row's prose is one string.
+        $merged = [];
+        foreach ($segments as $segment) {
+            $last = count($merged) - 1;
+            if ($segment[0] === 'text' && $last >= 0 && $merged[$last][0] === 'text') {
+                $merged[$last][1] .= $segment[1];
+            } else {
+                $merged[] = $segment;
+            }
+        }
+        return $merged;
+    }
+
+    /** A review row from its prose and maths parts, or null for an empty row. */
+    private static function document_row_line(array $parts): ?array {
+        $text = trim(implode('', array_map(static function(array $part): string {
+            return $part[0] === 'text' ? $part[1] : '';
+        }, $parts)));
+        $maths = array_values(array_filter(array_map(static function(array $part): string {
+            return $part[0] === 'math' ? self::clean_line_latex($part[1]) : '';
+        }, $parts), static function(string $math): bool {
+            return $math !== '';
+        }));
+        if ($text === '' && !$maths) {
+            return null;
+        }
+        // The text endpoint may prepend the uploaded filename as a header.
+        if (!$maths && preg_match('#^[^/\\\\]+\.(?:png|jpe?g|heic|webp|gif)$#iu', $text)) {
+            return null;
+        }
+
+        $display = [];
+        $source = '';
+        foreach ($parts as [$type, $value]) {
+            if ($type === 'text') {
+                $source .= $value;
+                if (trim($value) !== '') {
+                    $display[] = ['type' => 'text', 'text' => self::display_latex($value) . (preg_match('/\s$/u', $value) ? ' ' : '')];
+                }
+                continue;
+            }
+            $math = self::clean_line_latex($value);
+            if ($math !== '') {
+                $source .= '$' . $math . '$';
+                $display[] = ['type' => 'math', 'latex' => $math];
+            }
+        }
+        $source = trim($source);
+        if (!$maths) {
+            return self::candidate_line($source, '', $display);
+        }
+        // A row holding only one formula is that formula; with prose or
+        // several formulas, the last formula is the row's statement, as in
+        // the learner's Free-text working ("Since `x>2`, `x=4`").
+        if ($text === '' && count($maths) === 1) {
+            $source = $maths[0];
+        }
+        $math = stack_converter::extract_math($maths[count($maths) - 1]);
+        return self::candidate_line($source, $math, $display);
+    }
+
+    /** The review row for $source whose maths is $math. */
+    private static function candidate_line(string $source, string $math, array $displayparts): array {
+        $metadata = self::classify_candidate($source, $math);
+        $stack = $math === '' ? '' : stack_converter::normalize($math);
+        $normalized = $math === '' ? '' : stack_converter::normalize($metadata['value']);
+        return [
+            'raw' => $source,
+            'latex' => $source,
+            'display' => self::display_latex($source),
+            'display_parts' => $displayparts,
+            'math' => $math,
+            'ascii' => $stack,
+            'normalized' => $normalized,
+            'stack' => $stack,
+            'type' => $metadata['type'],
+            'relation' => $metadata['relation'],
+        ];
     }
 
     /** @return array{value:string,type:string,relation:?string} */
@@ -519,9 +676,6 @@ final class mathpix_client {
 
     private static function clean_line_latex(string $line): string {
         $line = trim($line);
-        // Repair a common Mathpix boundary split: the final "y" in Finally
-        // is emitted outside the prose command and otherwise looks like maths.
-        $line = preg_replace('/\\\\text\s*\{\s*Finall\s*\}\s*y\b/iu', '\\text{Finally}', $line);
         $line = preg_replace('/^\\\\begin\{(?:aligned|gathered|split|align|array)\*?\}(?:\{[^}]*\})?/', '', $line);
         $line = preg_replace('/\\\\end\{(?:aligned|gathered|split|align|array)\*?\}$/', '', $line);
         if (!preg_match('/\\\\begin\{(?:cases|array|pmatrix|bmatrix|matrix|vmatrix)\}/', $line)) {
@@ -552,13 +706,6 @@ final class mathpix_client {
             $line
         );
 
-        // In Japanese handwriting Mathpix can read the compact sequence
-        // "x=-" as the katakana-looking "メニー". Restrict the repair to
-        // answer-labelled lines so ordinary Japanese prose is untouched.
-        if (preg_match('/(?:答え|解答)/u', $line)) {
-            $line = preg_replace('/[xｘメ]\s*[ニ二]\s*[ー−-]\s*(\d+(?:\.\d+)?)/u', 'x=-$1', $line);
-            $line = preg_replace('/たす\s*$/u', 'です', $line);
-        }
         return trim($line);
     }
 

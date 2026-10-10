@@ -113,7 +113,7 @@ test('free-text mode is configured with localized review labels', () => {
 test('quiz content is widened for side-by-side free-text review only', () => {
     assert.match(source, /document\.querySelector\('\.main-inner'\)/);
     assert.match(source, /document\.body\.id === 'page-mod-quiz-attempt'/);
-    assert.match(source, /document\.body\.id === 'page-question-preview'/);
+    assert.match(source, /document\.body\.id === 'page-question-bank-previewquestion-preview'/);
     assert.match(source, /mainContent\.style\.maxWidth = '1200px'/);
 });
 

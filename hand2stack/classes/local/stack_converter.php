@@ -27,11 +27,18 @@ final class stack_converter {
         'sin', 'cos', 'tan', 'sec', 'csc', 'cot', 'sinh', 'cosh', 'tanh', 'arcsin', 'arccos', 'arctan',
         'arcsinh', 'arccosh', 'arctanh', 'asin', 'acos', 'atan', 'log', 'ln', 'lg', 'exp', 'det', 'sgn',
         'sign', 'signum', 'arg', 'max', 'min', 'gcd', 'lcm', 'deg', 'dim', 'ker', 'rank', 'tr', 'trace',
-        'Re', 'Im', 'lim', 'mod', 'abs', 'floor', 'ceil', 'erf', 'grad', 'div', 'curl',
+        'Re', 'Im', 'lim', 'mod', 'abs', 'floor', 'ceil', 'ceiling', 'erf', 'grad', 'div', 'curl',
     ];
 
     /** Logical connectives a handwritten line may join two relations with. */
     private const CONNECTIVES = ['or' => 'or', 'and' => 'and', 'または' => 'or', 'かつ' => 'and'];
+
+    /** Arrows and signs that join two statements, with the prose shown for each. */
+    private const STATEMENT_JOINERS = [
+        'Longleftrightarrow' => '⇔', 'Leftrightarrow' => '⇔', 'iff' => '⇔',
+        'Longrightarrow' => '⇒', 'Rightarrow' => '⇒', 'implies' => '⇒',
+        'therefore' => '∴', 'because' => '∵',
+    ];
 
     /** A relation symbol: a statement such as "x>2" has one, a term such as "0 x" has none. */
     private const RELATION = '/=|<|>|\\\\(?:leqq?|geqq?|leqslant|geqslant|le|ge|neq|ne|lt|gt)(?![A-Za-z])|[≤≥≦≧≠]/u';
@@ -58,6 +65,16 @@ final class stack_converter {
                 $depth++;
             } else if ($char === '}') {
                 $depth--;
+            } else if ($depth === 0 && ($char === '\\' || $char === "\xE2")
+                    && preg_match('/\G(?:\\\\(' . implode('|', array_keys(self::STATEMENT_JOINERS))
+                        . ')(?![A-Za-z])|[⇒⇔⟹⟺∴∵])/u', $latex, $match, 0, $i)) {
+                // "x^2=4 \Leftrightarrow x=\pm 2" states two things; the
+                // arrow is not a factor of a product.
+                $chunks[] = ['math', substr($latex, $start, $i - $start)];
+                $chunks[] = ['prose', isset($match[1]) && $match[1] !== ''
+                    ? self::STATEMENT_JOINERS[$match[1]] : strtr($match[0], ['⟹' => '⇒', '⟺' => '⇔'])];
+                $i += strlen($match[0]) - 1;
+                $start = $i + 1;
             } else if ($char === '\\' && $depth === 0
                     && preg_match('/\G\\\\(?:text|mathrm)\s*\{\s*([^{}]*?)\s*\}/u', $latex, $match, 0, $i)
                     && preg_match('/\pL.*\pL/u', $match[1]) && !preg_match($connectives, $match[1])) {
@@ -155,13 +172,35 @@ final class stack_converter {
     }
 
     /** Functions whose argument handwriting often leaves unbracketed, longest names first. */
-    private const BARE_ARGUMENT_FUNCTIONS = 'arcsin|arccos|arctan|sinh|cosh|tanh|sin|cos|tan|cot|sec|csc|exp|log|ln';
+    private const BARE_ARGUMENT_FUNCTIONS = 'arcsin|arccos|arctan|sinh|cosh|tanh|sin|cos|tan|cot|sec|csc|exp|log|ln|lg';
 
     /** An implicit product, kept distinct from "*" until function arguments are read. */
     private const IMPLICIT_PRODUCT = "\x03";
 
     /** Greek letters that may stand as a variable inside a function argument. */
-    private const GREEK_LETTERS = 'alpha|beta|gamma|delta|epsilon|varepsilon|theta|vartheta|lambda|mu|sigma|rho|tau|phi|varphi|psi|omega|pi';
+    private const GREEK_LETTERS = 'alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi'
+        . '|pi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega'
+        . '|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega';
+
+    /**
+     * Commands that name a STACK variable or function once the backslash goes.
+     * Any other command (\\cup, \\arg, \\nabla, ...) has no STACK form here and
+     * keeps its backslash, so STACK rejects it visibly instead of reading it
+     * as a product of letters such as c*u*p.
+     */
+    private const STRIPPABLE_COMMANDS = self::GREEK_LETTERS
+        . '|sin|cos|tan|cot|sec|csc|sinh|cosh|tanh|arcsin|arccos|arctan|exp|log|ln|lg|max|min|gcd|lcm|det';
+
+    /** Multi-letter names that are STACK identifiers, never a product of letters. */
+    private const IDENTIFIERS = ['mu', 'sigma', 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta',
+        'iota', 'kappa', 'lambda', 'nu', 'xi', 'rho', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega',
+        'inf', 'minf', 'and', 'or', 'not', 'then', 'else', 'in', 'true', 'false', 'min', 'max',
+        'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'sinh', 'cosh', 'tanh', 'asin', 'acos', 'atan', 'atan2',
+        'log', 'ln', 'lg', 'log10', 'sqrt', 'nthroot', 'exp', 'abs', 'floor', 'ceiling', 'signum', 'mod', 'gcd', 'lcm',
+        'realpart', 'imagpart', 'limit', 'diff', 'int', 'sum', 'product', 'matrix', 'determinant', 'elementp', 'binomial', 'pi'];
+
+    /** A float in scientific notation such as 2.5e-3, which STACK reads as one number. */
+    private const SCIENTIFIC = '/(?<![A-Za-z0-9.\\\\])\d+(?:\.\d+)?[eE][+-]?\d+(?![\dA-Za-z.(^])/';
 
     /**
      * Offset of the bracket closing the one at $open, or null when unbalanced.
@@ -452,6 +491,15 @@ final class stack_converter {
             }, $statements));
         }
 
+        // 2.5e-3 is one number; without this, e becomes %e and the value changes.
+        $scientific = [];
+        $s = preg_replace_callback(self::SCIENTIFIC, static function(array $m) use (&$scientific): string {
+            $token = '§S' . count($scientific) . '§';
+            $scientific[$token] = $m[0];
+            return $token;
+        }, $s);
+        $s = self::normalize_named_notation($s);
+
         // Layout/proof commands are not part of a STACK expression. When a
         // final expression is followed by a domain restriction, keep the
         // expression as the answer candidate; the restriction remains visible
@@ -582,14 +630,14 @@ final class stack_converter {
         $s = preg_replace('/\\\\binom\s*\{([^{}]+)\}\s*\{([^{}]+)\}/', 'binomial($1,$2)', $s);
 
         $s = self::normalize_inverse_trig($s);
-        $s = preg_replace('/e\^\(([^()]+)\)/', '%e^($1)', $s);
-        $s = preg_replace('/e\^([a-zA-Z0-9]+)/', '%e^$1', $s);
+        $s = preg_replace('/(?<!%)e\^\(([^()]+)\)/', '%e^($1)', $s);
+        $s = preg_replace('/(?<!%)e\^([a-zA-Z0-9]+)/', '%e^$1', $s);
 
         $s = self::normalize_base_logarithms($s);
 
         // Capture the differential before function normalization can consume
         // a compact tail such as "\\sin x\\,dx" as one function argument.
-        $s = self::normalize_integral($s);
+        $s = self::normalize_integrals($s);
 
         $s = self::normalize_function_arguments($s);
         $s = str_replace(self::IMPLICIT_PRODUCT, '*', $s);
@@ -617,6 +665,9 @@ final class stack_converter {
             },
             $s
         );
+        // A subscript i (a_{i}) is an index, so i is a variable in this
+        // expression rather than the imaginary unit.
+        $indexi = preg_match('/[a-zA-Z]_(?:\{[^{}]*(?<![A-Za-z\\\\])i(?![A-Za-z])[^{}]*\}|i(?![A-Za-z]))/', $s) === 1;
         $s = preg_replace('/([a-zA-Z])_\{\s*([^{}]+?)\s*\}/', '$1[$2]', $s);
         $s = preg_replace('/_\{([^{}]+)\}/', '_$1', $s);
 
@@ -625,7 +676,8 @@ final class stack_converter {
         $s = preg_replace('/\\\\operatorname\s*\{\s*([^{}]+?)\s*\}/', '$1', $s);
         // \{1,2,3\} is a set; other braces are LaTeX grouping.
         $s = str_replace(['\\{', '\\}', '{', '}'], ["\x01", "\x02", '(', ')'], $s);
-        $s = preg_replace('/\\\\([a-zA-Z]+)/', '$1', $s);
+        $s = preg_replace('/\\\\(' . self::STRIPPABLE_COMMANDS . ')(?![A-Za-z])/', '$1', $s);
+        $s = preg_replace('/(?<![A-Za-z\\\\])var(epsilon|theta|rho|sigma|phi)(?![A-Za-z])/', '$1', $s);
 
         // Preserve logical words before whitespace-based implicit
         // multiplication turns "x and x" into "x*and*x".
@@ -655,19 +707,23 @@ final class stack_converter {
 
         $s = preg_replace('/\\\\pi\b/', '%pi', $s);
         $s = str_replace('π', '%pi', $s);
-        $s = preg_replace('/(^|[^A-Za-z0-9_])pi(?![A-Za-z0-9_])/', '$1%pi', $s);
+        $s = preg_replace('/(^|[^%A-Za-z0-9_])pi(?![A-Za-z0-9_])/', '$1%pi', $s);
         $s = preg_replace('/(\d)pi(?![A-Za-z0-9_])/', '$1*%pi', $s);
         $s = preg_replace('/(^|[^%A-Za-z0-9_])e(?![A-Za-z0-9_])/', '$1%e', $s);
-        $s = preg_replace('/(^|[^%A-Za-z0-9_])i(?![A-Za-z0-9_])/', '$1%i', $s);
-        $s = preg_replace('/([A-Za-z0-9)\]])(%e|%pi)/', '$1*$2', $s);
+        if (!$indexi) {
+            $s = preg_replace('/(^|[^%A-Za-z0-9_])i(?![A-Za-z0-9_])/', '$1%i', $s);
+        }
+        $s = preg_replace('/([A-Za-z0-9)\]])(%e|%pi|%i)(?![A-Za-z])/', '$1*$2', $s);
 
         $s = str_replace(')(', ')*(', $s);
         $s = preg_replace('/(\d)([a-zA-Z])/', '$1*$2', $s);
-        $s = preg_replace('/(\d)\(/', '$1*(', $s);
+        $s = preg_replace('/(?<!atan|log1)(\d)\(/', '$1*(', $s);
         $s = preg_replace('/\)([a-zA-Z])/', ')*$1', $s);
         $s = preg_replace('/\]([a-zA-Z(])/', ']*$1', $s);
         $s = preg_replace('/(^|[^%A-Za-z0-9_])e(?![A-Za-z0-9_])/', '$1%e', $s);
-        $s = preg_replace('/(^|[^%A-Za-z0-9_])i(?![A-Za-z0-9_])/', '$1%i', $s);
+        if (!$indexi) {
+            $s = preg_replace('/(^|[^%A-Za-z0-9_])i(?![A-Za-z0-9_])/', '$1%i', $s);
+        }
         $s = self::normalize_absolute($s);
         $s = preg_replace('/\b([a-df-zA-DF-Z])x(?=(\^|\+|\-|\*|\/|\)|$))/', '$1*x', $s);
         $s = preg_replace('/^(.+?)\s+in\s+(\[[^\]]+\])$/', 'elementp($1,$2)', $s);
@@ -680,8 +736,64 @@ final class stack_converter {
         $s = preg_replace('/\blog\(([^(),]+),([^(),]+)\)/', '(log($1)/log($2))', $s);
         $s = self::protect_functions($s);
         $s = self::beautify($s);
+        if ($scientific) {
+            $s = strtr($s, $scientific);
+        }
 
         return trim($s);
+    }
+
+    /**
+     * Notation with one STACK spelling: \\lfloor x\\rfloor is floor(x), \\emptyset
+     * is {}, \\land is and, \\mathrm{d}x is dx, \\varphi is \\phi.
+     */
+    private static function normalize_named_notation(string $s): string {
+        $s = preg_replace('/(?:\\\\(?:left|big|Big|bigg|Bigg)\s*)?\\\\lfloor(?![A-Za-z])/', '\\operatorname{floor}(', $s);
+        $s = preg_replace('/(?:\\\\(?:left|big|Big|bigg|Bigg)\s*)?\\\\lceil(?![A-Za-z])/', '\\operatorname{ceiling}(', $s);
+        $s = preg_replace('/(?:\\\\(?:right|big|Big|bigg|Bigg)\s*)?\\\\r(?:floor|ceil)(?![A-Za-z])/', ')', $s);
+        $s = preg_replace('/\\\\(?:emptyset|varnothing)(?![A-Za-z])|∅/u', '\\{\\}', $s);
+        $s = preg_replace('/\s*(?:\\\\(?:land|wedge)(?![A-Za-z])|∧)\s*/u', ' \\text{and} ', $s);
+        $s = preg_replace('/\s*(?:\\\\(?:lor|vee)(?![A-Za-z])|∨)\s*/u', ' \\text{or} ', $s);
+        $s = preg_replace('/\\\\(?:mathrm|operatorname|text)\s*\{\s*d\s*\}\s*(?=[A-Za-z])/', 'd', $s);
+        $s = preg_replace('/\\\\var(epsilon|theta|rho|sigma|phi)(?![A-Za-z])/', '\\\\$1', $s);
+        $s = preg_replace('/\\\\(?:no)?limits(?![A-Za-z])/', '', $s);
+        // Maxima's names for the sign function and complex parts.
+        $s = preg_replace('/(?:\\\\operatorname\s*\{\s*(?:sgn|sign)\s*\}|(?<![A-Za-z\\\\])(?:sgn|sign))\s*(?=\()/', 'signum', $s);
+        $s = preg_replace('/(?:\\\\operatorname\s*\{\s*Re\s*\}|\\\\Re(?![A-Za-z]))\s*(?=\()/', 'realpart', $s);
+        $s = preg_replace('/(?:\\\\operatorname\s*\{\s*Im\s*\}|\\\\Im(?![A-Za-z]))\s*(?=\()/', 'imagpart', $s);
+        // log10(x) typed by a learner is the base-10 logarithm, not log(10)*x.
+        return preg_replace('/(?<![A-Za-z\\\\])log10\s*(?=\()/', 'lg', $s);
+    }
+
+    /**
+     * Convert each integral within its own scope: up to the bracket that
+     * encloses it or a relation beside it. "\\int_0^1 x\\,dx = 1/2" and
+     * "\\frac{\\int_0^1 x\\,dx}{2}" both end the integral at its differential.
+     */
+    private static function normalize_integrals(string $input): string {
+        $offset = 0;
+        while (preg_match('/\\\\int(?![A-Za-z])/', $input, $match, PREG_OFFSET_CAPTURE, $offset)) {
+            $start = $match[0][1];
+            $length = strlen($input);
+            $end = $length;
+            $depth = 0;
+            for ($i = $start; $i < $length; $i++) {
+                $char = $input[$i];
+                if (strpos('({[', $char) !== false) {
+                    $depth++;
+                } else if (strpos(')}]', $char) !== false && --$depth < 0) {
+                    $end = $i;
+                    break;
+                } else if ($depth === 0 && strpos('=<>#,', $char) !== false && $input[$i - 1] !== '\\') {
+                    $end = $i;
+                    break;
+                }
+            }
+            $scope = rtrim(substr($input, $start, $end - $start));
+            $input = substr($input, 0, $start) . self::normalize_integral($scope) . substr($input, $start + strlen($scope));
+            $offset = $start + 1;
+        }
+        return $input;
     }
 
     private static function extract_math_candidate(string $input): string {
@@ -699,6 +811,8 @@ final class stack_converter {
         }
 
         $s = str_replace(['−', '–', '—', '＝'], ['-', '-', '-', '='], $s);
+        // Before prose detection, which would drop \mathrm{d} as a word.
+        $s = self::normalize_named_notation($s);
         $s = self::normalize_combinations($s);
         $s = self::prose_operatornames($s);
         $connected = self::join_connected_relations($s);
@@ -717,11 +831,9 @@ final class stack_converter {
             }, $s);
             return trim(str_replace(['\\quad', '\\qquad'], ' ', $s));
         }
-        $s = str_replace(['\\therefore', '\\because'], '', $s);
-        if (preg_match('/(?:答え|解答)/u', $s)) {
-            $s = preg_replace('/[xｘメ]\s*[ニ二]\s*[ー-]\s*(\d+(?:\.\d+)?)/u', 'x=-$1', $s);
-            $s = preg_replace('/たす\s*$/u', 'です', $s);
-        }
+        // A leading ∴ introduces the line; between two statements it stays,
+        // so normalize() can split "2x+3=7 \\therefore x=2" there.
+        $s = preg_replace('/^\s*\\\\(?:therefore|because)(?![A-Za-z])\s*/', '', $s);
 
         // Extract explicitly delimited maths before removing Mathpix's dollar
         // markers. Doing this later lets trailing letters from prose (the r in
@@ -738,17 +850,15 @@ final class stack_converter {
             '_label',
             $s
         );
-        $hasprose = preg_match('/(?:\\\\text|(?<!\\\\)\btext|\\\\mathrm)\s*\{/u', $prosecheck) === 1
-            || preg_match('/[\x{3040}-\x{30ff}\x{3400}-\x{9fff}]/u', $s) === 1
-            || preg_match('/\b(?:answer|solution|therefore|hence|thus|finally|so)\b/iu', $s) === 1;
-
-        $hasprose = $hasprose
-            || preg_match('/\b(?:first|next)\b/iu', $s) === 1;
+        // Prose inside a formula is what Mathpix marks as \\text{...}; a word
+        // list would only guess at it.
+        $hasprose = preg_match('/(?:\\\\text|(?<!\\\\)\btext|\\\\mathrm)\s*\{/u', $prosecheck) === 1;
 
         // Mathpix occasionally omits the closing delimiter at the end of a
         // handwritten line. The opening delimiter still gives an exact prose
-        // boundary, so keep only its remainder.
-        if ($hasprose && preg_match('/\$([^$\n]+)$/u', $s, $match)) {
+        // boundary, so keep only its remainder. A Japanese font may render
+        // the "$" as a yen sign.
+        if (preg_match('/[$¥￥]([^$¥￥\n]+)$/u', $s, $match)) {
             return trim($match[1]);
         }
 
@@ -861,6 +971,18 @@ final class stack_converter {
             return '';
         }
 
+        $position = (int) strpos($input, $match[0]);
+        $before = substr($input, 0, $position);
+        // Count only grouping braces; \\{ in "\\left\\{" opens a system, not a group.
+        if (preg_match_all('/(?<!\\\\)\{/', $before) > preg_match_all('/(?<!\\\\)\}/', $before)) {
+            // A matrix inside a group, e.g. \\frac{\\begin{pmatrix}...\\end{pmatrix}}{2}:
+            // convert the matrix alone and the expression around a placeholder.
+            $token = '§M' . substr_count($input, '§M') . '§';
+            $core = self::normalize_matrix($match[0]);
+            $rest = self::normalize(substr_replace($input, $token, $position, strlen($match[0])));
+            return $core === '' || $rest === '' ? '' : strtr($rest, [$token => $core]);
+        }
+
         $rows = [];
         foreach (preg_split('/\\\\\\\\/', trim($match[2])) as $row) {
             $row = trim($row);
@@ -880,8 +1002,7 @@ final class stack_converter {
             return '';
         }
 
-        $before = substr($input, 0, (int) strpos($input, $match[0]));
-        $after = substr($input, (int) strpos($input, $match[0]) + strlen($match[0]));
+        $after = substr($input, $position + strlen($match[0]));
         $opener = '/(?:\\\\left\s*)?(?:\(|\[|\||\\\\\{|\\\\vert|\\\\lvert)\s*$/';
         $closer = '/^\s*(?:\\\\right\s*)?(?:\)|\]|\||\.|\\\\\}|\\\\vert|\\\\rvert)/';
         $prefix = trim(preg_replace($opener, '', $before));
@@ -1171,20 +1292,26 @@ final class stack_converter {
     }
 
     private static function normalize_variable_products(string $input): string {
-        $identifiers = ['mu', 'sigma', 'alpha', 'beta', 'gamma', 'delta', 'theta', 'lambda',
-            'omega', 'phi', 'psi', 'rho', 'tau', 'epsilon', 'inf', 'minf', 'and', 'or', 'not',
-            'then', 'else', 'in', 'min', 'max', 'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
-            'sinh', 'cosh', 'tanh', 'asin', 'acos', 'atan', 'log', 'ln', 'sqrt', 'exp',
-            'abs', 'limit', 'diff', 'int', 'sum', 'product', 'matrix', 'determinant', 'elementp',
-            'binomial', 'pi', 'lg'];
+        $identifiers = self::IDENTIFIERS;
 
-        return preg_replace_callback('/[A-Za-z]{2,}/', static function($m) use ($identifiers) {
+        // A word after a backslash is an unsupported command; leave it whole.
+        return preg_replace_callback('/(?<![\\\\A-Za-z])[A-Za-z]{2,}(?:10|2)?(?=(\()?)/', static function($m) use ($identifiers) {
             if (in_array(strtolower($m[0]), $identifiers, true)) {
+                return $m[0];
+            }
+            // A longer unknown name applied to brackets, e.g. expand(x), is a
+            // function call for STACK to accept or reject, not e*x*p*a*n*d.
+            if (strlen($m[0]) >= 3 && !empty($m[1])) {
                 return $m[0];
             }
             // "sinx" typed for sin(x).
             if (preg_match('/^(sin|cos|tan|ln|log|exp)([a-zA-Z])$/', $m[0], $fn)) {
                 return $fn[1] . '(' . $fn[2] . ')';
+            }
+            if (preg_match('/\d$/', $m[0])) {
+                // x2 is the variable x2; only log10 and atan2 end in digits.
+                $letters = rtrim($m[0], '0123456789');
+                return implode('*', str_split($letters)) . substr($m[0], strlen($letters));
             }
             return implode('*', str_split($m[0]));
         }, $input);
@@ -1228,13 +1355,14 @@ final class stack_converter {
 
     private static function protect_functions(string $input): string {
         $functions = ['f', 'g', 'h', 'min', 'max', 'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
-            'sinh', 'cosh', 'tanh', 'asin', 'acos', 'atan', 'log', 'ln', 'sqrt', 'exp',
-            'abs', 'limit', 'diff', 'int', 'sum', 'product', 'matrix', 'determinant', 'binomial', 'lg'];
+            'sinh', 'cosh', 'tanh', 'asin', 'acos', 'atan', 'atan2', 'log', 'ln', 'log10', 'sqrt', 'nthroot', 'exp',
+            'abs', 'floor', 'ceiling', 'signum', 'mod', 'gcd', 'lcm', 'realpart', 'imagpart',
+            'limit', 'diff', 'int', 'sum', 'product', 'matrix', 'determinant', 'binomial', 'lg'];
         $functions[] = 'not';
         $functions[] = 'elementp';
 
-        return preg_replace_callback('/([a-zA-Z]+)\(/', static function($m) use ($functions) {
-            return in_array($m[1], $functions, true) ? $m[0] : $m[1] . '*(';
+        return preg_replace_callback('/(?<![\\\\A-Za-z0-9])([a-zA-Z]+(?:10|2)?)\(/', static function($m) use ($functions) {
+            return in_array($m[1], $functions, true) || strlen($m[1]) >= 3 ? $m[0] : $m[1] . '*(';
         }, $input);
     }
 

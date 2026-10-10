@@ -81,7 +81,6 @@ const buildApplyMatchedAnswers = (0, eval)(`(function(isFreeTextInput, findSibli
     ${extractFunctionSource('matchableLineTexts')}
     ${extractFunctionSource('isProseAnchor')}
     ${extractFunctionSource('isMathLine')}
-    ${extractFunctionSource('finalClause')}
     ${extractFunctionSource('extractAnchoredValue')}
     ${extractFunctionSource('extractAnchoredAnswers')}
     ${extractFunctionSource('applyMatchedAnswers')}
@@ -178,7 +177,6 @@ const extractAnchoredAnswers = (0, eval)(`(function() {
     ${extractFunctionSource('matchableLineTexts')}
     ${extractFunctionSource('isProseAnchor')}
     ${extractFunctionSource('isMathLine')}
-    ${extractFunctionSource('finalClause')}
     ${extractFunctionSource('extractAnchoredValue')}
     ${extractFunctionSource('extractAnchoredAnswers')}
     return extractAnchoredAnswers;
@@ -242,7 +240,6 @@ test('a prose label is found in the recognized row when the maths dropped it', (
         ${extractFunctionSource('matchableLineTexts')}
     ${extractFunctionSource('isProseAnchor')}
     ${extractFunctionSource('isMathLine')}
-    ${extractFunctionSource('finalClause')}
         ${extractFunctionSource('extractAnchoredValue')}
         ${extractFunctionSource('extractAnchoredAnswers')}
         return extractAnchoredAnswers;
@@ -281,7 +278,6 @@ test('a missing prose label falls back to the last mathematical line', () => {
         ${extractFunctionSource('matchableLineTexts')}
         ${extractFunctionSource('isProseAnchor')}
         ${extractFunctionSource('isMathLine')}
-        ${extractFunctionSource('finalClause')}
         ${extractFunctionSource('extractAnchoredValue')}
         ${extractFunctionSource('extractAnchoredAnswers')}
         return extractAnchoredAnswers;
@@ -313,14 +309,13 @@ test('a missing prose label falls back to the last mathematical line', () => {
     assert.deepEqual([twoLabels[1].lineIndex, twoLabels[1].fallback], [4, true]);
 });
 
-test('a last-line fallback takes the conclusion after its conditions', () => {
+test('a last-line fallback fills the whole line', () => {
     const extract = (0, eval)(`(function() {
         ${extractFunctionSource('normalizeAnchorText')}
         ${extractFunctionSource('matchableLineText')}
         ${extractFunctionSource('matchableLineTexts')}
         ${extractFunctionSource('isProseAnchor')}
         ${extractFunctionSource('isMathLine')}
-        ${extractFunctionSource('finalClause')}
         ${extractFunctionSource('extractAnchoredValue')}
         ${extractFunctionSource('extractAnchoredAnswers')}
         return extractAnchoredAnswers;
@@ -329,15 +324,10 @@ test('a last-line fallback takes the conclusion after its conditions', () => {
         {type: 'equation', math: 'x=-2 \\text { or } x=4'},
         {type: 'equation', math, raw: 'Since $' + math + '$'}
     ])[0].expr;
-    // 2026-10-08 attempt: "Since x>2, x=4" with the answer underlined.
-    assert.equal(lastLine('x>2, x=4'), 'x=4');
-    assert.equal(lastLine('x>2, \\quad x=4'), 'x=4');
-    assert.equal(lastLine('x \\geq 0, x \\neq 1, x=3'), 'x=3');
-    // Two solutions, a list, a point or a bare condition stay whole.
+    // The fallback does not guess which part is the answer; the learner is
+    // asked to check the filled box.
+    assert.equal(lastLine('x>2, x=4'), 'x>2, x=4');
     assert.equal(lastLine('x=2, x=3'), 'x=2, x=3');
-    assert.equal(lastLine('x=2, 3'), 'x=2, 3');
-    assert.equal(lastLine('(x, y)=(1,2)'), '(x, y)=(1,2)');
-    assert.equal(lastLine('x>2, x<5'), 'x>2, x<5');
     assert.equal(lastLine('x \\leq 5'), 'x \\leq 5');
 });
 
@@ -368,6 +358,51 @@ test('applyMatchedAnswers marks a last-line fallback for checking', async () => 
     assert.equal(box.value, '1<x and x<=5');
     assert.deepEqual(reports, [['fallback_last_line', 0]]);
     assert.deepEqual(events.at(-1), ['answer_inserted', 'fallback_last_line']);
+});
+
+test('a failed last-line fallback clears an answer left from an earlier attempt', async () => {
+    const run = async (box, lines, convert = async () => '') => {
+        const reports = [];
+        const events = [];
+        const applyMatchedAnswers = buildApplyMatchedAnswers(
+            () => true,
+            () => [box],
+            convert,
+            (target, value) => { target.value = value; },
+            () => {},
+            Object.assign({}, silentResearch, {log: (target, type, payload) => events.push([type, payload.status, payload.value])})
+        );
+        await applyMatchedAnswers('SOURCE', lines, () => true, (target, result) => reports.push(result.status));
+        return {reports, last: events.at(-1)};
+    };
+    // 2026-10-09 attempt: the last line "x>2, x=4" is not valid STACK input,
+    // and the box still held x=3 from the previous submission.
+    const stale = {value: 'x=3', dataset: {hand2stackAnchor: 'Answer:'}};
+    const result = await run(stale, [{type: 'condition', math: 'x>2, x=4'}]);
+    assert.equal(stale.value, '');
+    assert.deepEqual(result.reports, ['convertfailed']);
+    assert.deepEqual(result.last, ['answer_inserted', 'convertfailed', '']);
+
+    // A conversion error is treated the same way.
+    const thrown = {value: 'x=3', dataset: {hand2stackAnchor: 'Answer:'}};
+    globalThis.window = {console: {warn: () => {}}};
+    try {
+        await run(thrown, [{type: 'condition', math: 'x>2, x=4'}], async () => { throw new Error('offline'); });
+    } finally {
+        delete globalThis.window;
+    }
+    assert.equal(thrown.value, '');
+
+    // An answer the learner typed on this page is theirs.
+    const typed = {value: 'x=4', dataset: {hand2stackAnchor: 'Answer:', hand2stackStudentEdited: '1'}};
+    assert.deepEqual((await run(typed, [{type: 'condition', math: 'x>2, x=4'}])).last,
+        ['answer_inserted', 'convertfailed', null]);
+    assert.equal(typed.value, 'x=4');
+
+    // A labelled line that cannot be converted is not a guess; leave the box.
+    const labelled = {value: 'x=3', dataset: {hand2stackAnchor: 'Answer:'}};
+    await run(labelled, [{type: 'equation', math: 'Answer: x>2, x=4'}]);
+    assert.equal(labelled.value, 'x=3');
 });
 
 test('linesFromFreeText reads the edited working line by line', () => {

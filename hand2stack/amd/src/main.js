@@ -89,6 +89,7 @@ define([], function() {
         anchornotfound: 'Could not find {$a} in the recognized working. Please enter it manually.',
         filledfromlastline: 'No line starting with {$a} was found, so this was filled from the last line of your working. Please check it.',
         anchorconvertfailed: 'Found {$a} in the recognized working, but could not convert it. Please enter it manually.',
+        fallbackconvertfailed: 'Could not read {$a->label} from the last line {$a->line}. Please enter it manually.',
         pensize: 'Pen size',
         penthin: 'Thin pen',
         penmedium: 'Medium pen',
@@ -109,8 +110,8 @@ define([], function() {
         const selectors = [
             'input[data-stack-input-type]',
             'textarea[data-stack-input-type]',
-            'input[data-stack-input-decimalseparator]',
-            'textarea[data-stack-input-decimalseparator]'
+            'input[data-stack-input-decimal-separator]',
+            'textarea[data-stack-input-decimal-separator]'
         ];
 
         const boxes = [];
@@ -143,8 +144,20 @@ define([], function() {
         });
     };
 
+    // STACK input types that take one typed expression or text. Choice
+    // inputs (radio, checkbox, dropdown) submit an option key that must never
+    // be overwritten, and a matrix spreads one answer over many cells.
+    const SUPPORTED_INPUT_TYPES = ['algebraic', 'numerical', 'units', 'textarea', 'equiv', 'notes', 'string', 'freetext'];
+
+    const isSupportedAnswerBox = input => {
+        const isText = input.tagName === 'TEXTAREA'
+            || (input.tagName === 'INPUT' && String(input.type || 'text').toLowerCase() === 'text');
+        const type = String(input.dataset.stackInputType || '').toLowerCase();
+        return isText && SUPPORTED_INPUT_TYPES.includes(type);
+    };
+
     const findAnswerBoxes = () => findStackInputs().filter(input => {
-        return input.offsetParent !== null && !isProcessInput(input);
+        return input.offsetParent !== null && !isProcessInput(input) && isSupportedAnswerBox(input);
     });
 
     const createHiddenFileInput = (capture = false) => {
@@ -682,34 +695,6 @@ define([], function() {
             && String(line.type || 'expression').toLowerCase() !== 'text');
     };
 
-    // "Since x>2, x=4": conditions first, then the conclusion. When every
-    // earlier comma-separated part is a condition and the last one is an
-    // equation, the conclusion alone is the answer. "x=2, x=3" lists two
-    // solutions and stays whole. Brace characters are written as escapes so
-    // the source stays brace-balanced for the tests that extract it.
-    const finalClause = expr => {
-        const opening = '([\u007b';
-        const closing = ')]\u007d';
-        const parts = [];
-        let depth = 0;
-        let start = 0;
-        for (let i = 0; i < expr.length; i++) {
-            if (opening.includes(expr[i])) {
-                depth++;
-            } else if (closing.includes(expr[i])) {
-                depth--;
-            } else if (expr[i] === ',' && depth === 0) {
-                parts.push(expr.slice(start, i));
-                start = i + 1;
-            }
-        }
-        parts.push(expr.slice(start));
-        const isCondition = part => /[<>≤≥≦≧≠]|\\(?:le|ge|leq|geq|leqq|geqq|leqslant|geqslant|neq|ne|lt|gt)(?![A-Za-z])/.test(part);
-        const last = parts[parts.length - 1].replace(/^(?:\s|\\q?quad|\\[,;: ])+/, '').trim();
-        const isEquation = /(^|[^<>!#:])=/.test(last) && !isCondition(last);
-        return parts.length > 1 && isEquation && parts.slice(0, -1).every(isCondition) ? last : expr;
-    };
-
     // The edited Free-text working as recognized-line objects. Each text line
     // is one line; its maths is the backticked part (the last one when a line
     // holds several statements, e.g. "`x>0`, so `x>2`"), its raw text the line
@@ -756,7 +741,7 @@ define([], function() {
             if (result.expr || !isProseAnchor(result.anchor)) return;
             for (let i = lines.length - 1; i >= 0; i--) {
                 if (used.has(i) || !isMathLine(lines[i])) continue;
-                const expr = finalClause(matchableLineText(lines[i]).trim());
+                const expr = matchableLineText(lines[i]).trim();
                 if (!expr) continue;
                 used.add(i);
                 Object.assign(result, {expr, lineIndex: i, fallback: true});
@@ -811,6 +796,16 @@ define([], function() {
                 logAnchor('notfound', null, box.value);
                 continue;
             }
+            // A failed last-line guess clears the box, so an answer left from
+            // an earlier attempt cannot be submitted against this working.
+            // An answer the learner typed on this page is kept.
+            const failConversion = previousValue => {
+                const clear = result.fallback && box.value === previousValue && box.value !== ''
+                    && box.dataset.hand2stackStudentEdited !== '1';
+                if (clear) setAnswerValue(box, '');
+                report(box, Object.assign({status: 'convertfailed'}, result));
+                logAnchor('convertfailed', clear ? '' : null, previousValue);
+            };
             const valueBeforeValidation = box.value;
             const validationStartedAt = Date.now();
             try {
@@ -830,8 +825,7 @@ define([], function() {
                 }, logOptions);
                 result.stack = cleanStack || '';
                 if (!cleanStack) {
-                    report(box, Object.assign({status: 'convertfailed'}, result));
-                    logAnchor('convertfailed', null, valueBeforeValidation);
+                    failConversion(valueBeforeValidation);
                 } else if (box.value === valueBeforeValidation) {
                     const status = result.fallback ? 'fallback_last_line' : 'filled';
                     setAnswerValue(box, cleanStack);
@@ -851,8 +845,7 @@ define([], function() {
                         message: research.clip(error.message, 300),
                         latencyMs: Date.now() - validationStartedAt
                     }, logOptions);
-                    report(box, Object.assign({status: 'convertfailed'}, result));
-                    logAnchor('convertfailed', null, valueBeforeValidation);
+                    failConversion(valueBeforeValidation);
                 }
             }
         }
@@ -900,8 +893,12 @@ define([], function() {
             setTargetStatus(box, 'warning', (config.filledfromlastline
                 || 'No line starting with {$a} was found, so this was filled from the last line of your working. Please check it.')
                 .replace('{$a}', label));
-        } else if (result.status === 'notfound' || result.fallback) {
-            // A failed last-line guess did not find the label either.
+        } else if (result.fallback) {
+            // Show what was read, so the learner sees why nothing was filled.
+            setTargetStatus(box, 'warning', (config.fallbackconvertfailed
+                || 'Could not read {$a->label} from the last line {$a->line}. Please enter it manually.')
+                .replace('{$a->label}', label).replace('{$a->line}', result.expr));
+        } else if (result.status === 'notfound') {
             setTargetStatus(box, 'warning', (config.anchornotfound
                 || 'Could not find {$a} in the recognized working. Please enter it manually.').replace('{$a}', label));
         } else {
@@ -4260,7 +4257,7 @@ define([], function() {
         prepareProcessInputs();
         const mainContent = document.querySelector('.main-inner');
         if (mainContent && (document.body.id === 'page-mod-quiz-attempt'
-                || document.body.id === 'page-question-preview')) {
+                || document.body.id === 'page-question-bank-previewquestion-preview')) {
             mainContent.style.maxWidth = '1200px';
         }
         const boxes = findAnswerBoxes();

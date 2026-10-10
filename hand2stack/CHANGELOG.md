@@ -8,7 +8,7 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 - When a prose label such as `Answer:` is missing from the recognized working, fill its answer box from the last mathematical line and ask the learner to check it. Specific labels such as `f(2)=` never guess.
 - Accept full-width `：` and `＝` after anchor labels.
 - Answer boxes filled from the recognized working now follow the learner's corrections to that working: editing `x=3` to `x=4` in the review text updates the final-answer box. A box the learner has typed in is never overwritten.
-- When the last-line fallback reads a line such as `Since x>2, x=4`, fill only the conclusion `x=4`; two solutions such as `x=2, x=3` stay whole. A fallback that cannot be converted now says the label was not found, instead of "Found Answer: … but could not convert it".
+- When the last-line fallback cannot convert that line (e.g. `x>2, x=4`), say so and show the line, and clear the answer box so an answer left from an earlier attempt cannot be submitted against the new working. An answer the learner typed on the page is kept.
 - Convert based logarithms with nested arguments, e.g. `\log_{2}(x(x-2))` and the typed `log_2(x(x-2))`, to `log(x*(x-2))/log(2)` instead of the invalid product `log_2*(x*(x-2))`.
 - Keep a written `or`/`and` when one side is not a complete relation (often an OCR error such as `x-3` for `x=3`), so `x=-1 or x-3` stays visibly wrong instead of silently becoming `x=-1*x-3`.
 - Read unbracketed function arguments as handwriting means them: `\sin 2x` is `sin(2*x)` (was `sin(2)*x`), `\sin\frac{\pi}{6}` is `sin(%pi/6)` (was `sin(%pi)/6`), `\sin x^{2}` and `\ln x^{2}` keep the power inside, and `\tan\theta`, `\ln|x|` and `\sin 30^{\circ}` are valid.
@@ -18,7 +18,15 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 - Split a row holding two statements instead of reading it as one expression: `x-2>0 \quad x>2` was the false chain `x-2>0*x and 0*x>2`, and `x-2>0, \text{so} x>2` gave `s*o*x>2`. In Free text the prose word stays outside the maths: `` `x>0 and x-2>0`, so `x>2` ``.
 - Never turn `x=-1, x-3` (an OCR-damaged second solution) or `A=\{1,2\}` into a plausible list.
 - Typed answers: fold full-width characters (`ｘ＝３`), `≧`/`≦` and superscript digits (`x²`), and accept `sinx`, `sin^2(x)`, `ln|x|`, `lg(x,2)` and `log(x,2)`.
+- Never attach capture buttons to STACK radio, checkbox, dropdown or matrix inputs. Inserting into a choice overwrote the submitted option key, and every matrix cell received its own buttons.
+- Load the plugin on the Moodle 4.x question preview page (`/question/bank/previewquestion/preview.php`); it previously appeared only in quiz attempts.
+- Ask Mathpix not to keep learners' images and handwriting for model training (`improve_mathpix: false`).
+- Unsupported LaTeX such as `\cup`, `\arg`, `\nabla` or `\mapsto` now stays visibly invalid in STACK instead of becoming a product of letters such as `A*c*u*p*B`.
+- Fix answers STACK accepted but read differently from the handwriting: a subscript `a_{i}` is `a[i]` (was `a[%i]`); `\eta`, `\xi`, `\nu`, `\zeta`, `\kappa`, `\chi`, `\varepsilon` and `\varphi` are Greek letters (was e.g. `%e*t*a`); `\lfloor x\rfloor`, `\emptyset`, `\operatorname{Re}(z)`, `\lg x` and `\sqrt{3}i` convert; an integral with `\mathrm{d}x`, with a value after it (`\int_0^{\pi}\sin x\,dx=2`) or inside a fraction keeps its `int(...)`; a row joined by `\Rightarrow`, `\Leftrightarrow` or `\therefore` is split into its statements.
+- Typed answers keep scientific notation (`2.5e-3` was `2.5*%e-3`), `%pi` and `%e` (were `%%pi`), `log10(x)`, `atan2`, `floor`, `signum`, `mod`, `gcd`, `true`/`false` and Greek names, and leave unknown function names such as `expand(x)` for STACK to judge.
 - The release script refuses a release whose Moodle version number is not greater than the previous release's.
+- Follow Mathpix's own split between prose and formulas: the review rows and the Free-text working now read the same formula delimiters (`$...$`, `\(...\)`, `\[...\]`, `$$...$$`). A row Mathpix returned as text, such as `For the logarithms to be defined,` or `Since`, is shown as text instead of a product of letters like `F*o*r*t*h*e*...`, and is never inserted or copied into the `process` input. A `$` Mathpix left unclosed still starts the formula, also in Free text (`the larger one is $x=3`).
+- Remove case-specific OCR repairs (`\text{Finall} y`, `メニー` for `x=-`, `たす` for `です`) and the English keyword list used to guess prose; recognized text is shown as Mathpix returned it.
 
 ## 0.4.0-alpha - 2026-10-07
 

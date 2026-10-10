@@ -120,10 +120,6 @@ final class stack_converter_test extends \advanced_testcase {
                 '解答: ¥\\frac{x+1}{x-1}',
                 '(x+1)/(x-1)',
             ],
-            'Japanese OCR confuses x equals minus' => [
-                '答えはメニー1たす',
-                'x=-1',
-            ],
         ];
     }
 
@@ -147,18 +143,28 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame('x=9', $lines[0]['display_parts'][0]['latex']);
     }
 
-    public function test_japanese_answer_line_repairs_ocr_before_token_selection(): void {
-        $lines = mathpix_client::build_lines('答えはメニー1たす');
+    /**
+     * Mathpix decides what is prose: a document row without formula
+     * delimiters is text, shown as recognized and never guessed into maths.
+     */
+    public function test_document_rows_outside_formula_delimiters_are_text(): void {
+        $lines = mathpix_client::build_document_lines(
+            "(日)\nFor the lugarithms to be defined,\n\$x>0\$\nSince\nthe larger one is \$x=3"
+        );
 
-        $this->assertCount(1, $lines);
-        $this->assertSame('答えはx=-1です', $lines[0]['display']);
-        $this->assertSame('x=-1', $lines[0]['math']);
-        $this->assertSame('x=-1', $lines[0]['stack']);
-        $this->assertSame([
-            ['type' => 'text', 'text' => '答えは'],
-            ['type' => 'math', 'latex' => 'x=-1'],
-            ['type' => 'text', 'text' => 'です'],
-        ], $lines[0]['display_parts']);
+        $this->assertSame(['text', 'text', 'condition', 'text', 'equation'], array_column($lines, 'type'));
+        $this->assertSame('For the lugarithms to be defined,', $lines[1]['display']);
+        $this->assertSame('', $lines[1]['stack']);
+        $this->assertSame([['type' => 'text', 'text' => 'For the lugarithms to be defined,']], $lines[1]['display_parts']);
+        $this->assertSame('', $lines[3]['stack']);
+        // Mathpix left the closing "$" off; its opening "$" still starts the formula.
+        $this->assertSame('x=3', $lines[4]['stack']);
+        $this->assertSame('text', $lines[4]['display_parts'][0]['type']);
+
+        // A Japanese row Mathpix read as text stays text: no OCR repair is guessed.
+        $japanese = mathpix_client::build_document_lines('答えはメニー1たす');
+        $this->assertSame('text', $japanese[0]['type']);
+        $this->assertSame('', $japanese[0]['stack']);
     }
 
     public function test_freetext_preserves_prose_paragraphs_and_marks_only_math(): void {
@@ -354,6 +360,57 @@ final class stack_converter_test extends \advanced_testcase {
         ];
     }
 
+    /**
+     * Results that STACK accepted but read differently from the handwriting
+     * (a_{i} as a[%i], \eta as %e*t*a). Each expected value is STACK-valid;
+     * unsupported notation must keep a backslash so STACK rejects it visibly.
+     *
+     * @dataProvider valid_but_wrong_cases
+     */
+    public function test_valid_but_wrong_regressions(string $path, string $input, string $expected): void {
+        $actual = $path === 'ascii' ? stack_converter::normalize_ascii($input) : stack_converter::normalize_selection($input);
+        $this->assertSame($expected, $actual);
+    }
+
+    public static function valid_but_wrong_cases(): array {
+        return [
+            'subscript i is an index' => ['latex', 'a_{i}+a_{i+1}', 'a[i]+a[i+1]'],
+            'subscript i makes i a variable' => ['latex', 'x_{i}=i^2', 'x[i]=i^2'],
+            'imaginary unit after a root' => ['latex', 'z = 1 + \\sqrt{3}i', 'z=1+sqrt(3)*%i'],
+            'eta' => ['latex', '2\\eta x', '2*eta*x'],
+            'xi' => ['latex', '\\xi', 'xi'],
+            'chi' => ['latex', '\\chi', 'chi'],
+            'varepsilon' => ['latex', '\\varepsilon', 'epsilon'],
+            'varphi' => ['latex', '\\varphi', 'phi'],
+            'floor brackets' => ['latex', '\\lfloor x \\rfloor', 'floor(x)'],
+            'empty set' => ['latex', '\\emptyset', '{}'],
+            'real part' => ['latex', '\\operatorname{Re}(z)', 'realpart(z)'],
+            'base-10 logarithm' => ['latex', '\\lg x', 'lg(x)'],
+            'upright differential' => ['latex', '\\int \\frac{1}{x}\\,\\mathrm{d}x', 'int(1/x,x)'],
+            'definite integral with value' => ['latex', '\\int_0^{\\pi} \\sin x dx = 2', 'int(sin(x),x,0,%pi)=2'],
+            'integral inside a fraction' => ['latex', '\\frac{\\int_0^1(x+1)\\,dx}{(x+3)}', '(int((x+1),x,0,1))/((x+3))'],
+            'matrix inside a fraction' => ['latex', '\\frac{\\begin{pmatrix}3 & x \\\\ x & 3\\end{pmatrix}}{2}', '(matrix([3,x],[x,3]))/2'],
+            'equivalence arrow splits statements' => ['latex', 'x^2=4 \\Leftrightarrow x=\\pm 2', 'x^2=4,[2,-2]'],
+            'therefore splits statements' => ['latex', '2x+3=7 \\therefore x=2', '2*x+3=7,x=2'],
+            'union stays invalid' => ['latex', 'A \\cup B', 'A\\cup*B'],
+            'arg stays invalid' => ['latex', '\\arg z', '\\arg*z'],
+            'set builder stays invalid' => ['latex', '\\{x \\mid x>0\\}', '{x\\mid*x>0}'],
+            'scientific notation' => ['ascii', '2.5e-3', '2.5e-3'],
+            'scientific notation capital E' => ['ascii', '1.0E-5', '1.0E-5'],
+            'typed pi constant' => ['ascii', '%pi', '%pi'],
+            'typed e constant power' => ['ascii', '%e^x', '%e^x'],
+            'number times typed pi' => ['ascii', '2%pi', '2*%pi'],
+            'log10' => ['ascii', 'log10(x)', 'lg(x)'],
+            'atan2' => ['ascii', 'atan2(y,x)', 'atan2(y,x)'],
+            'floor' => ['ascii', 'floor(x)', 'floor(x)'],
+            'sign' => ['ascii', 'sign(x)', 'signum(x)'],
+            'gcd' => ['ascii', 'gcd(4,6)', 'gcd(4,6)'],
+            'Greek names' => ['ascii', 'zeta+eta+kappa+nu', 'zeta+eta+kappa+nu'],
+            'booleans' => ['ascii', 'true', 'true'],
+            'unknown function stays whole' => ['ascii', 'expand(x)', 'expand(x)'],
+        ];
+    }
+
     public function test_malformed_connected_relations_remain_visible_without_false_products(): void {
         $this->assertSame('x=-1 or x-3', stack_converter::normalize_selection('x=-1 \\text { or } x-3'));
         $this->assertSame('x=-1 or x-3', stack_converter::normalize_selection('x=-1 \\quad \\text { or } \\quad x-3'));
@@ -400,8 +457,7 @@ final class stack_converter_test extends \advanced_testcase {
     public function test_freetext_keeps_prose_between_statements_outside_the_maths(): void {
         $latex = "\\begin{array}{l}\nx>0 \\text { and } x-2>0, \\text { so } x>2 . \\\\\nx(x-2)=8\n\\end{array}";
         $this->assertSame("`x>0 and x-2>0`, so `x>2`.\n`x*(x-2)=8`", mathpix_client::build_freetext($latex));
-        $this->assertSame("because `x-2>0`\n`x>2`", mathpix_client::build_freetext('because $x-2>0 \\quad x>2$'));
-    }
+        $this->assertSame("because `x-2>0`\n`x>2`", mathpix_client::build_freetext('because $x-2>0 \\quad x>2$'));    }
 
     public function test_freetext_keeps_operatorname_prose_outside_the_formula(): void {
         $this->assertSame("cuz `x=-1`", mathpix_client::build_freetext("\$\\operatorname{cuz} \\quad x=-1\$"));
