@@ -103,6 +103,11 @@ final class stack_converter_test extends \advanced_testcase {
             'multiplication commands' => ['2 \\cdot 3+a \\times b-6 \\div 2', '2*3+a*b-6/2'],
             // \cdots is an ellipsis, not \cdot followed by "s".
             'ellipsis is not a product' => ['a^{2}-(a+2)>0 \\cdots', 'a^2-(a+2)>0\\cdots'],
+            'not equal commands' => ['x \\neq 1 \\quad y \\ne 2', 'not(x=1),not(y=2)'],
+            // Longer commands that merely start with \ne or \to stay unknown.
+            'negation is not not-equal' => ['\\neg p', '\\neg*p'],
+            'vert commands' => ['\\lvert x \\rvert+\\vert y \\vert', 'abs(x)+abs(y)'],
+            'transpose is not an arrow' => ['A^{\\top}', 'A^(\\top)'],
             'dense implicit multiplication' => [
                 '3x(x+1)(x-2)+2\\pi r^2h-4ab\\sqrt{c}',
                 '3*x*(x+1)*(x-2)+2*%pi*r^2*h-4*a*b*sqrt(c)',
@@ -113,7 +118,9 @@ final class stack_converter_test extends \advanced_testcase {
             ],
             'two solutions keep their variable' => ['x=1,2', 'x=1,2'],
             'therefore two solutions' => ['\\therefore x=2,3', 'x=2,3'],
-            'trailing restriction' => ['x-1,\\qquad x\\ne1', 'x-1'],
+            // A trailing condition is the learner's; it is never dropped as a domain restriction.
+            'trailing restriction is kept' => ['x-1,\\qquad x\\ne1', 'x-1,x#1'],
+            'second not-equal is kept' => ['y=2, x \\neq 1', 'y=2,x#1'],
             'not equal' => ['x \\neq 0', 'not(x=0)'],
             'English prose and unmatched math delimiter' => [
                 'Therefore, $x=\\frac{\\pi}{2}',

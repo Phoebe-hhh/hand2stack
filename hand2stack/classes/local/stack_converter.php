@@ -527,15 +527,7 @@ final class stack_converter {
         }, $s);
         $s = self::normalize_named_notation($s);
 
-        // Layout/proof commands are not part of a STACK expression. When a
-        // final expression is followed by a domain restriction, keep the
-        // expression as the answer candidate; the restriction remains visible
-        // in the raw OCR text.
-        $s = preg_replace(
-            '/\s*,\s*(?:\\\\q?quad\s*)*[a-zA-Z]\s*(?:\\\\neq|\\\\ne|#|!=)\s*[^,]+$/',
-            '',
-            $s
-        );
+        // Layout/proof commands are not part of a STACK expression.
         $s = str_replace(['\\quad', '\\qquad', '\\therefore', '\\because'], '', $s);
         $s = preg_replace('/\\\\pm(?![A-Za-z])/', '±', $s);
         // One degree mark, so later passes need to recognise only "°".
@@ -612,7 +604,7 @@ final class stack_converter {
         $s = preg_replace('/\\\\le(?![a-zA-Z])/', '<=', $s);
         $s = preg_replace('/\\\\gt(?![a-zA-Z])/', '>', $s);
         $s = preg_replace('/\\\\lt(?![a-zA-Z])/', '<', $s);
-        $s = str_replace(['\\neq', '\\ne'], '#', $s);
+        $s = preg_replace('/\\\\neq?(?![a-zA-Z])/', '#', $s);
 
         // STACK's own +- operator keeps both values and the variable:
         // "x=\pm 2" is x=+-2, never the bare list [2,-2].
@@ -663,7 +655,7 @@ final class stack_converter {
         $s = self::normalize_sum_product($s);
         $s = self::normalize_fractions_roots($s);
         $s = self::normalize_limit($s);
-        $s = str_replace(['\\rightarrow', '\\longrightarrow', '\\to'], '->', $s);
+        $s = preg_replace('/\\\\(?:rightarrow|longrightarrow|to)(?![a-zA-Z])/', '->', $s);
 
         $s = preg_replace('/\\\\operatorname\s*\{\s*det\s*\}\s*\(([^()]*)\)/', 'determinant($1)', $s);
         $s = preg_replace('/\\\\det\s*\(([^()]*)\)/', 'determinant($1)', $s);
@@ -1109,7 +1101,7 @@ final class stack_converter {
     }
 
     private static function normalize_absolute(string $input): string {
-        $output = str_replace(['\\lvert', '\\rvert', '\\vert'], '|', $input);
+        $output = preg_replace('/\\\\[lr]?vert(?![a-zA-Z])/', '|', $input);
         if (strpos($output, '|') === false) {
             return $output;
         }
