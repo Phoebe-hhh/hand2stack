@@ -76,8 +76,14 @@ final class stack_converter {
                 $i += strlen($match[0]) - 1;
                 $start = $i + 1;
             } else if ($char === '\\' && $depth === 0
-                    && preg_match('/\G\\\\(?:text|mathrm)\s*\{\s*([^{}]*?)\s*\}/u', $latex, $match, 0, $i)
-                    && preg_match('/\pL.*\pL/u', $match[1]) && !preg_match($connectives, $match[1])) {
+                    && preg_match('/\G\\\\(text|mathrm)\s*\{\s*([^{}]*?)\s*\}/u', $latex, $match, 0, $i)
+                    && !preg_match($connectives, $match[2])
+                    && ($match[1] === 'text'
+                        // Mathpix marks prose as \text: keep it as written, even a
+                        // misread word such as "f.)", except the constants e and i.
+                        ? trim($match[2]) !== '' && !preg_match('/^[ei]$/', $match[2])
+                        : preg_match('/\pL.*\pL/u', $match[2]))) {
+                $match[1] = $match[2];
                 $chunks[] = ['math', substr($latex, $start, $i - $start)];
                 $chunks[] = ['prose', $match[1]];
                 $i += strlen($match[0]) - 1;
@@ -113,7 +119,8 @@ final class stack_converter {
         $maths = array_filter($segments, static function(array $segment): bool {
             return $segment[0] === 'math';
         });
-        return count($maths) > 1 ? $segments : [['math', $latex]];
+        $textprose = count($chunks) > 1 && count($maths) > 0;
+        return count($maths) > 1 || $textprose ? $segments : [['math', $latex]];
     }
 
     /** Whether a formula states a relation (=, <, \\leq, ...) rather than a term. */
@@ -476,6 +483,16 @@ final class stack_converter {
     }
 
     public static function normalize_selection(string $input): string {
+        $statements = array_filter(self::split_statements(trim($input)), static function(array $segment): bool {
+            return $segment[0] === 'math';
+        });
+        if (count($statements) > 1) {
+            // Prose between statements is not part of either, so convert each one alone.
+            return implode(',', array_filter(array_map(static function(array $segment): string {
+                return self::normalize_selection($segment[1]);
+            }, $statements), 'strlen'));
+        }
+
         $candidate = self::extract_math_candidate($input);
         if ($candidate === '') {
             return '';

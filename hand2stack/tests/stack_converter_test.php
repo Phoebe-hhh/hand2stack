@@ -477,6 +477,15 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame("cuz `x=-1`", mathpix_client::build_freetext("\$\\operatorname{cuz} \\quad x=-1\$"));
     }
 
+    public function test_text_is_prose_even_when_ocr_misreads_the_word(): void {
+        // "より" read as "f.)": the \text stays prose and neither statement is lost.
+        $latex = '|x-1| \\geq 0 \\text { f.) } 2 x-4 \\geq 0';
+        $this->assertSame('`abs(x-1)>=0` f.) `2*x-4>=0`', mathpix_client::build_freetext("\\($latex\\)"));
+        $this->assertSame('abs(x-1)>=0,2*x-4>=0', stack_converter::normalize_selection($latex));
+        $this->assertSame('fって `x>=2`', mathpix_client::build_freetext('\\(\\text { fって } x \\geq 2\\)'));
+        $this->assertSame('`x=1 or x=2`', mathpix_client::build_freetext('$x=1 \\text{or} x=2$'));
+    }
+
     /**
      * @dataProvider edited_ascii_cases
      */
