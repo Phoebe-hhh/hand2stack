@@ -100,6 +100,9 @@ final class stack_converter_test extends \advanced_testcase {
             'product OCR as pi' => ['\\pi_{i=1}^{n} i', 'product(i,i,1,n)'],
             'vector' => ['(1,2,3)', '[1,2,3]'],
             'dot product' => ['\\vec{u} \\cdot \\vec{v}', 'u.v'],
+            'multiplication commands' => ['2 \\cdot 3+a \\times b-6 \\div 2', '2*3+a*b-6/2'],
+            // \cdots is an ellipsis, not \cdot followed by "s".
+            'ellipsis is not a product' => ['a^{2}-(a+2)>0 \\cdots', 'a^2-(a+2)>0\\cdots'],
             'dense implicit multiplication' => [
                 '3x(x+1)(x-2)+2\\pi r^2h-4ab\\sqrt{c}',
                 '3*x*(x+1)*(x-2)+2*%pi*r^2*h-4*a*b*sqrt(c)',

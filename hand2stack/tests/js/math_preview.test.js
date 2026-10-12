@@ -16,6 +16,9 @@ const asciiToLatexPreview = Function('return value => {' + body[1] + '}')();
 const delimiterBody = source.match(/const stripOuterMathDelimiters = value => \{([\s\S]*?)\n    \};/);
 assert.ok(delimiterBody, 'stripOuterMathDelimiters must remain available for regression tests');
 const stripOuterMathDelimiters = Function('return value => {' + delimiterBody[1] + '}')();
+const fallbackBody = source.match(/const clientSideStackFallback = \(value\) => \{([\s\S]*?)\n    \};/);
+assert.ok(fallbackBody, 'clientSideStackFallback must remain available for regression tests');
+const clientSideStackFallback = Function('return (value) => {' + fallbackBody[1] + '}')();
 const splitBody = source.match(/const splitEmbeddedMathText = value => \{([\s\S]*?)\n    \};/);
 assert.ok(splitBody, 'splitEmbeddedMathText must remain available for regression tests');
 const splitEmbeddedMathText = Function(
@@ -72,4 +75,11 @@ test('common edited STACK forms receive conventional LaTeX previews', () => {
     for (const [ascii, latex] of cases) {
         assert.equal(asciiToLatexPreview(ascii), latex, ascii);
     }
+});
+
+test('client fallback replaces whole multiplication commands only', () => {
+    assert.equal(clientSideStackFallback('2\\cdot 3'), '2*3');
+    assert.equal(clientSideStackFallback('a\\times b'), 'a*b');
+    // \cdots is an ellipsis; it must not become "*s".
+    assert.equal(clientSideStackFallback('a+2>0\\cdots'), 'a+2>0\\cdots');
 });

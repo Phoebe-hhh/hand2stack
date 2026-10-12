@@ -5,6 +5,7 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+- Replace `\cdot`, `\times` and `\div` only as whole commands. `\cdots` (a handwritten `…` that Mathpix keeps inside the formula) was cut into `\cdot` + `s`, so `a+2>0 \cdots` became `a+2>0*s`; it now stays `\cdots`, visibly unconverted, for the learner to remove.
 - Keep everything Mathpix marks as `\text{...}` as prose, even a misread word, and convert the maths on each side separately. `|x-1| \geq 0 \text{ f.) } 2x-4 \geq 0` ("より" misread as "f.)") lost `|x-1|` and became `>=02*x-4>=0`; it is now `` `abs(x-1)>=0` f.) `2*x-4>=0` ``. A leading word such as `\text{よって} x \geq 2` is kept instead of dropped. `e`, `i`, `or` and `and` stay inside the maths.
 - When a prose label such as `Answer:` is missing from the recognized working, fill its answer box from the last mathematical line and ask the learner to check it. Specific labels such as `f(2)=` never guess.
 - Accept full-width `：` and `＝` after anchor labels.

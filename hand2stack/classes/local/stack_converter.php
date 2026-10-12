@@ -601,7 +601,10 @@ final class stack_converter {
         $s = preg_replace('/\\\\vec\s*\{\s*([a-zA-Z])\s*\}\s*\\\\cdot\s*\\\\vec\s*\{\s*([a-zA-Z])\s*\}/', '$1.$2', $s);
         $s = preg_replace('/\\\\vec\s*\{\s*([a-zA-Z])\s*\}/', '$1', $s);
 
-        $s = str_replace(['\\cdot', '\\times', '×', '\\div', '÷'], ['*', '*', '*', '/', '/'], $s);
+        // Whole commands only: \cdots is an ellipsis, not \cdot followed by "s".
+        $s = preg_replace('/\\\\(?:cdot|times)(?![A-Za-z])/', '*', $s);
+        $s = preg_replace('/\\\\div(?![A-Za-z])/', '/', $s);
+        $s = str_replace(['×', '÷'], ['*', '/'], $s);
         // \geqq/\leqq (≧/≦) is the usual Japanese notation; replace it before \geq.
         $s = str_replace(['\\geqq', '\\geqslant', '\\geq', '≥', '≧', '⩾'], '>=', $s);
         $s = str_replace(['\\leqq', '\\leqslant', '\\leq', '≤', '≦', '⩽'], '<=', $s);

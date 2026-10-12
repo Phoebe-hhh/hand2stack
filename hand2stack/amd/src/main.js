@@ -1943,7 +1943,7 @@ define([], function() {
         stack = stack.replace(/[⁸]/g, '^8');
         stack = stack.replace(/[⁹]/g, '^9');
         stack = stack.replace(/[⁰]/g, '^0');
-        stack = stack.replace(/\\cdot|\\times/g, '*');
+        stack = stack.replace(/\\(?:cdot|times)(?![A-Za-z])/g, '*');
         stack = stack.replace(/\^\{([^{}]+)\}/g, '^$1');
         stack = stack.replace(/[{}]/g, '');
         stack = stack.replace(/\s+/g, '');
