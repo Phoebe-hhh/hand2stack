@@ -54,27 +54,10 @@ final class mathpix_client {
             'options_json' => json_encode($options),
         ];
 
-        $curl = curl_init(self::ENDPOINT);
-        curl_setopt_array($curl, [
-            CURLOPT_POST => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'app_id: ' . $appid,
-                'app_key: ' . $appkey,
-            ],
-            CURLOPT_POSTFIELDS => $postfields,
-            CURLOPT_TIMEOUT => 40,
+        [$body, $errno, $error, $status] = self::post(self::ENDPOINT, $postfields, [
+            'app_id: ' . $appid,
+            'app_key: ' . $appkey,
         ]);
-
-        $body = curl_exec($curl);
-        $errno = curl_errno($curl);
-        $error = curl_error($curl);
-        $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        curl_close($curl);
-
-        if ($body === false || $errno !== 0) {
-            throw new \moodle_exception('mathpixrequestfailed', 'local_hand2stack', '', null, $error);
-        }
 
         return self::parse_response($body, $errno, $error, $status);
     }
@@ -108,25 +91,32 @@ final class mathpix_client {
             throw new \moodle_exception('invalidstrokes', 'local_hand2stack');
         }
 
-        $curl = curl_init(self::STROKES_ENDPOINT);
-        curl_setopt_array($curl, [
-            CURLOPT_POST => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'app_id: ' . $appid,
-                'app_key: ' . $appkey,
-                'Content-Type: application/json',
-            ],
-            CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_TIMEOUT => 40,
+        [$body, $errno, $error, $status] = self::post(self::STROKES_ENDPOINT, $payload, [
+            'app_id: ' . $appid,
+            'app_key: ' . $appkey,
+            'Content-Type: application/json',
         ]);
-        $body = curl_exec($curl);
-        $errno = curl_errno($curl);
-        $error = curl_error($curl);
-        $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        curl_close($curl);
 
         return self::parse_response($body, $errno, $error, $status);
+    }
+
+    /**
+     * Send a request through Moodle's HTTP client, so the site's outgoing proxy
+     * and HTTP security settings apply as they do to the rest of Moodle.
+     */
+    private static function post(string $url, $postfields, array $headers): array {
+        global $CFG;
+        require_once($CFG->libdir . '/filelib.php');
+
+        $curl = new \curl();
+        $curl->setHeader($headers);
+        $body = $curl->post($url, $postfields, ['CURLOPT_TIMEOUT' => 40]);
+        $errno = (int)$curl->get_errno();
+        $status = (int)($curl->get_info()['http_code'] ?? 0);
+        // A URL blocked by the site's HTTP security settings is never sent;
+        // the client returns the reason as the body, with no status.
+        $error = $errno !== 0 ? (string)$curl->error : ($status === 0 ? (string)$body : '');
+        return [$body, $errno, $error, $status];
     }
 
     private static function validate_strokes(array $x, array $y): void {
@@ -154,7 +144,7 @@ final class mathpix_client {
     }
 
     private static function parse_response($body, int $errno, string $error, int $status): array {
-        if ($body === false || $errno !== 0) {
+        if ($body === false || $errno !== 0 || $status === 0) {
             throw new \moodle_exception('mathpixrequestfailed', 'local_hand2stack', '', null, $error);
         }
 

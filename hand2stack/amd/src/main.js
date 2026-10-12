@@ -156,8 +156,13 @@ define([], function() {
         return isText && SUPPORTED_INPUT_TYPES.includes(type);
     };
 
+    // A read-only or disabled box (a review page, or an answer locked after
+    // Check) would show an inserted value that is never submitted.
+    const isEditableAnswerBox = input => !input.readOnly && !input.disabled;
+
     const findAnswerBoxes = () => findStackInputs().filter(input => {
-        return input.offsetParent !== null && !isProcessInput(input) && isSupportedAnswerBox(input);
+        return input.offsetParent !== null && !isProcessInput(input)
+            && isSupportedAnswerBox(input) && isEditableAnswerBox(input);
     });
 
     const createHiddenFileInput = (capture = false) => {
@@ -802,7 +807,7 @@ define([], function() {
             const failConversion = previousValue => {
                 const clear = result.fallback && box.value === previousValue && box.value !== ''
                     && box.dataset.hand2stackStudentEdited !== '1';
-                if (clear) setAnswerValue(box, '');
+                if (clear) setBackgroundValue(box, '');
                 report(box, Object.assign({status: 'convertfailed'}, result));
                 logAnchor('convertfailed', clear ? '' : null, previousValue);
             };
@@ -828,7 +833,10 @@ define([], function() {
                     failConversion(valueBeforeValidation);
                 } else if (box.value === valueBeforeValidation) {
                     const status = result.fallback ? 'fallback_last_line' : 'filled';
-                    setAnswerValue(box, cleanStack);
+                    // Filled in the background: moving focus here would pull
+                    // the learner away from what they are doing and, on a
+                    // tablet, open the on-screen keyboard.
+                    setBackgroundValue(box, cleanStack);
                     flashAutofilledBox(box);
                     report(box, Object.assign({}, result, {status}));
                     logAnchor(status, cleanStack, valueBeforeValidation);

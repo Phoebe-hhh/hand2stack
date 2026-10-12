@@ -30,6 +30,11 @@ const isSupportedAnswerBox = (0, eval)(`(function() {
     return isSupportedAnswerBox;
 })()`);
 
+const isEditableAnswerBox = (0, eval)(`(function() {
+    ${constSource('isEditableAnswerBox')}
+    return isEditableAnswerBox;
+})()`);
+
 // The attributes STACK 4.13 renders for each input type.
 const box = (tagName, type, stackInputType) => ({tagName, type, dataset: {stackInputType}});
 
@@ -52,6 +57,21 @@ test('choice and matrix inputs are never treated as answer boxes', () => {
     assert.equal(isSupportedAnswerBox(box('INPUT', 'text', 'varmatrix')), false);
     assert.equal(isSupportedAnswerBox(box('INPUT', 'text', 'singlechar')), false);
     assert.equal(isSupportedAnswerBox(box('INPUT', 'hidden', 'algebraic')), false);
+});
+
+test('read-only and disabled answer boxes receive no capture buttons', () => {
+    // A review page, or an answer locked after Check, would show an inserted
+    // value that is never submitted.
+    assert.equal(isEditableAnswerBox({readOnly: false, disabled: false}), true);
+    assert.equal(isEditableAnswerBox({readOnly: true, disabled: false}), false);
+    assert.equal(isEditableAnswerBox({readOnly: false, disabled: true}), false);
+    assert.match(constSource('findAnswerBoxes'), /isEditableAnswerBox\(input\)/);
+});
+
+test('Mathpix requests go through Moodle\'s HTTP client, so the site proxy applies', () => {
+    assert.doesNotMatch(mathpix, /curl_init\(/);
+    assert.match(mathpix, /new \\curl\(\)/);
+    assert.equal((mathpix.match(/self::post\(self::(STROKES_)?ENDPOINT/g) || []).length, 2);
 });
 
 test('the plugin loads on the Moodle 4.x question preview page', () => {

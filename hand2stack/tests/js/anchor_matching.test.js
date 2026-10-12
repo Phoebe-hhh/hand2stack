@@ -74,7 +74,7 @@ test('extractAnchoredValue requires a relation marker right after the anchor', (
 // server-side validation), so build it with those dependencies stubbed out
 // while keeping the real matching/extraction code it closes over.
 const silentResearch = {log: () => {}, clip: value => (value === null || value === undefined ? '' : String(value))};
-const buildApplyMatchedAnswers = (0, eval)(`(function(isFreeTextInput, findSiblingAnswerBoxes, postLatex, setAnswerValue, flashAutofilledBox,
+const buildApplyMatchedAnswers = (0, eval)(`(function(isFreeTextInput, findSiblingAnswerBoxes, postLatex, setBackgroundValue, flashAutofilledBox,
         research = ${'{'}log: () => {}, clip: value => (value === null || value === undefined ? '' : String(value))${'}'}) {
     ${extractFunctionSource('normalizeAnchorText')}
     ${extractFunctionSource('matchableLineText')}
@@ -452,4 +452,23 @@ test('editing the working updates a box only while the learner has not typed in 
     box.dataset.hand2stackStudentEdited = '1';
     await edit('`x^2-2*x-8=0`\n\nSince `x>2`,\n`x=5`');
     assert.equal(box.value, 'x=4');
+});
+
+test('answer boxes filled from the working never take focus', () => {
+    // Focusing a box the learner did not touch pulls them away from what
+    // they are doing and, on a tablet, opens the on-screen keyboard.
+    assert.doesNotMatch(extractFunctionSource('applyMatchedAnswers'), /setAnswerValue\(/);
+    const setBackgroundValue = (0, eval)(`(function() {
+        ${extractFunctionSource('setBackgroundValue')}
+        return setBackgroundValue;
+    })()`);
+    const events = [];
+    const input = {
+        value: '',
+        focus: () => events.push('focus'),
+        dispatchEvent: event => events.push(event.type)
+    };
+    setBackgroundValue(input, 'x=3');
+    assert.equal(input.value, 'x=3');
+    assert.deepEqual(events, ['input', 'change']);
 });

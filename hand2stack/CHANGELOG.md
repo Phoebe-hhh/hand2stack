@@ -29,6 +29,9 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 - The release script refuses a release whose Moodle version number is not greater than the previous release's.
 - Follow Mathpix's own split between prose and formulas: the review rows and the Free-text working now read the same formula delimiters (`$...$`, `\(...\)`, `\[...\]`, `$$...$$`). A row Mathpix returned as text, such as `For the logarithms to be defined,` or `Since`, is shown as text instead of a product of letters like `F*o*r*t*h*e*...`, and is never inserted or copied into the `process` input. A `$` Mathpix left unclosed still starts the formula, also in Free text (`the larger one is $x=3`).
 - Remove case-specific OCR repairs (`\text{Finall} y`, `メニー` for `x=-`, `たす` for `です`) and the English keyword list used to guess prose; recognized text is shown as Mathpix returned it.
+- Never attach capture buttons to a read-only or disabled answer box, such as on the review page or after an answer is locked by Check; a value inserted there was shown but never submitted.
+- Fill answer boxes from the working without moving focus to them, so the cursor no longer jumps away from what the learner is doing and the on-screen keyboard no longer opens on a tablet.
+- Send Mathpix requests through Moodle's HTTP client, so they use the site's outgoing proxy and HTTP security settings. Servers that reach the internet only through a proxy previously failed every recognition.
 
 ## 0.4.0-alpha - 2026-10-07
 
