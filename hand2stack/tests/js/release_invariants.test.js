@@ -357,15 +357,16 @@ test('candidate selection is delegated so MathJax updates cannot break the detai
     assert.doesNotMatch(source, /const selectLine = \(index, line\) => \{[\s\S]{0,400}selectLine\(index, resultLines\[index\]\)/);
 });
 
-test('handwriting canvas accepts finger input without turning strokes into page scrolling', () => {
+test('handwriting canvas accepts only Pencil, stylus or mouse input without turning strokes into page scrolling', () => {
     assert.match(source, /touch-action:none/);
     assert.match(source, /overscroll-behavior:contain/);
     assert.doesNotMatch(source, /canvas\.style\.touchAction/);
     assert.doesNotMatch(source, /setPointerCapture|releasePointerCapture/);
     assert.match(source, /event\.pointerType === 'mouse' && event\.button !== 0/);
     assert.match(source, /const drawingTouch =/);
-    assert.doesNotMatch(source, /touch\.touchType === 'stylus'/);
-    assert.match(source, /isIPadWebKit && \(event\.pointerType === 'touch' \|\| event\.pointerType === 'pen'\)/);
+    assert.match(source, /touch\.touchType === 'stylus'/);
+    assert.match(source, /if \(event\.pointerType === 'touch'\n/);
+    assert.match(source, /isIPadWebKit && event\.pointerType === 'pen'/);
     assert.match(source, /addEventListener\('touchmove'.*\{passive: false\}/s);
 });
 

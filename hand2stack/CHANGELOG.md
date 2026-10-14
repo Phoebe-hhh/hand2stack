@@ -5,6 +5,7 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+- Write on the handwriting canvas only with Apple Pencil, a stylus or a mouse. A finger or a resting palm drew stray strokes; finger touches on the canvas are now ignored.
 - Keep every formula of a review row, in order, instead of only the last one. `\(a<-2\), \(2<a\)` gave `2<a` and silently dropped `a<-2`; it now gives `a<-2,2<a`. `\(x>2\) なので \(x=4\)` gives `x>2,x=4`. An answer label such as `f(2)=` is still found at the start of any formula in the row.
 - End the body of a limit, sum, product or `d/dx` at a `+` or `-` outside brackets, as `\sin x+1` already ends at `sin(x)+1`. `\lim_{x \to 0} \frac{\sin x}{x} + 1` became `limit(sin(x)/x+1,x,0)`, which STACK accepts with a different value; it is now `limit(sin(x)/x,x,0)+1`. A body in brackets, or one that starts with a sign, is kept whole.
 - Keep every branch condition of a piecewise function as written. `\begin{cases} x^2 & x>0 \\ 0 & \text{otherwise} \end{cases}` was cut at the word and became unreadable; it is now `if x>0 then x^2 elseif "otherwise" then 0`, with words kept as a quoted string and the maths converted, and no branch assumed to be the `else`. The last branch's condition is no longer dropped either: `1 & x<0 \\ 2 & x \geq 0` gives `if x<0 then 1 elseif x>=0 then 2` instead of `... else 2`. Only a branch written without a condition is the `else`. Prose before the block (`\text{Answer: }`) stays prose.

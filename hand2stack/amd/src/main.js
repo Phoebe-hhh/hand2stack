@@ -3422,7 +3422,9 @@ define([], function() {
             canvasRect = null;
         };
         canvas.addEventListener('pointerdown', event => {
-            if ((isIPadWebKit && (event.pointerType === 'touch' || event.pointerType === 'pen'))
+            // Fingers never write: a resting hand or a stray tap would leave marks.
+            if (event.pointerType === 'touch'
+                    || (isIPadWebKit && event.pointerType === 'pen')
                     || (event.pointerType === 'mouse' && event.button !== 0)) return;
             event.preventDefault();
             startStroke(event.pointerId, event);
@@ -3444,11 +3446,11 @@ define([], function() {
             active = null;
             canvasRect = null;
         });
-        // On iPad/iPhone WebKit, handle both Pencil and finger input through
-        // Touch Events. This avoids the Pencil gaps seen through Pointer Events
-        // while still allowing ordinary finger handwriting.
+        // On iPad/iPhone WebKit, handle Pencil input through Touch Events. This
+        // avoids the Pencil gaps seen through Pointer Events. Finger touches are
+        // ignored so a palm or a stray tap cannot draw.
         const drawingTouch = (event, identifier = null) => Array.from(event.changedTouches || []).find(touch =>
-            identifier === null || touch.identifier === identifier);
+            identifier === null ? touch.touchType === 'stylus' : touch.identifier === identifier);
         canvas.addEventListener('touchstart', event => {
             if (!isIPadWebKit) return;
             const touch = drawingTouch(event);
