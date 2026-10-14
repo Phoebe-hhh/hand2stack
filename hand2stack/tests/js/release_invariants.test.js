@@ -106,6 +106,11 @@ test('the review panel and its source image survive the reload after a submit', 
     assert.match(source, /if \(unsubmitted\) setBackgroundValue\(answerBox, working\);/);
 });
 
+test('a Free-text panel without a source image has no empty Original work column', () => {
+    assert.match(source, /panel\._candidateColumn\.style\.display = freeTextMode && !sourceUrl \? 'none' : 'block';/);
+    assert.match(source, /panel\._sourceTitle\.style\.display = freeTextMode && sourceUrl \? 'block' : 'none';/);
+});
+
 test('a locked Free-text answer shows only its original image', () => {
     assert.match(hook, /'\/mod\/quiz\/review\.php'/);
     assert.match(source, /isFreeTextInput\(input\) && !isEditableAnswerBox\(input\)/);

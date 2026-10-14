@@ -2707,8 +2707,10 @@ define([], function() {
         panel._rawTextarea.style.display = freeTextMode ? 'none' : 'block';
         panel._formatRows.style.display = freeTextMode ? 'none' : 'grid';
         panel._editableHeader.style.display = freeTextMode ? 'none' : 'flex';
-        panel._candidateColumn.style.display = 'block';
-        panel._sourceTitle.style.display = freeTextMode ? 'block' : 'none';
+        // A mobile upload brings back no image, so a Free-text panel without
+        // one leaves out the empty "Original work" column.
+        panel._candidateColumn.style.display = freeTextMode && !sourceUrl ? 'none' : 'block';
+        panel._sourceTitle.style.display = freeTextMode && sourceUrl ? 'block' : 'none';
         panel._sourceViewer.style.display = freeTextMode && sourceUrl ? 'block' : 'none';
         panel._sourcePreview.src = freeTextMode && sourceUrl ? sourceUrl : '';
         if (freeTextMode && sourceUrl) panel._resetImageView();
