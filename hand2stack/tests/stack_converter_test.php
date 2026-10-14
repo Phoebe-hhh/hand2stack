@@ -228,6 +228,9 @@ final class stack_converter_test extends \advanced_testcase {
 
         $lines = mathpix_client::build_document_lines("\\[\\begin{aligned}1. 2 x&=4 \\\\ 2) x&=2\\end{aligned}\\]");
         $this->assertSame(['2*x=4', 'x=2'], array_column($lines, 'stack'));
+
+        // Free text keeps an item number but never reads a decimal as one.
+        $this->assertSame("`1.5*x=3`\n`2. x=2`", mathpix_client::build_freetext('\\( \\begin{array}{l} 1.5 x=3 \\\\ 2. x=2 \\end{array} \\)'));
     }
 
     public function test_freetext_preserves_prose_paragraphs_and_marks_only_math(): void {
@@ -513,6 +516,15 @@ final class stack_converter_test extends \advanced_testcase {
         $lines = mathpix_client::build_document_lines($text);
         $this->assertSame(['x^2-5*x+6=0', '(x-2)*(x-3)=0', 'x=2 or x=3', 'x=3'], array_column($lines, 'stack'));
         $this->assertSame('the larger one is $x=3$', $lines[3]['latex']);
+    }
+
+    public function test_display_row_with_quad_is_shown_once(): void {
+        // 2026-10-14 handwriting: the first row of a multi-row block kept its
+        // "\quad" in the maths but not in the display text, so the row was
+        // shown twice, as plain text and as rendered maths.
+        $text = "\$\$\n\\begin{aligned}\n& x>2,50 \\quad x=4 \\\\\n& 1.5 x=3\n\\end{aligned}\n\$\$";
+        $lines = mathpix_client::build_document_lines($text);
+        $this->assertSame([['type' => 'math', 'latex' => 'x>2,50 \\quad x=4']], $lines[0]['display_parts']);
     }
 
     public function test_document_lines_drop_leading_implication_arrows(): void {

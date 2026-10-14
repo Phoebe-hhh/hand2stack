@@ -273,7 +273,8 @@ final class mathpix_client {
             // newline does not shift every later number by one.
             $rawrows = array_filter(preg_split('/(?:\n+|\\\\\\\\)/', $multilinebody), [self::class, 'is_kept_math_row']);
             foreach ($rawrows as $rawrow) {
-                if (preg_match('/^\s*&?\s*(\d+)\s*[\.\)]\s*/', $rawrow, $match)) {
+                // "1.5x=3" starts with a decimal, not the item number "1.".
+                if (preg_match('/^\s*&?\s*(\d+)\s*(?:\.(?!\d)|\))\s*/', $rawrow, $match)) {
                     $numbering[] = $match[1] . '. ';
                 } else {
                     $numbering[] = '';
@@ -706,8 +707,11 @@ final class mathpix_client {
         // Apply the same layout clean-up as extract_math(); otherwise a row
         // containing "\quad" or a Unicode minus cannot be located in the
         // display text and is shown twice (raw LaTeX plus rendered maths).
-        $display = str_replace(['−', '–', '—', '＝'], ['-', '-', '-', '='], self::display_latex($line));
-        $display = preg_replace('/\\\\q?quad(?![a-zA-Z])/u', ' ', $display);
+        $layout = static function(string $latex): string {
+            $latex = str_replace(['−', '–', '—', '＝'], ['-', '-', '-', '='], self::display_latex($latex));
+            return preg_replace('/\\\\q?quad(?![a-zA-Z])/u', ' ', $latex);
+        };
+        $display = $layout($line);
         if ($math === '') {
             return [[
                 'type' => 'text',
@@ -715,7 +719,9 @@ final class mathpix_client {
             ]];
         }
 
-        $mathdisplay = self::display_latex($math);
+        // The maths itself may keep "\quad" ("x>2,50 \quad x=4"), so compare
+        // both with the same layout clean-up.
+        $mathdisplay = $layout($math);
         $displaycompact = preg_replace('/\s+/u', '', $display);
         $mathcompact = preg_replace('/\s+/u', '', $mathdisplay);
         $pos = $mathcompact === '' ? false : mb_strpos($displaycompact, $mathcompact);

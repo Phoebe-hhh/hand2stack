@@ -5,6 +5,8 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+- In Free text, never read a decimal as an item number: handwritten `1.5x=3` became `1. 1.5*x=3`; it is now `1.5*x=3`.
+- Show a review row whose formula contains `\quad` once. The first row of a handwritten multi-row block (`x>2,50 \quad x=4`) was shown twice, as plain text and again as rendered maths.
 - Write on the handwriting canvas only with Apple Pencil, a stylus or a mouse. A finger or a resting palm drew stray strokes; finger touches on the canvas are now ignored.
 - Keep every formula of a review row, in order, instead of only the last one. `\(a<-2\), \(2<a\)` gave `2<a` and silently dropped `a<-2`; it now gives `a<-2,2<a`. `\(x>2\) なので \(x=4\)` gives `x>2,x=4`. An answer label such as `f(2)=` is still found at the start of any formula in the row.
 - End the body of a limit, sum, product or `d/dx` at a `+` or `-` outside brackets, as `\sin x+1` already ends at `sin(x)+1`. `\lim_{x \to 0} \frac{\sin x}{x} + 1` became `limit(sin(x)/x+1,x,0)`, which STACK accepts with a different value; it is now `limit(sin(x)/x,x,0)+1`. A body in brackets, or one that starts with a sign, is kept whole.
