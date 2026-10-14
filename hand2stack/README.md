@@ -223,11 +223,11 @@ amd/build/main.min.js
 
 ## Creating a Release
 
-Update `version.php` and `CHANGELOG.md`, merge the change into the release branch, and push a matching version tag:
+Update `version.php` and `CHANGELOG.md`, commit the change to `main`, and push a matching version tag:
 
 ```bash
-git tag v0.4.0-alpha
-git push origin v0.4.0-alpha
+git tag v0.5.0-alpha
+git push origin v0.5.0-alpha
 ```
 
 The GitHub Actions workflow then runs the JavaScript tests, rebuilds `amd/build/main.min.js` and fails if it differs from the committed file, checks PHP syntax, and checks that the tag matches `$plugin->release` and that `$plugin->version` is greater than the previous tag's. It then creates a GitHub Release containing:
@@ -243,5 +243,5 @@ The workflow refuses to publish if the tag does not match `$plugin->release` in 
 Current version:
 
 ```text
-0.4.0-alpha
+0.5.0-alpha
 ```

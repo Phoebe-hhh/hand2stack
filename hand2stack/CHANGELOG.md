@@ -3,7 +3,7 @@
 Hand2STACK was previously known as STACK Input Helper. Releases from 0.3.0 onward
 use the Moodle component name `local_hand2stack` and install in `local/hand2stack`.
 
-## Unreleased
+## 0.5.0-alpha - 2026-10-15
 
 - Keep the letters of a name together after its backslash goes. `r\pi` became `r*p*%i` and `e^{i\pi}` became `%e^(%i*p*%i)`, which STACK accepts with a different value; they are now `r*%pi` and `%e^(%i*%pi)`. Likewise `\alpha\pi` is `alpha*%pi` and `n\infty` is `n*inf`.
 - Read `-\infty` after a term as subtraction: `x-\infty` became `x*m*%i*n*f`; it is now `x-inf`. After an operator, a bracket or an arrow it is still `minf` (`\lim_{x\to-\infty}`).

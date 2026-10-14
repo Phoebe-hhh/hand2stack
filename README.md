@@ -4,15 +4,15 @@
 
 Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-> **Current pilot release:** [v0.4.0-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.4.0-alpha)
+> **Current pilot release:** [v0.5.0-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.5.0-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download hand2stack-v0.4.0-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.4.0-alpha/hand2stack-v0.4.0-alpha.zip)**
+**[Download hand2stack-v0.5.0-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.5.0-alpha/hand2stack-v0.5.0-alpha.zip)**
 
-Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.4.0-alpha.zip` and contains the plugin root folder `hand2stack/`.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.5.0-alpha.zip` and contains the plugin root folder `hand2stack/`.
 
 ## Features
 
@@ -116,4 +116,4 @@ See the [plugin README](hand2stack/README.md) for development details, configura
 
 ## Status
 
-Version `0.4.0-alpha` is intended for controlled pilot testing. It adds optional research event logging, label-aware answer insertion, and conversion fixes for written connectives, prose in formulas, and implication arrows. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, research event logging and its privacy provider, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+Version `0.5.0-alpha` is intended for controlled pilot testing. It keeps the learner's working as written: notation with no single STACK meaning (approximations, accents, mixed numbers, bare primes, percentages, possible cross products) stays visible for STACK to reject instead of becoming another value, and Insert inserts exactly the value shown. It also keeps the review panel after Check, splits handwritten rows correctly, lays out piecewise functions as written, keeps units, accepts only Pencil, stylus or mouse on the handwriting canvas, and sends Mathpix requests through Moodle's proxy settings. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, research event logging and its privacy provider, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
