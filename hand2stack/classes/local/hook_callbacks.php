@@ -29,6 +29,8 @@ final class hook_callbacks {
 
         $targets = [
             '/mod/quiz/attempt.php',
+            // Review only shows the learner's original image under each answer.
+            '/mod/quiz/review.php',
             // Moodle 4.x moved question preview into the previewquestion plugin.
             '/question/bank/previewquestion/preview.php',
         ];

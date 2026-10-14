@@ -88,9 +88,28 @@ test('free-text edits are visually distinguished without changing submitted text
     assert.match(source, /Array\(newSuffix - prefix\)\.fill\(true\)/);
     assert.match(source, /span\.style\.color = '#0b63ce'/);
     assert.doesNotMatch(source, /span\.style\.fontWeight/);
-    assert.match(source, /panel\._changeHighlighter\.reset\(panel\._stackTextarea\.value\)/);
+    assert.match(source, /panel\._changeHighlighter\.reset\(recognizedWorking\)/);
     assert.match(source, /answerBox\.value = panel\._stackTextarea\.value/);
     assert.match(source, /answerBox\.dispatchEvent\(new Event\('input'/);
+});
+
+test('the review panel and its source image survive the reload after a submit', () => {
+    assert.match(source, /SAVED_RESULT_PREFIX = 'hand2stack:result:'/);
+    assert.match(source, /if \(!restore\) \{\n\s+\/\/ Only the Free-text panel shows the source image\./);
+    assert.match(source, /canvas\.toDataURL\('image\/jpeg', 0\.85\)/);
+    // A restored panel shows the working and marks corrections against the recognition.
+    assert.match(source, /panel\._stackTextarea\.value = working;\n\s+panel\._changeHighlighter\.compare\(recognizedWorking, working\);/);
+    assert.match(source, /if \(!freeTextMode && !restore\) syncDiagnosticProcess\(\);/);
+    assert.match(source, /savedResult\.sourceUrl \|\| '', \{restore: true, savedWorking: savedResult\.working\}\)/);
+    // A plain reload brings back an older saved answer; the newer working wins.
+    assert.match(source, /saveFreeTextWorking\(answerBox, panel\._stackTextarea\.value\)/);
+    assert.match(source, /if \(unsubmitted\) setBackgroundValue\(answerBox, working\);/);
+});
+
+test('a locked Free-text answer shows only its original image', () => {
+    assert.match(hook, /'\/mod\/quiz\/review\.php'/);
+    assert.match(source, /isFreeTextInput\(input\) && !isEditableAnswerBox\(input\)/);
+    assert.match(source, /findLockedFreeTextBoxes\(\)\.forEach\(showSavedSourceImage\);/);
 });
 
 test('free-text mode is configured with localized review labels', () => {

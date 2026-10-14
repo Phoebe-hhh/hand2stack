@@ -165,6 +165,12 @@ define([], function() {
             && isSupportedAnswerBox(input) && isEditableAnswerBox(input);
     });
 
+    // Locked Free-text answers: the review page, or a box locked after Check.
+    const findLockedFreeTextBoxes = () => findStackInputs().filter(input => {
+        return input.offsetParent !== null && isSupportedAnswerBox(input)
+            && isFreeTextInput(input) && !isEditableAnswerBox(input);
+    });
+
     const createHiddenFileInput = (capture = false) => {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
@@ -2510,7 +2516,159 @@ define([], function() {
         return container;
     };
 
-    const updateResultPanel = (panel, rawLatex, rawAscii, stackResult, answerBox, lines, recognizedText = '', sourceUrl = '') => {
+    // The last recognition of each answer box lives in sessionStorage so the
+    // review panel and its source image survive the page reload of every
+    // quiz Check, Next or Save. Input names carry the question usage id, so a
+    // new attempt or preview never picks up an older result.
+    const SAVED_RESULT_PREFIX = 'hand2stack:result:';
+    const SAVED_IMAGE_MAX_SIDE = 1600;
+    let savedResultToken = 0;
+
+    const savedResultKey = answerBox => SAVED_RESULT_PREFIX + String((answerBox && answerBox.name) || '');
+
+    const loadSavedResult = answerBox => {
+        if (!answerBox || !answerBox.name) return null;
+        try {
+            const saved = JSON.parse(window.sessionStorage.getItem(savedResultKey(answerBox)) || 'null');
+            return saved && typeof saved === 'object' ? saved : null;
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const writeSavedResult = (key, value) => {
+        const text = JSON.stringify(value);
+        try {
+            window.sessionStorage.setItem(key, text);
+            return true;
+        } catch (error) {
+            // Over quota: drop the other saved results, oldest first, and retry.
+        }
+        let others = [];
+        try {
+            for (let i = 0; i < window.sessionStorage.length; i++) {
+                const other = window.sessionStorage.key(i);
+                if (other && other !== key && other.startsWith(SAVED_RESULT_PREFIX)) {
+                    let savedAt = 0;
+                    try {
+                        savedAt = Number(JSON.parse(window.sessionStorage.getItem(other)).savedAt) || 0;
+                    } catch (error) {
+                        // Unreadable entries go first.
+                    }
+                    others.push({key: other, savedAt});
+                }
+            }
+        } catch (error) {
+            return false;
+        }
+        others.sort((a, b) => a.savedAt - b.savedAt);
+        for (const other of others) {
+            try {
+                window.sessionStorage.removeItem(other.key);
+                window.sessionStorage.setItem(key, text);
+                return true;
+            } catch (error) {
+                // Keep evicting.
+            }
+        }
+        return false;
+    };
+
+    // A downscaled JPEG keeps the image small enough for sessionStorage.
+    // Handwriting canvases are transparent, so paint them on white first.
+    const compressSourceImage = sourceUrl => new Promise(resolve => {
+        if (!sourceUrl) {
+            resolve('');
+            return;
+        }
+        const image = new Image();
+        image.onload = () => {
+            try {
+                const scale = Math.min(1, SAVED_IMAGE_MAX_SIDE / Math.max(image.naturalWidth, image.naturalHeight, 1));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+                canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+                const context = canvas.getContext('2d');
+                context.fillStyle = '#fff';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.85));
+            } catch (error) {
+                resolve('');
+            }
+        };
+        image.onerror = () => resolve('');
+        image.src = sourceUrl;
+    });
+
+    const saveRecognitionResult = (answerBox, result) => {
+        if (!answerBox || !answerBox.name) return;
+        const token = ++savedResultToken;
+        answerBox._hand2stackSavedResultToken = token;
+        answerBox._hand2stackSavePending = true;
+        const key = savedResultKey(answerBox);
+        compressSourceImage(result.sourceUrl).then(imageUrl => {
+            // A newer recognition of this box has been saved meanwhile.
+            if (answerBox._hand2stackSavedResultToken !== token) return;
+            answerBox._hand2stackSavePending = false;
+            // The Free-text working as last edited, which may be newer than
+            // the recognition if the learner edited while the image compressed.
+            const working = answerBox._hand2stackWorking;
+            const entry = Object.assign({}, result, {sourceUrl: imageUrl, savedAt: Date.now()},
+                typeof working === 'string' ? {working} : {});
+            if (!writeSavedResult(key, entry) && imageUrl) {
+                writeSavedResult(key, Object.assign(entry, {sourceUrl: ''}));
+            }
+        });
+    };
+
+    // A reload that is not a submit (F5) brings back the answer Moodle saved
+    // last, so the learner's newer working is kept here as they type.
+    const saveFreeTextWorking = (answerBox, working) => {
+        answerBox._hand2stackWorking = working;
+        if (answerBox._hand2stackSavePending) return;
+        const saved = loadSavedResult(answerBox);
+        if (!saved || saved.working === working) return;
+        writeSavedResult(savedResultKey(answerBox), Object.assign(saved, {working}));
+    };
+
+    // A locked answer cannot be edited, so it gets only the image it was
+    // recognized from, below the box, and no capture buttons.
+    const showSavedSourceImage = answerBox => {
+        if (answerBox.dataset.hand2stackSourceShown === '1') return;
+        const saved = loadSavedResult(answerBox);
+        if (!saved || !saved.sourceUrl) return;
+        answerBox.dataset.hand2stackSourceShown = '1';
+        const figure = document.createElement('div');
+        figure.style.marginTop = '8px';
+        figure.style.maxWidth = '100%';
+        const title = document.createElement('div');
+        title.textContent = config.originalwork || 'Original work';
+        title.style.fontWeight = '600';
+        title.style.marginBottom = '4px';
+        const image = document.createElement('img');
+        image.src = saved.sourceUrl;
+        image.alt = config.originalwork || 'Original work';
+        image.style.display = 'block';
+        image.style.maxWidth = '100%';
+        image.style.maxHeight = '520px';
+        image.style.objectFit = 'contain';
+        image.style.background = '#fff';
+        image.style.border = '1px solid #d8e1e8';
+        image.style.borderRadius = '6px';
+        figure.append(title, image);
+        answerBox.insertAdjacentElement('afterend', figure);
+    };
+
+    const updateResultPanel = (panel, rawLatex, rawAscii, stackResult, answerBox, lines, recognizedText = '', sourceUrl = '',
+            {restore = false, savedWorking = null} = {}) => {
+        // A restored panel shows the result the saved answer came from; it is
+        // not a new recognition, so it neither logs nor rewrites any answer.
+        if (!restore) {
+            // Only the Free-text panel shows the source image.
+            saveRecognitionResult(answerBox, {rawLatex, rawAscii, stackResult, lines, recognizedText,
+                sourceUrl: isFreeTextInput(answerBox) ? sourceUrl : ''});
+        }
         setRequestStatus(panel);
         window.clearTimeout(panel._dragConversionTimer);
         panel._selectionRequestId = (panel._selectionRequestId || 0) + 1;
@@ -2621,26 +2779,47 @@ define([], function() {
         };
         const syncDiagnosticProcess = () => syncProcessInput(answerBox, resultLines);
         // Free-text mode syncs from the submitted text instead (bindFreeTextProcess).
-        if (!freeTextMode) syncDiagnosticProcess();
+        if (!freeTextMode && !restore) syncDiagnosticProcess();
 
         if (freeTextMode) {
             panel._options.innerHTML = '';
             panel._candidateSummaryList.replaceChildren();
             panel._candidateSummary.style.display = 'none';
-            panel._stackTextarea.value = formatFreeTextWorking(recognizedText, rawAscii, rawLatex, stackResult, lines);
-            panel._changeHighlighter.reset(panel._stackTextarea.value);
+            const recognizedWorking = formatFreeTextWorking(recognizedText, rawAscii, rawLatex, stackResult, lines);
             if (panel._answerBoxDisplay === undefined) {
                 panel._answerBoxDisplay = answerBox.style.display;
             }
             answerBox.style.display = 'none';
-            logRecognition(null);
-            const previousValue = answerBox.value;
-            setAnswerValue(answerBox, panel._stackTextarea.value);
-            research.log(answerBox, 'answer_inserted', {
-                via: 'freetext_recognition',
-                value: research.clip(panel._stackTextarea.value, 8000),
-                previousValue: research.clip(previousValue, 8000)
-            }, logOptions());
+            if (restore) {
+                // After a submit the answer box holds the working. After a plain
+                // reload it holds an older saved answer, so put the learner's
+                // unsubmitted working back, as a browser keeps unsent form
+                // input, and let the anchored boxes follow it again.
+                const working = typeof savedWorking === 'string' ? savedWorking : answerBox.value;
+                const unsubmitted = working.trim() !== String(answerBox.value || '').trim();
+                if (unsubmitted) setBackgroundValue(answerBox, working);
+                answerBox._hand2stackWorking = working;
+                panel._stackTextarea.value = working;
+                panel._changeHighlighter.compare(recognizedWorking, working);
+                if (unsubmitted) {
+                    applyMatchedAnswers(answerBox, linesFromFreeText(working), () => answerBox.value === working,
+                        reportTargetResult, {convert: postAscii, via: 'freetext_restore'}).catch(error => {
+                        window.console.error('[hand2stack] re-extraction failed:', error);
+                    });
+                }
+            } else {
+                answerBox._hand2stackWorking = recognizedWorking;
+                panel._stackTextarea.value = recognizedWorking;
+                panel._changeHighlighter.reset(recognizedWorking);
+                logRecognition(null);
+                const previousValue = answerBox.value;
+                setAnswerValue(answerBox, panel._stackTextarea.value);
+                research.log(answerBox, 'answer_inserted', {
+                    via: 'freetext_recognition',
+                    value: research.clip(panel._stackTextarea.value, 8000),
+                    previousValue: research.clip(previousValue, 8000)
+                }, logOptions());
+            }
             const freeTextTracker = research.editTracker(answerBox, () => panel._stackTextarea.value,
                 () => ({target: 'freetext'}), {max: 8000, logOptions});
             panel._hand2stackTrackers.push(freeTextTracker);
@@ -2650,6 +2829,7 @@ define([], function() {
             panel._freeTextSyncHandler = () => {
                 freeTextTracker.input();
                 answerBox.value = panel._stackTextarea.value;
+                saveFreeTextWorking(answerBox, panel._stackTextarea.value);
                 answerBox.dispatchEvent(new Event('input', {bubbles: true}));
                 // The answer boxes were extracted from this working, so they
                 // follow the learner's corrections to it, unless the learner
@@ -4040,6 +4220,13 @@ define([], function() {
         }
         handwritingPanel.insertAdjacentElement('afterend', resultPanel);
 
+        const savedResult = loadSavedResult(answerBox);
+        if (savedResult) {
+            updateResultPanel(resultPanel, savedResult.rawLatex || '', savedResult.rawAscii || '',
+                savedResult.stackResult || '', answerBox, Array.isArray(savedResult.lines) ? savedResult.lines : [],
+                savedResult.recognizedText || '', savedResult.sourceUrl || '', {restore: true, savedWorking: savedResult.working});
+        }
+
         const cleanupObserver = new MutationObserver(() => {
             if (answerBox.isConnected) return;
             requestCoordinator.invalidate();
@@ -4268,6 +4455,7 @@ define([], function() {
                 || document.body.id === 'page-question-bank-previewquestion-preview')) {
             mainContent.style.maxWidth = '1200px';
         }
+        findLockedFreeTextBoxes().forEach(showSavedSourceImage);
         const boxes = findAnswerBoxes();
         if (!boxes.length) {
             window.console.warn(config.nofieldfound || 'No visible STACK input found');
