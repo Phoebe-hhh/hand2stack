@@ -35,6 +35,10 @@ final class stack_converter_test extends \advanced_testcase {
                 '\\sqrt{\\frac{x+1}{x-1}}',
                 'sqrt((x+1)/(x-1))',
             ],
+            'fraction in an exponent inside a fraction' => [
+                '\\frac{x e^{-\\frac{x}{2}}}{\\sqrt{x^{2}+1}}-\\frac{x \\sqrt{x^{2}+1} \\cdot e^{-\\frac{x}{2}}}{2}',
+                '(x*%e^(-x/2))/(sqrt(x^2+1))-(x*sqrt(x^2+1)*%e^(-x/2))/(2)',
+            ],
             'square root inside fraction' => [
                 '\\frac{\\sqrt{x^2+1}}{e^{x}+1}',
                 'sqrt(x^2+1)/(%e^x+1)',

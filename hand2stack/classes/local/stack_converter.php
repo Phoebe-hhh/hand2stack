@@ -1275,18 +1275,27 @@ final class stack_converter {
     }
 
     private static function normalize_fractions_roots(string $input): string {
+        // A group may hold braces of its own, e.g. the exponent in
+        // "\\frac{x e^{-\\frac{x}{2}}}{2}"; the loop converts what is nested.
+        $group = '(?<g>\{(?:[^{}]++|(?&g))*\})';
         $output = $input;
         do {
             $previous = $output;
-            $output = preg_replace(
-                '/\\\\sqrt\s*\[([^\[\]]+)\]\s*\{([^{}]+)\}/',
-                '($2)^(1/$1)',
+            $output = preg_replace_callback(
+                '/\\\\sqrt\s*\[([^\[\]]+)\]\s*' . $group . '/',
+                static function(array $m): string {
+                    return '(' . substr($m['g'], 1, -1) . ')^(1/' . $m[1] . ')';
+                },
                 $output
             );
-            $output = preg_replace('/\\\\sqrt\s*\{([^{}]+)\}/', 'sqrt($1)', $output);
-            $output = preg_replace(
-                '/\\\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/',
-                '($1)/($2)',
+            $output = preg_replace_callback('/\\\\sqrt\s*' . $group . '/', static function(array $m): string {
+                return 'sqrt(' . substr($m['g'], 1, -1) . ')';
+            }, $output);
+            $output = preg_replace_callback(
+                '/\\\\frac\s*(?<n>\{(?:[^{}]++|(?&n))*\})\s*(?<d>\{(?:[^{}]++|(?&d))*\})/',
+                static function(array $m): string {
+                    return '(' . substr($m['n'], 1, -1) . ')/(' . substr($m['d'], 1, -1) . ')';
+                },
                 $output
             );
         } while ($output !== $previous);
