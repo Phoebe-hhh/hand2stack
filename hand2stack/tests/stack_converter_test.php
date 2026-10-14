@@ -188,6 +188,15 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame(['4*x-7=2*x+9', '2*x=16', 'x=8'], array_column($lines, 'stack'));
     }
 
+    /** A row starting with a decimal keeps it; only an item number such as "1." or "2)" is removed. */
+    public function test_leading_decimal_is_not_an_item_number(): void {
+        $lines = mathpix_client::build_document_lines("\\[\\begin{aligned}1.5 x&=3 \\\\ x&=2\\end{aligned}\\]");
+        $this->assertSame(['1.5*x=3', 'x=2'], array_column($lines, 'stack'));
+
+        $lines = mathpix_client::build_document_lines("\\[\\begin{aligned}1. 2 x&=4 \\\\ 2) x&=2\\end{aligned}\\]");
+        $this->assertSame(['2*x=4', 'x=2'], array_column($lines, 'stack'));
+    }
+
     public function test_freetext_preserves_prose_paragraphs_and_marks_only_math(): void {
         $text = "First explain the method.\n\nTherefore, \\(x=\\frac{3}{2}\\), so the result follows.";
 

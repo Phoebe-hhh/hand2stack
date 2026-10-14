@@ -643,7 +643,8 @@ final class mathpix_client {
         }
         $line = str_replace(['\\therefore', '\\because'], '', $line);
         $line = preg_replace('/^\s*=\s*/', '', $line);
-        $line = preg_replace('/^\s*(?:\d+[\.\)]\s*|[-*]\s+)/', '', $line);
+        // "1.5x=3" starts with a decimal, not the item number "1.".
+        $line = preg_replace('/^\s*(?:\d+(?:\.(?!\d)|\))\s*|[-*]\s+)/', '', $line);
         // Remove delimiters only when they wrap the complete row. Mixed prose
         // such as "Therefore, \(x>=1\)" must keep both delimiters until its
         // text and mathematical parts have been separated.
