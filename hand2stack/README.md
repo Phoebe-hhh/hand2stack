@@ -230,7 +230,7 @@ git tag v0.4.0-alpha
 git push origin v0.4.0-alpha
 ```
 
-The GitHub Actions workflow then checks PHP syntax and creates a GitHub Release containing:
+The GitHub Actions workflow then runs the JavaScript tests, rebuilds `amd/build/main.min.js` and fails if it differs from the committed file, checks PHP syntax, and checks that the tag matches `$plugin->release` and that `$plugin->version` is greater than the previous tag's. It then creates a GitHub Release containing:
 
 - a Moodle-installable ZIP whose root folder is `hand2stack/` (tests and Node build files are excluded through `.gitattributes`);
 - a changelog generated from commits since the previous version tag;
