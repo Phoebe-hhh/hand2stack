@@ -309,6 +309,12 @@ test('a missing prose label falls back to the last mathematical line', () => {
     // A specific label such as f(2) never guesses.
     assert.deepEqual(extract(['f(2)='], lines), [{anchor: 'f(2)=', expr: null, lineIndex: -1}]);
 
+    // A row keeps all of its formulas; a label may start any one of them.
+    const rowWithSeveral = [{type: 'condition', math: 'x>2, f(2)=3', raw: 'Since $x>2$, $f(2)=3$',
+        display_parts: [{type: 'text', text: 'Since '}, {type: 'math', latex: 'x>2'},
+            {type: 'text', text: ', '}, {type: 'math', latex: 'f(2)=3'}]}];
+    assert.deepEqual(extract(['f(2)='], rowWithSeveral), [{anchor: 'f(2)=', expr: '3', lineIndex: 0}]);
+
     // A written label still wins, and its line is not reused by a fallback.
     const labelled = lines.concat([{type: 'condition', math: '1<x \\leq 5', raw: 'Answer: $1<x \\leq 5$'}]);
     assert.deepEqual(extract(['Answer:'], labelled), [

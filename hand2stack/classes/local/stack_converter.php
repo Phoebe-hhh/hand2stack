@@ -1122,18 +1122,10 @@ final class stack_converter {
             $parts = explode('&', $row);
             $expression = trim(preg_replace('/[,\s]+$/', '', array_shift($parts)));
             $condition = trim(implode('&', $parts));
-            // A condition written only in words ("otherwise", "その他") is the
-            // remaining case, whatever the word: the branch is the else.
-            if (preg_match('/^\(?\s*\\\\(?:text|mathrm)\s*\{[^{}]*\}\s*\)?\s*[.,]?$/u', $condition)) {
-                $condition = '';
-            } else if ($condition !== '') {
-                // "\\text{if } x>0": the leading words are prose, the rest the condition.
-                $condition = self::split_leading_prose($condition)[1];
-            }
             if ($expression !== '') {
                 $branches[] = [
                     'expression' => self::normalize($expression),
-                    'condition' => $condition === '' ? '' : self::normalize($condition),
+                    'condition' => $condition === '' ? '' : self::piecewise_condition($condition),
                 ];
             }
         }
@@ -1162,16 +1154,44 @@ final class stack_converter {
             }
         }
 
-        $result = $branches[count($branches) - 1]['expression'];
-        for ($i = count($branches) - 2; $i >= 0; $i--) {
-            if ($branches[$i]['condition'] === '') {
-                $result = $branches[$i]['expression'];
-                continue;
+        // Every branch keeps the condition the learner wrote; only a branch
+        // written without one is the else. No condition is inferred.
+        $result = '';
+        foreach ($branches as $index => $branch) {
+            if ($branch['condition'] === '') {
+                $result .= ($index === 0 ? '' : ' else ') . $branch['expression'];
+            } else {
+                $result .= ($index === 0 ? 'if ' : ' elseif ') . $branch['condition'] . ' then ' . $branch['expression'];
             }
-            $result = 'if ' . $branches[$i]['condition'] . ' then ' . $branches[$i]['expression'] . ' else ' . $result;
         }
 
         return $prefix . $result;
+    }
+
+    /**
+     * A branch condition with its words kept as words: each \\text{...} becomes
+     * a STACK string and the maths around it is converted, so
+     * "\\text{otherwise}" is "otherwise" (quoted), never an assumed else, and
+     * "\\text{if } x>0" keeps both "if" and x>0.
+     */
+    private static function piecewise_condition(string $condition): string {
+        if (!preg_match('/\\\\(?:text|mathrm)\s*\{/', $condition)) {
+            return self::normalize($condition);
+        }
+        $condition = trim($condition);
+        $wrapped = preg_match('/^\((.*)\)$/s', $condition, $inner);
+        $pieces = preg_split('/\\\\(?:text|mathrm)\s*\{([^{}]*)\}/u', $wrapped ? $inner[1] : $condition, -1,
+            PREG_SPLIT_DELIM_CAPTURE);
+        $out = [];
+        foreach ($pieces as $index => $piece) {
+            $piece = trim($piece);
+            if ($piece === '') {
+                continue;
+            }
+            $out[] = $index % 2 === 1 ? '"' . str_replace('"', "'", $piece) . '"' : self::normalize($piece);
+        }
+        $result = implode(' ', array_filter($out, 'strlen'));
+        return $wrapped ? '(' . $result . ')' : $result;
     }
 
     private static function normalize_absolute(string $input): string {

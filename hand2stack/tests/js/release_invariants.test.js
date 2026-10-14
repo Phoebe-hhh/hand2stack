@@ -247,9 +247,8 @@ test('algebraic edits use the same blue edit cue and suggested wording', () => {
 
 test('algebraic editing synchronizes the formula without changing OCR prose styling', () => {
     assert.match(source, /Keep the OCR prose styling, while synchronizing only its formula/);
-    // The edit is the row's statement: its last formula, not its first.
-    assert.match(source, /if \(part\.type === 'math'\) statementIndex = partIndex;/);
-    assert.match(source, /if \(partIndex !== statementIndex \|\| !line\.edited\) return part;/);
+    // The row's ASCII holds all its formulas, so an edit of a row with several replaces them all.
+    assert.match(source, /mathParts\.length > 1 \? \[\{type: 'math', latex: line\.latex, text: line\.latex\}\]/);
     assert.match(source, /Object\.assign\(\{\}, part, \{latex: line\.latex, text: line\.latex\}\)/);
     assert.doesNotMatch(source, /const editedPreview = document\.createElement/);
 });

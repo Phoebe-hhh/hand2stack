@@ -580,13 +580,14 @@ final class mathpix_client {
         if (!$maths) {
             return self::candidate_line($source, '', $display);
         }
-        // A row holding only one formula is that formula; with prose or
-        // several formulas, the last formula is the row's statement, as in
-        // the learner's Free-text working ("Since `x>2`, `x=4`").
+        // A row holding only one formula is that formula. With several, every
+        // one is kept, in order: "\\(a<-2\\), \\(2<a\\)" is "a<-2,2<a", and
+        // "\\(x>2\\) なので \\(x=4\\)" is "x>2,x=4". Choosing one would guess
+        // which the answer is and silently drop the others.
         if ($text === '' && count($maths) === 1) {
             $source = $maths[0];
         }
-        $math = stack_converter::extract_math($maths[count($maths) - 1]);
+        $math = implode(', ', array_map([stack_converter::class, 'extract_math'], $maths));
         return self::candidate_line($source, $math, $display);
     }
 

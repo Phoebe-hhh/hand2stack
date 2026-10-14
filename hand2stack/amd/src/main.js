@@ -630,6 +630,11 @@ define([], function() {
     // prose label, so a label is also looked for in the recognized row.
     const matchableLineTexts = line => {
         const texts = [matchableLineText(line), String((line && line.raw) || ''), String((line && line.latex) || '')];
+        // A row keeps all of its formulas ("x>2, f(2)=3"); a label may start any one.
+        const parts = (line && (line.display_parts || line.displayParts)) || [];
+        parts.forEach(part => {
+            if (part && part.type === 'math' && part.latex) texts.push(String(part.latex));
+        });
         return texts.filter((text, index) => text && texts.indexOf(text) === index);
     };
 
@@ -2921,16 +2926,13 @@ define([], function() {
             line._status.textContent = statuses.join(' · ');
             line._lineContent.innerHTML = '';
             // Keep the OCR prose styling, while synchronizing only its formula.
-            // The row's ASCII is its statement, the last formula of the row
-            // ("Since x>2, x=4"), so an edit replaces that one.
-            let statementIndex = -1;
-            line.displayParts.forEach((part, partIndex) => {
-                if (part.type === 'math') statementIndex = partIndex;
-            });
-            const synchronizedParts = line.displayParts.map((part, partIndex) => {
-                if (partIndex !== statementIndex || !line.edited) return part;
-                return Object.assign({}, part, {latex: line.latex, text: line.latex});
-            });
+            // The row's ASCII holds all of its formulas ("x>2,x=4"), so an
+            // edit of a row with several replaces them by the edited one.
+            const mathParts = line.displayParts.filter(part => part.type === 'math');
+            const synchronizedParts = !line.edited ? line.displayParts
+                : mathParts.length > 1 ? [{type: 'math', latex: line.latex, text: line.latex}]
+                : line.displayParts.map(part => part.type !== 'math' ? part
+                    : Object.assign({}, part, {latex: line.latex, text: line.latex}));
             const synchronizedLine = Object.assign({}, line, {
                 displayParts: synchronizedParts,
                 math: line.edited ? line.latex : line.math

@@ -188,6 +188,12 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame(['4*x-7=2*x+9', '2*x=16', 'x=8'], array_column($lines, 'stack'));
     }
 
+    /** A row keeps every formula it holds, in order; none is chosen as the answer. */
+    public function test_row_keeps_all_of_its_formulas(): void {
+        $lines = mathpix_client::build_document_lines("\\(a<-2\\), \\(2<a\\)\n\\(x>2\\) なので \\(x=4\\)");
+        $this->assertSame(['a<-2,2<a', 'x>2,x=4'], array_column($lines, 'stack'));
+    }
+
     /** Mathpix may answer 200 with an error; that is a failed request, not an empty result. */
     public function test_mathpix_error_in_a_successful_response_fails(): void {
         $parse = new \ReflectionMethod(mathpix_client::class, 'parse_response');
@@ -355,7 +361,7 @@ final class stack_converter_test extends \advanced_testcase {
             ],
             'piecewise' => [
                 "f(x)=\\left\\{\\begin{array}{ll}\n0, & x<0 \\\\\n1, & x \\geqslant 0\n\\end{array}\\right.",
-                'f(x)=if x<0 then 0 else 1',
+                'f(x)=if x<0 then 0 elseif x>=0 then 1',
             ],
         ];
     }
@@ -438,9 +444,13 @@ final class stack_converter_test extends \advanced_testcase {
             'leading sign stays in a sum body' => ['latex', '\\sum_{k=1}^{n} -k', 'sum(-k,k,1,n)'],
             'bracketed sum body is whole' => ['latex', '\\sum_{k=1}^{n} (k^2 + k)', 'sum((k^2+k),k,1,n)'],
             'x double prime has no stated variable' => ['latex', "x''=3", "x''=3"],
-            'otherwise branch is the else' => ['latex', 'f(x)=\\begin{cases} x^2 & x>0 \\\\ 0 & \\text{otherwise} \\end{cases}', 'f(x)=if x>0 then x^2 else 0'],
-            'any worded branch is the else' => ['latex', 'f(x)=\\begin{cases} x^2, & x>0 \\\\ 0, & \\text{その他} \\end{cases}', 'f(x)=if x>0 then x^2 else 0'],
-            'words before a branch condition are prose' => ['latex', 'f(x)=\\begin{cases} 1 & \\text{if } x>0 \\\\ 0 & \\text{otherwise} \\end{cases}', 'f(x)=if x>0 then 1 else 0'],
+            // A worded condition keeps its words as words; nothing is inferred as an else.
+            'worded condition stays text' => ['latex', 'f(x)=\\begin{cases} x^2 & x>0 \\\\ 0 & \\text{otherwise} \\end{cases}', 'f(x)=if x>0 then x^2 elseif "otherwise" then 0'],
+            'worded middle condition stays text' => ['latex', 'f(n)=\\begin{cases} n/2 & \\text{n even} \\\\ 3n+1 & \\text{n odd} \\end{cases}', 'f(n)=if "n even" then n/2 elseif "n odd" then 3*n+1'],
+            'words and maths in one condition' => ['latex', 'f(x)=\\begin{cases} 1 & \\text{if } x>0 \\\\ 0 & \\text{otherwise} \\end{cases}', 'f(x)=if "if" x>0 then 1 elseif "otherwise" then 0'],
+            'last branch keeps its own condition' => ['latex', 'f(x)=\\begin{cases} 1 & x<0 \\\\ 2 & x \\geq 0 \\end{cases}', 'f(x)=if x<0 then 1 elseif x>=0 then 2'],
+            'branch without a condition is the else' => ['latex', 'f(x)=\\begin{cases} 1 & x<0 \\\\ 2 \\end{cases}', 'f(x)=if x<0 then 1 else 2'],
+            'prose before a system is prose' => ['latex', '\\text{Answer: } \\begin{cases} x=1 \\\\ y=2\\end{cases}', '[x=1,y=2]'],
             'variable times a scientific number' => ['latex', 'x 2.5e-3', 'x*2.5e-3'],
             'unbraced text subscript' => ['latex', 'x_\\text{max}=3', 'x[max]=3'],
             'sentence period after an approximation' => ['latex', 'x \\approx 2.71.', 'x=2.71'],
