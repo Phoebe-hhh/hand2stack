@@ -200,6 +200,9 @@ test('algebraic review uses a responsive candidate-and-single-editor layout', ()
     assert.doesNotMatch(source, /resultLines\.forEach\(\(line, index\) => \{[\s\S]*panel\._formatRows\.appendChild\(row\)/);
     assert.doesNotMatch(source, /field\.addEventListener\('focus', \(\) => panel\._activateLine/);
     assert.match(source, /convertedColumn\.style\.display = 'none'/);
+    // Both modes show the converted value; line-by-line it is read-only.
+    assert.match(source, /panel\._convertedColumn\.style\.display = 'block';/);
+    assert.match(source, /panel\._stackTextarea\.readOnly = !freeTextMode;/);
     assert.match(source, /wrapper\.style\.minHeight = '38px'/);
     assert.match(source, /wrapper\.style\.borderRadius = '3px'/);
     assert.match(source, /selectionMarker\.style\.height = '38px'/);

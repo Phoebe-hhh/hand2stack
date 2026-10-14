@@ -35,6 +35,7 @@ function extractFunctionSource(name) {
 
 const sandbox = (0, eval)(`(function() {
     ${extractFunctionSource('normalizeAnchorText')}
+    ${extractFunctionSource('isProseAnchor')}
     ${extractFunctionSource('extractAnchoredValue')}
     return {normalizeAnchorText, extractAnchoredValue};
 })()`);
@@ -54,6 +55,14 @@ test('extractAnchoredValue drops a restated decimal after a second =', () => {
     // This is the exact line shape that defeats a naive "last expression"
     // extractor: the approximate symbol plus a trailing "=2.71" restatement.
     assert.equal(extractAnchoredValue('g(1)=', 'g(1)~~2+1/sqrt(2)=2.71'), '2+1/sqrt(2)');
+});
+
+test('extractAnchoredValue removes only a prose label, whatever its relation mark', () => {
+    // The hint "answer =" labels the value; the value x=3 is not cut at its own "=".
+    assert.equal(extractAnchoredValue('answer =', 'answer = x=3'), 'x=3');
+    assert.equal(extractAnchoredValue('Answer:', 'Answer: x=3'), 'x=3');
+    // A quantity label still drops a restated value.
+    assert.equal(extractAnchoredValue('f(2)=', 'f(2)=3=3.0'), '3');
 });
 
 test('extractAnchoredValue ignores lines that do not start with the anchor', () => {
@@ -257,6 +266,7 @@ test('a prose label is found in the recognized row when the maths dropped it', (
 test('an answer box drops its own label hint from an inserted value', () => {
     const stripOwnAnchor = (0, eval)(`(function() {
         ${extractFunctionSource('normalizeAnchorText')}
+        ${extractFunctionSource('isProseAnchor')}
         ${extractFunctionSource('extractAnchoredValue')}
         ${extractFunctionSource('stripOwnAnchor')}
         return stripOwnAnchor;

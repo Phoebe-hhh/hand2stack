@@ -654,9 +654,10 @@ define([], function() {
             return null;
         }
         let rest = text.slice(head[0].length);
-        // After "f(2) =" a further "=" restates the value; after "Answer:"
-        // the value itself may be an equation such as "x=3".
-        const labelled = /[:：]\s*$/.test(head[0]);
+        // After "f(2) =" a further "=" restates the value; after a prose
+        // label ("Answer:" or "answer =") the value itself may be an equation
+        // such as "x=3", so only the label is removed.
+        const labelled = /[:：]\s*$/.test(head[0]) || isProseAnchor(anchor);
         // "<=", ">=", "!=" and "#=" are part of the value, not a new relation.
         const next = labelled ? null : /(^|[^<>!#:])(?:~~|≈|\\approx|\\simeq|=)/.exec(rest);
         if (next) {
@@ -2389,7 +2390,9 @@ define([], function() {
         panel._convertedColumn.style.paddingTop = freeTextMode ? '0' : '10px';
         panel._convertedColumn.style.borderTop = freeTextMode ? '0' : '1px solid #e2e6ea';
         panel._convertedColumn.style.marginTop = freeTextMode ? '0' : '10px';
-        panel._convertedColumn.style.display = freeTextMode ? 'block' : 'none';
+        // The line-by-line review shows, read-only, the value Insert will put
+        // in the answer box, so the learner confirms what is inserted.
+        panel._convertedColumn.style.display = 'block';
         if (!freeTextMode || sourceUrl) panel._updateReviewLayout();
         panel._stackTitle.textContent = freeTextMode
             ? (config.recognizedfullanswer || 'Complete recognized answer · editable')
@@ -2556,7 +2559,9 @@ define([], function() {
         };
         const updateSelectedPreview = () => {
             const selectedLine = resultLines[selectedIndex];
-            panel._stackTextarea.value = stackValueForLine(selectedLine);
+            const value = stackValueForLine(selectedLine);
+            const ownAnchor = answerBox.dataset.hand2stackAnchor || '';
+            panel._stackTextarea.value = ownAnchor ? stripOwnAnchor(ownAnchor, value) : value;
         };
         const renderFormatRows = () => {
             panel._formatRows.innerHTML = '';
