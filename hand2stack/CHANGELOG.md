@@ -5,6 +5,17 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+- Keep the letters of a name together after its backslash goes. `r\pi` became `r*p*%i` and `e^{i\pi}` became `%e^(%i*p*%i)`, which STACK accepts with a different value; they are now `r*%pi` and `%e^(%i*%pi)`. Likewise `\alpha\pi` is `alpha*%pi` and `n\infty` is `n*inf`.
+- Read `-\infty` after a term as subtraction: `x-\infty` became `x*m*%i*n*f`; it is now `x-inf`. After an operator, a bracket or an arrow it is still `minf` (`\lim_{x\to-\infty}`).
+- Convert `\det` before a matrix, `\det\begin{pmatrix}1&2\\3&4\end{pmatrix}`, to `determinant(matrix([1,2],[3,4]))` instead of `d*%e*tmatrix(...)`, and multiply a factor written next to a matrix: `2\begin{pmatrix}...` is `2*matrix(...)`, not `2matrix(...)`.
+- Keep notation whose meaning has no single STACK form exactly as written, so STACK rejects it visibly instead of accepting another value: possible cross products when either operand is marked as a vector, mixed numbers, accents, percentages, standalone degree marks, approximation signs, bare primes, unknown continuous names, and parenthesised pairs. No variable, derivative variable, percentage convention, interval/list meaning or approximation is inferred.
+- Keep an unambiguous unit written after a number: `x=3\,\mathrm{cm}` became `x=3` in a review row and `x=3*c*m` elsewhere; it is now `x=3*cm`. Mathpix's `5 \mathrm{~cm}^{2}` is `5*cm^2`, `3 \mathrm{~km} / \mathrm{h}` is `3*km/h`, and adjacent `3 \mathrm{m} \mathrm{s}^{-1}` is `3*m*s^-1`, not `3*ms^-1`. Arbitrary upright words such as `\mathrm{or}`, `\mathrm{and}` and prose are not guessed to be units.
+- Convert the Unicode `≠` like `\neq`.
+- Insert exactly what the Converted for STACK box shows. A box whose Syntax hint was a label such as `x=` received `3` for a recognized `x=3`; it now receives `x=3`, as shown, and the learner decides what to insert.
+- A formula part chosen by clicking or Shift-clicking is what Insert inserts, as a dragged part already was; Insert used to insert the whole row while the box showed the part.
+- After an edit of a review row, show the server's conversion of the edit in the Converted for STACK box once the learner pauses, so the box shows the value Insert will insert.
+- Write the hidden `process` input when the learner inserts an answer, not as soon as a recognition arrives, and update it with every later edit of that working. A recognition that is never inserted leaves it unchanged.
+- The English fallback of the handwriting instructions no longer says to write with a finger.
 - In Free text, never read a decimal as an item number: handwritten `1.5x=3` became `1. 1.5*x=3`; it is now `1.5*x=3`.
 - Show a review row whose formula contains `\quad` once. The first row of a handwritten multi-row block (`x>2,50 \quad x=4`) was shown twice, as plain text and again as rendered maths.
 - Write on the handwriting canvas only with Apple Pencil, a stylus or a mouse. A finger or a resting palm drew stray strokes; finger touches on the canvas are now ignored.
@@ -12,11 +23,11 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 - End the body of a limit, sum, product or `d/dx` at a `+` or `-` outside brackets, as `\sin x+1` already ends at `sin(x)+1`. `\lim_{x \to 0} \frac{\sin x}{x} + 1` became `limit(sin(x)/x+1,x,0)`, which STACK accepts with a different value; it is now `limit(sin(x)/x,x,0)+1`. A body in brackets, or one that starts with a sign, is kept whole.
 - Lay out a piecewise function as it was written, a row per branch, instead of one `if ... then ... else` expression: each branch's value and condition are converted separately, words stay words, and the brace is kept as text on the first row. `f(x)=\begin{cases} x^2 & x>0 \\ 0 & \text{otherwise} \end{cases}` was cut at the word and became unreadable; in Free text it is now `f(x)=`, then `` { `x^2` `x>0` `` and `` `0` otherwise ``. No branch is assumed to be the `else`, and no condition is dropped. A handwritten page, which Mathpix returns as one array, no longer splits a piecewise function nested inside it into fragments of `\begin{array}`. A system of equations, with no conditions, is still one list `[x+y=3,x-y=1]`.
 - In Free text, keep two statements written on one row with a gap (`x-2>0 \quad x>2`) on that row instead of breaking it.
-- Leave `x'` and `x''` unconverted, since they state no variable to differentiate by; they became `diff(x,x)`. `y'` and `y''` are still derivatives by `x`, and `f''(t)` by `t`.
+- Leave every bare prime such as `x'`, `y'` and `y''` unconverted because it states no independent variable. An explicit `f''(t)` can still be converted by `t`.
 - Remove only a prose label from an anchored answer. With the syntax hint `answer =`, `answer = x=3` gave `x`; it now gives `x=3`. A quantity label such as `f(2)=` still drops a restated value (`f(2)=3=3.0` gives `3`).
-- Show the converted value in the line-by-line review, read-only, so the learner sees what Insert will put in the answer box, including a label hint already removed.
+- Show the converted value in the line-by-line review, read-only, so the learner sees what Insert will put in the answer box.
 - Multiply a number in scientific notation by the variable next to it: `2.5e-3 x` became `2.5e-3x`, which STACK rejects; it is now `2.5e-3*x`.
-- Drop the sentence period after an approximation: `x \approx 2.71.` became `x=2.71.`; it is now `x=2.71`. The review row's `normalized` value no longer joins both sides of the approximation (`x2.71`).
+- Keep approximation notation exactly as OCR returned it. `x \approx 2.71` is not silently changed into the equality `x=2.71`, and a trailing decimal approximation is not discarded from an exact expression.
 - Read `x_\text{max}` as the label of `x`, like `x_{\text{max}}`: it became `x_` and the prose `max`; it is now `x[max]`.
 - Classify a row with `\neq` as a condition instead of an expression.
 - In Free text, number only the rows that are kept (a `\\` followed by a newline lost `2.`), leave out the uploaded filename header, and keep the space before prose that follows a formula in the review row (` and then`, not `and then`).
@@ -42,14 +53,14 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 - Convert based logarithms with nested arguments, e.g. `\log_{2}(x(x-2))` and the typed `log_2(x(x-2))`, to `log(x*(x-2))/log(2)` instead of the invalid product `log_2*(x*(x-2))`.
 - Keep a written `or`/`and` when one side is not a complete relation (often an OCR error such as `x-3` for `x=3`), so `x=-1 or x-3` stays visibly wrong instead of silently becoming `x=-1*x-3`.
 - Read unbracketed function arguments as handwriting means them: `\sin 2x` is `sin(2*x)` (was `sin(2)*x`), `\sin\frac{\pi}{6}` is `sin(%pi/6)` (was `sin(%pi)/6`), `\sin x^{2}` and `\ln x^{2}` keep the power inside, and `\tan\theta`, `\ln|x|` and `\sin 30^{\circ}` are valid.
-- Convert `\leqq`/`\geqq` (≦/≧), `\dfrac`, `\pm` inside an expression (STACK's `+-`), a leading `\Rightarrow`/`∴`, `y'`, `{}_{n}C_{r}`/`{}_{n}P_{r}`, sets `\{1,2\}`, open intervals `x\in(a,b)` and `(x,y)=(1,2)`.
+- Convert `\leqq`/`\geqq` (≦/≧), `\dfrac`, `\pm` inside an expression (STACK's `+-`), a leading `\Rightarrow`/`∴`, `{}_{n}C_{r}`/`{}_{n}P_{r}`, sets `\{1,2\}` and open intervals `x\in(a,b)`.
 - Keep the right-hand side of a limit, sum or derivative (`\lim ... =1` was swallowed into the limit), and the text around a matrix (`|A|=ad-bc`).
 - Treat a `cases` or `\left\{` block without conditions as a system of equations; it previously kept only its last equation or became a one-column matrix.
 - Split a row holding two statements instead of reading it as one expression: `x-2>0 \quad x>2` was the false chain `x-2>0*x and 0*x>2`, and `x-2>0, \text{so} x>2` gave `s*o*x>2`. In Free text the prose word stays outside the maths: `` `x>0 and x-2>0`, so `x>2` ``.
 - Keep two relations that Mathpix returned as separate formulas joined by a written `or`/`and` (`\(x=4\) or \(x=-2\)`) in one Free-text statement, `` `x=4 or x=-2` ``. They were marked as two statements, so only `x=-2` was read as the answer. A capitalised `Or`/`OR` is read as `or` too, in one formula or between two.
 - Keep the variable the learner wrote: `x=2, 3` stays `x=2,3` and `x=\pm 2` is `x=+-2`. They were rewritten to the bare lists `[2,3]` and `[2,-2]`, which dropped `x=` and assumed the question wanted a list. Likewise `x=1, y=2` is no longer wrapped as `[x=1,y=2]`, and a system's last rows `y=1`, `x=2` no longer add a combined `[x=2,y=1]` row, which was also offered as the answer.
 - Never turn `x=-1, x-3` (an OCR-damaged second solution) or `A=\{1,2\}` into a plausible list.
-- Typed answers: fold full-width characters (`ｘ＝３`), `≧`/`≦` and superscript digits (`x²`), and accept `sinx`, `sin^2(x)`, `ln|x|`, `lg(x,2)` and `log(x,2)`.
+- Typed answers: fold full-width characters (`ｘ＝３`), `≧`/`≦` and superscript digits (`x²`), and accept `sin^2(x)`, `ln|x|`, `lg(x,2)` and `log(x,2)`.
 - Never attach capture buttons to STACK radio, checkbox, dropdown or matrix inputs. Inserting into a choice overwrote the submitted option key, and every matrix cell received its own buttons.
 - Load the plugin on the Moodle 4.x question preview page (`/question/bank/previewquestion/preview.php`); it previously appeared only in quiz attempts.
 - Ask Mathpix not to keep learners' images and handwriting for model training (`improve_mathpix: false`).

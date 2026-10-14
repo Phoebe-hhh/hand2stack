@@ -48,6 +48,23 @@ test('process data preserves order and omits prose and generated summaries', () 
     assert.equal(helpers.processValueForLines(lines), 'x>=0\nx^2=1\nx>=1');
 });
 
+test('an edited row is its current edit until the server validates it', () => {
+    const edited = {type: 'equation', stack: 'x^2+5*x+8=0', ascii: 'x^2+5x+6=0', edited: true};
+    assert.equal(helpers.processValueForLines([edited]), 'x^2+5x+6=0');
+    edited._validatedAscii = 'x^2+5x+6=0';
+    edited._validatedStack = 'x^2+5*x+6=0';
+    assert.equal(helpers.processValueForLines([edited]), 'x^2+5*x+6=0');
+    // A later edit is newer than the last validation.
+    edited.ascii = 'x^2+5x+7=0';
+    assert.equal(helpers.processValueForLines([edited]), 'x^2+5x+7=0');
+});
+
+test('the process input is written on Insert, not on recognition', () => {
+    assert.match(source, /const syncDiagnosticProcess = \(\) => \{\s*if \(processBound\) syncProcessInput\(answerBox, resultLines\);/);
+    assert.match(source, /processBound = true;\s*syncDiagnosticProcess\(\);/);
+    assert.doesNotMatch(source, /if \(!freeTextMode && !restore\) syncDiagnosticProcess\(\);/);
+});
+
 test('free-text process data keeps only backtick rows, in order', () => {
     const text = 'Since `x^2-1=(x-1)*(x+1)` we cancel `x+1`. Therefore,\n'
         + '`f(x)=x-1+sqrt(x^2+4)`\n\nNext, let `x=2`.\n`\nf(2)=1+2*sqrt(2)\n\n2*sin(1)\n`';
@@ -60,8 +77,8 @@ test('free-text process data reflects edits and ignores an unpaired backtick', (
     assert.equal(helpers.processValueForFreeText('no maths here'), '');
 });
 
-test('free-text process rows drop numbering and the approximation operator', () => {
-    assert.equal(helpers.processValueForFreeText('`1. f(2)=1+2*sqrt(2)~~3.83`'), 'f(2)=1+2*sqrt(2)');
-    assert.equal(helpers.processValueForFreeText('`g(1)~~2.71`'), 'g(1)=2.71');
-    assert.equal(helpers.processValueForFreeText('`~~2.71`'), '2.71');
+test('free-text process rows drop layout numbering but preserve approximation notation', () => {
+    assert.equal(helpers.processValueForFreeText('`1. f(2)=1+2*sqrt(2)~~3.83`'), 'f(2)=1+2*sqrt(2)~~3.83');
+    assert.equal(helpers.processValueForFreeText('`g(1)~~2.71`'), 'g(1)~~2.71');
+    assert.equal(helpers.processValueForFreeText('`~~2.71`'), '~~2.71');
 });

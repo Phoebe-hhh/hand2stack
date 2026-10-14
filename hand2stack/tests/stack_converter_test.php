@@ -75,9 +75,9 @@ final class stack_converter_test extends \advanced_testcase {
             'numbered result label' => ['1. f(2)=1+2\\sqrt{2}', 'f(2)=1+2*sqrt(2)'],
             'exact value followed by decimal approximation' => [
                 'g(1)=2+\\frac{1}{\\sqrt{2}}\\approx2.71',
-                'g(1)=2+1/sqrt(2)',
+                'g(1)=2+\\frac{1}{\\sqrt{2}}\\approx2.71',
             ],
-            'approximate assignment' => ['x\\approx3.83', 'x=3.83'],
+            'approximate assignment' => ['x\\approx3.83', 'x\\approx3.83'],
             'short LaTeX inequality commands' => ['1\\le x\\lt3', '1<=x and x<3'],
             'derivative' => ['\\frac{d}{d x} x^{2}', 'diff(x^2,x)'],
             'derivative quotient' => ['\\frac{dy}{dx}', 'diff(y,x)'],
@@ -102,7 +102,7 @@ final class stack_converter_test extends \advanced_testcase {
             ],
             'product' => ['\\prod_{k=1}^{n} x_{k}', 'product(x[k],k,1,n)'],
             'product OCR as pi' => ['\\pi_{i=1}^{n} i', 'product(i,i,1,n)'],
-            'vector' => ['(1,2,3)', '[1,2,3]'],
+            'parenthesised triple stays ambiguous' => ['(1,2,3)', '(1,2,3)'],
             'dot product' => ['\\vec{u} \\cdot \\vec{v}', 'u.v'],
             'multiplication commands' => ['2 \\cdot 3+a \\times b-6 \\div 2', '2*3+a*b-6/2'],
             // \cdots is an ellipsis, not \cdot followed by "s".
@@ -114,11 +114,11 @@ final class stack_converter_test extends \advanced_testcase {
             'transpose is not an arrow' => ['A^{\\top}', 'A^(\\top)'],
             'dense implicit multiplication' => [
                 '3x(x+1)(x-2)+2\\pi r^2h-4ab\\sqrt{c}',
-                '3*x*(x+1)*(x-2)+2*%pi*r^2*h-4*a*b*sqrt(c)',
+                '3*x*(x+1)*(x-2)+2*%pi*r^2*h-4*ab*sqrt(c)',
             ],
             'multivariable products' => [
                 '\\frac{ax^2+bxy+cy^2}{\\sqrt{a^2+b^2+c^2}}',
-                '(a*x^2+b*x*y+c*y^2)/(sqrt(a^2+b^2+c^2))',
+                '(a*x^2+bxy+cy^2)/(sqrt(a^2+b^2+c^2))',
             ],
             'two solutions keep their variable' => ['x=1,2', 'x=1,2'],
             'therefore two solutions' => ['\\therefore x=2,3', 'x=2,3'],
@@ -225,13 +225,13 @@ final class stack_converter_test extends \advanced_testcase {
         $parse->invoke(null, json_encode(['error' => 'Image too large']), 0, '', 200);
     }
 
-    /** An inequation is a condition, and an approximation's normalized value is its STACK value. */
+    /** An inequation converts; an approximation remains exactly what OCR returned. */
     public function test_inequation_and_approximation_rows(): void {
         $lines = mathpix_client::build_lines('x \\neq 1');
         $this->assertSame('condition', $lines[0]['type']);
 
         $lines = mathpix_client::build_lines('x \\approx 2.71.');
-        $this->assertSame(['x=2.71', 'x=2.71', 'approximation'],
+        $this->assertSame(['x \\approx 2.71.', 'x \\approx 2.71.', 'approximation'],
             [$lines[0]['stack'], $lines[0]['normalized'], $lines[0]['type']]);
     }
 
@@ -319,7 +319,7 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame('g(1)=2+1/sqrt(2)', $lines[0]['normalized']);
         $this->assertSame('approximation', $lines[1]['type']);
         $this->assertSame('approximate', $lines[1]['relation']);
-        $this->assertSame('2.71', $lines[1]['normalized']);
+        $this->assertSame('~~2.71.', $lines[1]['normalized']);
         $this->assertSame('~~2.71.', $lines[1]['raw']);
     }
 
@@ -423,14 +423,14 @@ final class stack_converter_test extends \advanced_testcase {
             'Greek argument' => ['\\tan \\theta', 'tan(theta)'],
             'logarithm of absolute value' => ['\\ln |x|+C', 'ln(abs(x))+C'],
             'degrees inside trigonometric function' => ['\\sin 30^{\\circ}=\\frac{1}{2}', 'sin((30)*%pi/180)=1/2'],
-            'degrees alone' => ['30^{\\circ}', '30'],
+            'degrees alone' => ['30^{\\circ}', '30°'],
             'display fraction' => ['\\dfrac{3}{4}', '3/4'],
             'Japanese leqq' => ['x \\leqq 2', 'x<=2'],
             'Japanese leqq chain' => ['0 \\leqq x \\leqq 2 \\pi', '0<=x and x<=2*%pi'],
             'plus-minus before a root' => ['x=\\pm \\sqrt{3}', 'x=+-sqrt(3)'],
             'plus-minus inside quadratic formula' => ['\\frac{-b \\pm \\sqrt{b^{2}-4 a c}}{2 a}', '(-b+-sqrt(b^2-4*a*c))/(2*a)'],
             'leading implication arrow' => ['\\Rightarrow x=3', 'x=3'],
-            'bare prime' => ['y^{\\prime}=2 y', 'diff(y,x)=2*y'],
+            'bare prime' => ['y^{\\prime}=2 y', "y'=2*y"],
             'limit keeps its right-hand side' => ['\\lim _{x \\rightarrow 0} \\frac{\\sin x}{x}=1', 'limit(sin(x)/x,x,0)=1'],
             'sum keeps its right-hand side' => ['\\sum_{k=1}^{n} k=\\frac{n(n+1)}{2}', 'sum(k,k,1,n)=(n*(n+1))/(2)'],
             'determinant keeps its right-hand side' => ['\\left|\\begin{array}{ll}a & b \\\\ c & d\\end{array}\\right|=a d-b c', 'determinant(matrix([a,b],[c,d]))=a*d-b*c'],
@@ -441,7 +441,7 @@ final class stack_converter_test extends \advanced_testcase {
             'open interval' => ['x \\in(-1,3)', '-1<x and x<3'],
             'combination' => ['{ }_{5} C_{2}', 'binomial(5,2)'],
             'combination with mathrm' => ['{ }_{6} \\mathrm{C}_{3}=20', 'binomial(6,3)=20'],
-            'point equation' => ['(x, y)=(1,2)', '[x,y]=[1,2]'],
+            'ambiguous point or interval keeps parentheses' => ['(x, y)=(1,2)', '(x,y)=(1,2)'],
             'several assignments stay as written' => ['\\mu=50, \\sigma=10', 'mu=50,sigma=10'],
             'OCR-damaged second solution stays invalid' => ['x=-1, x-3', 'x=-1,x-3'],
             'integrand of two functions' => ['\\int \\sin x \\cos x d x', 'int(sin(x)*cos(x),x)'],
@@ -479,8 +479,8 @@ final class stack_converter_test extends \advanced_testcase {
             'prose before a system is prose' => ['latex', '\\text{Answer: } \\begin{cases} x=1 \\\\ y=2\\end{cases}', '[x=1,y=2]'],
             'variable times a scientific number' => ['latex', 'x 2.5e-3', 'x*2.5e-3'],
             'unbraced text subscript' => ['latex', 'x_\\text{max}=3', 'x[max]=3'],
-            'sentence period after an approximation' => ['latex', 'x \\approx 2.71.', 'x=2.71'],
-            'sentence period after a lone approximation' => ['latex', '\\approx 2.71.', '2.71'],
+            'sentence period after an approximation' => ['latex', 'x \\approx 2.71.', 'x \\approx 2.71.'],
+            'sentence period after a lone approximation' => ['latex', '\\approx 2.71.', '\\approx 2.71.'],
             'subscript i makes i a variable' => ['latex', 'x_{i}=i^2', 'x[i]=i^2'],
             'imaginary unit after a root' => ['latex', 'z = 1 + \\sqrt{3}i', 'z=1+sqrt(3)*%i'],
             'eta' => ['latex', '2\\eta x', '2*eta*x'],
@@ -501,6 +501,38 @@ final class stack_converter_test extends \advanced_testcase {
             'union stays invalid' => ['latex', 'A \\cup B', 'A\\cup*B'],
             'arg stays invalid' => ['latex', '\\arg z', '\\arg*z'],
             'set builder stays invalid' => ['latex', '\\{x \\mid x>0\\}', '{x\\mid*x>0}'],
+            // A name keeps its letters together after the backslash goes.
+            'pi after a variable' => ['latex', 'r\\pi', 'r*%pi'],
+            'pi in an exponent' => ['latex', 'e^{i\\pi}', '%e^(%i*%pi)'],
+            'Greek letter before pi' => ['latex', '\\alpha\\pi', 'alpha*%pi'],
+            'infinity after a variable' => ['latex', 'n\\infty', 'n*inf'],
+            'minus infinity is subtraction after a term' => ['latex', 'x-\\infty', 'x-inf'],
+            'minus infinity after an arrow is minf' => ['latex', '\\lim_{x\\to-\\infty} f(x)', 'limit(f(x),x,minf)'],
+            'unicode not-equal sign' => ['latex', 'x≠1', 'not(x=1)'],
+            'determinant of a matrix' => ['latex', '\\det\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}', 'determinant(matrix([1,2],[3,4]))'],
+            'factor before a matrix' => ['latex', '2\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}', '2*matrix([1,2],[3,4])'],
+            // Meaning with no STACK form here stays as written for STACK to reject.
+            'cross product stays as written' => ['latex', '\\vec{a}\\times\\vec{b}', '\\vec{a}\\times\\vec{b}'],
+            'conjugate stays as written' => ['latex', 'z\\bar{z}=25', 'z\\bar{z}=25'],
+            'mean stays as written' => ['latex', '\\overline{x}=5', '\\overline{x}=5'],
+            'repeating decimal stays as written' => ['latex', '0.\\dot{3}', '0.\\dot{3}'],
+            'mixed number stays as written' => ['latex', '1\\frac{1}{2}', '1\\frac{1}{2}'],
+            'fraction after a power is a product' => ['latex', 'x^2\\frac{1}{2}', 'x^2*1/2'],
+            // A unit after a number is part of the quantity.
+            'unit after a number' => ['latex', 'x=3\\,\\mathrm{cm}', 'x=3*cm'],
+            'squared unit' => ['latex', '5 \\mathrm{~cm}^{2}', '5*cm^2'],
+            'unit quotient' => ['latex', 'v=3 \\mathrm{~km} / \\mathrm{h}', 'v=3*km/h'],
+            'unit product with a negative power' => ['latex', '5\\,\\mathrm{m}\\cdot\\mathrm{s}^{-2}', '5*m*s^-2'],
+            'adjacent units remain separate factors' => ['latex', '3 \\mathrm{m} \\mathrm{s}^{-1}', '3*m*s^-1'],
+            'upright or is not guessed to be a unit' => ['latex', 'x=2 \\mathrm{or} x=3', 'x=2 or x=3'],
+            'upright and is not guessed to be a unit' => ['latex', 'x=2 \\mathrm{and} y=3', 'x=2 and y=3'],
+            'upright prose after a number is not guessed to be a unit' => ['latex', 'x=2 \\mathrm{people}', 'x=2'],
+            'one marked vector keeps a possible cross product unchanged' => [
+                'latex', '\\vec{a}\\times b', '\\vec{a}\\times b',
+            ],
+            'percentage remains visible' => ['latex', '50\\%', '50\\%'],
+            'full-width percentage remains visible' => ['latex', '50％', '50％'],
+            'unknown continuous name is not split into guessed factors' => ['latex', 'abc', 'abc'],
             'scientific notation' => ['ascii', '2.5e-3', '2.5e-3'],
             'scientific notation capital E' => ['ascii', '1.0E-5', '1.0E-5'],
             'typed pi constant' => ['ascii', '%pi', '%pi'],
@@ -553,7 +585,7 @@ final class stack_converter_test extends \advanced_testcase {
     public function test_document_lines_drop_leading_implication_arrows(): void {
         $text = "\$\\Rightarrow f(2)=1+2 \\sqrt{2} \\approx 3.82\$\n"
             . "\$\$\n\\begin{aligned}\n& \\Leftrightarrow x^{2}-6 x+5 \\leq 0\n\\end{aligned}\n\$\$";
-        $this->assertSame(['f(2)=1+2*sqrt(2)', 'x^2-6*x+5<=0'],
+        $this->assertSame(['f(2)=1+2 \\sqrt{2} \\approx 3.82', 'x^2-6*x+5<=0'],
             array_column(mathpix_client::build_document_lines($text), 'stack'));
     }
 
@@ -612,7 +644,7 @@ final class stack_converter_test extends \advanced_testcase {
 
     public static function edited_ascii_cases(): array {
         return [
-            'function typed without brackets' => ['sinx', 'sin(x)'],
+            'function typed without brackets stays as typed' => ['sinx', 'sinx'],
             'power on function name' => ['sin^2(x)', 'sin(x)^2'],
             'typed logarithm of absolute value' => ['ln|x|+C', 'ln(abs(x))+C'],
             'STACK base logarithm' => ['lg(x,2)', 'lg(x,2)'],
@@ -626,7 +658,7 @@ final class stack_converter_test extends \advanced_testcase {
             'absolute value' => ['|x-1|', 'abs(x-1)'],
             'unicode minus' => ['x=−1', 'x=-1'],
             'logarithm base with nested argument' => ['log_2(x(x-2))=3', '(log(x*(x-2))/log(2))=3'],
-            'logarithm base inside a word is not a logarithm' => ['catalog_2', 'c*a*t*a*l*o*g_2'],
+            'logarithm base inside a word stays one name' => ['catalog_2', 'catalog_2'],
             'logical interval with implicit multiplication' => [
                 '1<=x and x<=3*2x',
                 '1<=x and x<=3*2*x',

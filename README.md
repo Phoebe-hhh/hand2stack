@@ -29,7 +29,6 @@ Do not upload GitHub's automatically generated **Source code** archives to Moodl
 - Preserve prose and every recognized mathematics line during desktop and mobile free-text recognition.
 - Show the uploaded source image beside the editable free-text transcription, with zoom and drag inspection.
 - Match labelled results such as `f(2)=...` or `Answer: ...` to sibling STACK inputs using their syntax hints without overwriting newer results or student edits.
-- Insert only the value when an answer field's own syntax hint is a label, so a recognized `x=3` goes into an `x=` field as `3`.
 - Select part of a recognized formula and insert only the confirmed STACK expression.
 - Prevent stale recognition requests from replacing newer results and limit recognition requests per user.
 - Keep Mathpix credentials on the Moodle server rather than in browser JavaScript.

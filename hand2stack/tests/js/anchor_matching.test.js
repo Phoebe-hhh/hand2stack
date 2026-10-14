@@ -263,22 +263,17 @@ test('a prose label is found in the recognized row when the maths dropped it', (
     ]);
 });
 
-test('an answer box drops its own label hint from an inserted value', () => {
-    const stripOwnAnchor = (0, eval)(`(function() {
-        ${extractFunctionSource('normalizeAnchorText')}
-        ${extractFunctionSource('isProseAnchor')}
-        ${extractFunctionSource('extractAnchoredValue')}
-        ${extractFunctionSource('stripOwnAnchor')}
-        return stripOwnAnchor;
-    })()`);
-    assert.equal(stripOwnAnchor('x=', 'x=3'), '3');
-    assert.equal(stripOwnAnchor('x=', 'x = -1/2'), '-1/2');
-    assert.equal(stripOwnAnchor('f(2)=', 'f(2)=1+2*sqrt(2)'), '1+2*sqrt(2)');
-    // Anything that is not "label = value" is inserted unchanged.
-    assert.equal(stripOwnAnchor('x=', 'x=2 or x=3'), 'x=2 or x=3');
-    assert.equal(stripOwnAnchor('x=', 'x^2=9'), 'x^2=9');
-    assert.equal(stripOwnAnchor('x=', '3'), '3');
-    assert.equal(stripOwnAnchor('y=', 'x=3'), 'x=3');
+test('Insert puts in exactly the converted value, whatever the box hint', () => {
+    // The learner checks what Insert inserts; a hint such as "x=" never reshapes it.
+    assert.equal(source.includes('stripOwnAnchor'), false);
+    assert.match(source, /setAnswerValue\(answerBox, stackValue\);/);
+    assert.match(source, /const updateSelectedPreview = \(\) => \{\s*panel\._stackTextarea\.value = stackValueForLine\(resultLines\[selectedIndex\]\);/);
+});
+
+test('a clicked formula part is what Insert inserts, as a dragged one is', () => {
+    const convert = source.slice(source.indexOf('const convertSelectedLatex = '));
+    assert.match(convert, /panel\._partialSelection = \{lineIndex, value: panel\._stackTextarea\.value\};/);
+    assert.match(convert, /panel\._partialSelection\.value = panel\._stackTextarea\.value;/);
 });
 
 test('a missing prose label falls back to the last mathematical line', () => {

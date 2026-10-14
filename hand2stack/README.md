@@ -47,7 +47,6 @@ Migrating from 0.2.x is a component migration rather than an ordinary upgrade. D
 - Keeps the review panel and the source image of each Free-text answer after Check, Next, or Save, with the learner's corrections still marked, and puts unsubmitted working back after a plain reload. On the quiz review page, and under a Free-text answer locked after Check, the source image is shown below the answer.
 - Matches labelled results such as `f(2)=...` or `Answer: ...` to sibling STACK fields through their syntax hints while protecting newer recognition results and concurrent student edits.
 - When a prose label such as `Answer:` is not written, fills that field from the last mathematical line of the working (a common "underlined final answer" habit) and asks the learner to check it; specific labels such as `f(2)=` never guess.
-- Inserts only the value when an answer field's own syntax hint is a label (`x=`), so a recognized `x=3` is inserted as `3`; values with a further relation or connective are inserted unchanged.
 - Classifies recognized lines as text, equation, expression, approximation, or condition without inferring which is the answer.
 - Preserves approximate values as normalized candidates with an `approximate` relation instead of discarding them.
 - Lets users choose a different line, drag-select part of a line, or edit the selected recognized ASCII expression.

@@ -99,7 +99,8 @@ test('the review panel and its source image survive the reload after a submit', 
     assert.match(source, /canvas\.toDataURL\('image\/jpeg', 0\.85\)/);
     // A restored panel shows the working and marks corrections against the recognition.
     assert.match(source, /panel\._stackTextarea\.value = working;\n\s+panel\._changeHighlighter\.compare\(recognizedWorking, working\);/);
-    assert.match(source, /if \(!freeTextMode && !restore\) syncDiagnosticProcess\(\);/);
+    // A restored panel keeps the process input bound only if it was inserted from.
+    assert.match(source, /if \(!freeTextMode && restore\) \{\s*const processInput = findProcessInput\(answerBox\);/);
     assert.match(source, /savedResult\.sourceUrl \|\| '', \{restore: true, savedWorking: savedResult\.working\}\)/);
     // A plain reload brings back an older saved answer; the newer working wins.
     assert.match(source, /saveFreeTextWorking\(answerBox, panel\._stackTextarea\.value\)/);
@@ -266,9 +267,8 @@ test('insert recomputes the current selected value in STACK format', () => {
     assert.match(source, /let stackValue = panel\._partialSelection[\s\S]*stackValueForLine\(line\)/);
     assert.match(source, /stackValue = await postAscii\(ascii\)/);
     assert.match(source, /line\._validatedAscii = ascii/);
-    // The inserted value is the validated STACK value, less the box's own label hint.
-    assert.match(source, /const insertedValue = ownAnchor \? stripOwnAnchor\(ownAnchor, stackValue\) : stackValue;/);
-    assert.match(source, /panel\._stackTextarea\.value = insertedValue;[\s\S]*setAnswerValue\(answerBox, insertedValue\)/);
+    // The inserted value is the validated STACK value, exactly as the box shows it.
+    assert.match(source, /panel\._stackTextarea\.value = stackValue;[\s\S]*setAnswerValue\(answerBox, stackValue\)/);
     assert.match(source, /updateEditedControls\(\);\s*updateSelectedPreview\(\);/);
 });
 

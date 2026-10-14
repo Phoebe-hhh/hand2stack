@@ -61,6 +61,106 @@ final class stack_converter {
         return preg_replace('/([_^])\s*(\\\\(?:text|mathrm)\s*\{[^{}]*\})/u', '$1{$2}', $latex);
     }
 
+    /** Upright units that are unambiguous; arbitrary \\mathrm words remain OCR text. */
+    private const UNIT_NAME = '(?:mm|cm|dm|km|um|nm|kg|mg|ug|mol|Hz|kHz|MHz|GHz|Pa|kPa|MPa|J|kJ|W|kW|V|mV|A|mA|K|N|C|F|Ohm|L|mL|s|min|h|m|g)';
+    private const UNIT_ATOM = '\\\\mathrm\s*\{\s*~?\s*(' . self::UNIT_NAME . ')\s*\}'
+        . '(?:\s*\^\s*(?:\{\s*-?\d+\s*\}|-?\d))?';
+
+    /**
+     * A unit written after a number: "2.5\\,\\mathrm{m}", "5 \\mathrm{~cm}^{2}",
+     * "3 \\mathrm{~km} / \\mathrm{h}". Mathpix sets units upright like prose,
+     * but after a number they are part of the quantity, not a word.
+     */
+    private const UNIT = '/(?<=\d)(?:\s|\\\\[,;: ]|~)*(' . self::UNIT_ATOM
+        . '(?:(?:\s*(?:\/|\\\\cdot(?![A-Za-z]))\s*|\s+)' . self::UNIT_ATOM . ')*)/u';
+
+    /** Byte ranges of the units in $latex, so prose detection can skip them. */
+    private static function unit_spans(string $latex): array {
+        if (!preg_match_all(self::UNIT, $latex, $matches, PREG_OFFSET_CAPTURE)) {
+            return [];
+        }
+        return array_map(static function(array $match): array {
+            return [$match[1], $match[1] + strlen($match[0])];
+        }, $matches[1]);
+    }
+
+    /** The ASCII spelling of a matched unit: \\mathrm{~km} / \\mathrm{h} is km/h. */
+    private static function unit_ascii(string $unit): string {
+        // Adjacent upright units are factors: m s^-1, not ms^-1.
+        $unit = preg_replace('/\}\s+(?=\\\\mathrm\s*\{)/', '}*', $unit);
+        // \cdot first: once \mathrm{s} is s, "\cdot s" would read as \cdots.
+        $unit = preg_replace('/\\\\cdot(?![A-Za-z])/', '*', $unit);
+        $unit = preg_replace('/\\\\mathrm\s*\{\s*~?\s*([^{}]*?)\s*\}/', '$1', $unit);
+        $unit = preg_replace('/\^\s*\{\s*(-?\d+)\s*\}/', '^$1', $unit);
+        return preg_replace('/\s+/', '', $unit);
+    }
+
+    /**
+     * Notation whose meaning has no STACK form here, kept exactly as written
+     * so STACK rejects it visibly instead of accepting a different value: a
+     * possible cross product (the whole expression, when either side of a
+     * \\times is marked as a vector), a mixed number 1\\frac{1}{2} (not
+     * 1*1/2), and an accent such as \\bar{z}, \\overline{z} or 0.\\dot{3}
+     * (not z or 0.3).
+     *
+     * @param array<string,string> $kept placeholder => original text
+     */
+    private static function keep_unconvertible(string $s, array &$kept): string {
+        $keep = static function(string $text) use (&$kept): string {
+            $token = '§K' . count($kept) . '§';
+            $kept[$token] = $text;
+            return $token;
+        };
+        $vector = '\\\\(?:vec|mathbf|boldsymbol)\s*(?:\{[^{}]*\}|[A-Za-z])';
+        // If either side is explicitly a vector, multiplication may actually
+        // be a cross product. Preserve the OCR expression instead of guessing.
+        if (preg_match('/(?:' . $vector . '\s*(?:\\\\times(?![A-Za-z])|×)|(?:\\\\times(?![A-Za-z])|×)\s*' . $vector . ')/u', $s)) {
+            return $keep($s);
+        }
+        $s = preg_replace_callback(
+            '/(?<![A-Za-z0-9.^_{}\\\\§])\d+\s*\\\\[dt]?frac\s*\{\s*\d+\s*\}\s*\{\s*\d+\s*\}/',
+            static function(array $m) use ($keep): string {
+                return $keep($m[0]);
+            }, $s);
+
+        $offset = 0;
+        while (preg_match('/\\\\(?:hat|widehat|bar|overline|dot|ddot)(?![A-Za-z])\s*/', $s, $match,
+                PREG_OFFSET_CAPTURE, $offset)) {
+            $start = $match[0][1];
+            $cursor = $start + strlen($match[0][0]);
+            if (($s[$cursor] ?? '') === '{') {
+                $close = self::closing_brace($s, $cursor);
+                if ($close === null) {
+                    $offset = $cursor;
+                    continue;
+                }
+                $end = $close + 1;
+            } else if (preg_match('/\G(?:\\\\[A-Za-z]+|[A-Za-z0-9])/', $s, $atom, 0, $cursor)) {
+                $end = $cursor + strlen($atom[0]);
+            } else {
+                $offset = $cursor;
+                continue;
+            }
+            $token = $keep(substr($s, $start, $end - $start));
+            $s = substr($s, 0, $start) . $token . substr($s, $end);
+            $offset = $start + strlen($token);
+        }
+        return $s;
+    }
+
+    /** Offset of the brace closing the one at $open, or null when unbalanced. */
+    private static function closing_brace(string $s, int $open): ?int {
+        $depth = 0;
+        for ($i = $open, $length = strlen($s); $i < $length; $i++) {
+            if ($s[$i] === '{') {
+                $depth++;
+            } else if ($s[$i] === '}' && --$depth === 0) {
+                return $i;
+            }
+        }
+        return null;
+    }
+
     public static function split_statements(string $latex): array {
         $latex = self::brace_script_labels($latex);
         $connectives = '/^(?:' . implode('|', array_map('preg_quote', array_keys(self::CONNECTIVES))) . ')$/iu';
@@ -68,8 +168,16 @@ final class stack_converter {
         $start = 0;
         $depth = 0;
         $length = strlen($latex);
+        $units = self::unit_spans($latex);
         for ($i = 0; $i < $length; $i++) {
             $char = $latex[$i];
+            foreach ($units as [$from, $to]) {
+                if ($i === $from) {
+                    // A unit after a number is part of the quantity, not prose.
+                    $i = $to - 1;
+                    continue 2;
+                }
+            }
             if ($char === '\\' && $depth === 0
                     && preg_match('/\G\\\\begin\s*\{([A-Za-z]+\*?)\}/', $latex, $environment, 0, $i)) {
                 // A cases or array block is one statement; the \\text{otherwise}
@@ -122,6 +230,9 @@ final class stack_converter {
                 return trim($part, " \t,.;") !== '' && !preg_match(self::RELATION, $part);
             });
             foreach ($complete ? $parts : [$text] as $part) {
+                // LaTeX spacing (\, \; ~) at a prose boundary is layout; without
+                // this, "x=3\, \text{so}" keeps "x=3\" and calls "," prose.
+                $part = preg_replace('/^(?:\s|\\\\[,;:! ]|~)+|(?:\s|\\\\[,;:! ]|~)+$/', ' ', $part);
                 // Punctuation between statements belongs to the prose.
                 preg_match('/^([\s,.;:]*)(.*?)([\s,.;:]*)$/su', $part, $edge);
                 if (trim($edge[1]) !== '') {
@@ -571,6 +682,15 @@ final class stack_converter {
             $scientific[$token] = $m[0];
             return $token;
         }, $s);
+        // A unit after a number stays one name (cm, not c*m) and joins its number with "*".
+        $units = [];
+        $s = preg_replace_callback(self::UNIT, static function(array $m) use (&$units): string {
+            $token = '§U' . count($units) . '§';
+            $units[$token] = self::unit_ascii($m[1]);
+            return $token;
+        }, $s);
+        $kept = [];
+        $s = self::keep_unconvertible($s, $kept);
         $s = self::normalize_named_notation($s);
 
         // Layout/proof commands are not part of a STACK expression.
@@ -588,27 +708,17 @@ final class stack_converter {
             $s
         );
         $s = self::normalize_combinations($s);
-        // A percentage is written as its number; the unit stays outside the answer.
-        $s = preg_replace('/\s*(?:\\\\%|％)/u', '', $s);
+        // A percentage is not the same value as its bare number. Keep the OCR
+        // notation so unsupported percentage syntax is rejected visibly.
 
         // List numbering such as "1. f(2)=..." is layout, not a product "1.f(2)".
         $s = preg_replace('/^\s*(?:\d+[.)]|\(\d+\))\s+(?=[A-Za-z\\\\(])/', '', $s);
 
-        // Maxima has no approximation operator. A trailing "≈ 3.83" after an
-        // exact value restates it as a decimal, so keep the exact part; a
-        // lone approximation ("x ≈ 3.83", "≈ 2.71") keeps the decimal.
+        // Approximation is not equality. With no semantics-preserving STACK
+        // spelling available here, keep exactly what OCR returned.
         $approx = '(?:\\\\(?:approx|simeq|thickapprox|sim)(?![A-Za-z])|(?<![A-Za-z\\\\])approx(?![A-Za-z])|≈|~~)';
-        $approximate = (bool)preg_match('/' . $approx . '/u', $s);
-        $s = preg_replace('/^\s*' . $approx . '\s*/u', '', $s);
-        if (preg_match('/' . $approx . '/u', $s, $match, PREG_OFFSET_CAPTURE)) {
-            $head = substr($s, 0, $match[0][1]);
-            $s = preg_match('/(?<![<>!#:])=/', $head)
-                ? rtrim($head)
-                : preg_replace('/' . $approx . '/u', '=', $s, 1);
-        }
-        if ($approximate) {
-            // The period closing "x ≈ 2.71." ends the sentence, not the number.
-            $s = preg_replace('/(?<=\d)\s*[.。]\s*$/u', '', $s);
+        if (preg_match('/' . $approx . '/u', $s)) {
+            return trim($input);
         }
 
         $piecewise = self::normalize_piecewise($s);
@@ -633,11 +743,6 @@ final class stack_converter {
             $s = preg_replace('/\\\\\s*' . preg_quote($command, '/') . '/', '\\' . $command, $s);
         }
 
-        // Accents are presentation metadata in handwritten/OCR input. STACK
-        // has no generally safe scalar representation for them, so retain the
-        // underlying expression instead of emitting invalid hat*(...) tokens.
-        $s = self::normalize_accents($s);
-
         $greekcommands = '(?:alpha|beta|gamma|delta|epsilon|theta|lambda|mu|sigma|rho|tau|phi|psi|omega)';
         $s = self::insert_star_before_commands($s, substr($greekcommands, 3, -1));
 
@@ -655,7 +760,7 @@ final class stack_converter {
         $s = preg_replace('/\\\\le(?![a-zA-Z])/', '<=', $s);
         $s = preg_replace('/\\\\gt(?![a-zA-Z])/', '>', $s);
         $s = preg_replace('/\\\\lt(?![a-zA-Z])/', '<', $s);
-        $s = preg_replace('/\\\\neq?(?![a-zA-Z])/', '#', $s);
+        $s = preg_replace('/\\\\neq?(?![a-zA-Z])|≠/u', '#', $s);
 
         // STACK's own +- operator keeps both values and the variable:
         // "x=\pm 2" is x=+-2, never the bare list [2,-2].
@@ -673,17 +778,22 @@ final class stack_converter {
         $s = preg_replace('/([a-zA-Z])\s*∈\s*([A-Z])/u', '__ALL__$1__IN__$2__', $s);
         $s = preg_replace('/\\\\mathbb\s*\{\s*([A-Z])\s*\}/', '$1', $s);
 
-        $s = preg_replace('/-\s*\\\\infty/', 'minf', $s);
-        $s = preg_replace('/-\s*∞/u', 'minf', $s);
-        $s = str_replace(['\\infty', '∞'], 'inf', $s);
+        // -∞ is minf only as a value; in x-\infty the minus subtracts. Spaces
+        // keep inf a word of its own, so x\infty is x*inf, not x*i*n*f.
+        $s = preg_replace_callback('/-\s*(?:\\\\infty(?![A-Za-z])|∞)/u', static function(array $m) use ($s): string {
+            $before = rtrim(substr($s, 0, $m[0][1]));
+            $binary = preg_match('/\\\\([A-Za-z]+)$/', $before, $command)
+                ? preg_match('/^(?:' . self::GREEK_LETTERS . '|infty)$/', $command[1])
+                : preg_match('/[A-Za-z0-9)\]}§]$/u', $before);
+            return $binary ? '- inf ' : ' minf ';
+        }, $s, -1, $count, PREG_OFFSET_CAPTURE);
+        $s = preg_replace('/\\\\infty(?![A-Za-z])|∞/u', ' inf ', $s);
 
         $s = preg_replace('/\^\s*\{\s*\\\\prime\s*\\\\prime\s*\}|\^\s*\\\\prime\s*\\\\prime(?![A-Za-z])/', "''", $s);
         $s = preg_replace('/\^\s*\{\s*\\\\prime\s*\}|\^\s*\\\\prime(?![A-Za-z])/', "'", $s);
         $s = self::normalize_prime_derivative($s);
-        // A bare y' or y'' is by x, as usual; x' itself has no stated variable
-        // (often a time derivative), so it stays unconverted for STACK to reject.
-        $s = preg_replace("/(?<![A-Za-z])([a-wyzA-Z])''(?![A-Za-z0-9(])/", 'diff($1,x,2)', $s);
-        $s = preg_replace("/(?<![A-Za-z])([a-wyzA-Z])'(?![A-Za-z0-9('])/", 'diff($1,x)', $s);
+        // A bare prime does not state its independent variable. Keep it as OCR
+        // wrote it; only f'(x) supplies enough information to convert safely.
         $s = str_replace(['\\,', '\\!', '\\;', '\\:', '\\ '], '', $s);
         $s = preg_replace('/\^\{([^{}]+)\}/', '^($1)', $s);
 
@@ -701,8 +811,7 @@ final class stack_converter {
 
         $s = self::normalize_function_arguments($s);
         $s = str_replace(self::IMPLICIT_PRODUCT, '*', $s);
-        // Any other degree mark is an angle answer in degrees: keep the number.
-        $s = preg_replace('/\s*°/u', '', $s);
+        // A standalone degree mark carries meaning and must not be discarded.
 
         $s = self::normalize_derivative($s);
         $s = self::normalize_sum_product($s);
@@ -736,7 +845,8 @@ final class stack_converter {
         $s = preg_replace('/\\\\operatorname\s*\{\s*([^{}]+?)\s*\}/', '$1', $s);
         // \{1,2,3\} is a set; other braces are LaTeX grouping.
         $s = str_replace(['\\{', '\\}', '{', '}'], ["\x01", "\x02", '(', ')'], $s);
-        $s = preg_replace('/\\\\(' . self::STRIPPABLE_COMMANDS . ')(?![A-Za-z])/', '$1', $s);
+        // Spaces keep the name a word of its own: r\pi is r*%pi, not r*p*%i.
+        $s = preg_replace('/\\\\(' . self::STRIPPABLE_COMMANDS . ')(?![A-Za-z])/', ' $1 ', $s);
         $s = preg_replace('/(?<![A-Za-z\\\\])var(epsilon|theta|rho|sigma|phi)(?![A-Za-z])/', '$1', $s);
 
         // Preserve logical words before whitespace-based implicit
@@ -744,8 +854,9 @@ final class stack_converter {
         $s = preg_replace('/\band\b/i', '__LOGICAL_AND__', $s);
         $s = preg_replace('/\bor\b/i', '__LOGICAL_OR__', $s);
         $s = preg_replace('/\bin\b/i', '__RELATIONAL_IN__', $s);
-        $s = preg_replace('/([a-zA-Z])\s+([a-zA-Z])/', '$1*$2', $s);
-        $s = preg_replace('/(\d)\s+([a-zA-Z])/', '$1*$2', $s);
+        // Lookahead, so "a b c" is a*b*c: each letter both ends one gap and starts the next.
+        $s = preg_replace('/([a-zA-Z])\s+(?=[a-zA-Z])/', '$1*', $s);
+        $s = preg_replace('/(\d)\s+(?=[a-zA-Z])/', '$1*', $s);
         $s = preg_replace('/\s+/', '', $s);
 
         // Restore set/interval placeholders before splitting unknown letter
@@ -792,12 +903,20 @@ final class stack_converter {
         $s = preg_replace('/\blog\(([^(),]+),([^(),]+)\)/', '(log($1)/log($2))', $s);
         $s = self::protect_functions($s);
         $s = self::beautify($s);
+        // Kept text first: it may hold a number or unit placeholder of its own.
+        if ($kept) {
+            $s = strtr($s, $kept);
+        }
         if ($scientific) {
             // A placeholder is not a letter, so implicit multiplication never
             // saw "2.5e-3 x"; the number and its neighbour are two factors.
             $s = preg_replace('/(§S\d+§)(?=[A-Za-z(%])/u', '$1*', $s);
             $s = preg_replace('/(?<=[A-Za-z0-9)])(§S\d+§)/u', '*$1', $s);
             $s = strtr($s, $scientific);
+        }
+        if ($units) {
+            $s = preg_replace('/(?<=[0-9])(§U\d+§)/u', '*$1', $s);
+            $s = strtr($s, $units);
         }
 
         return trim($s);
@@ -917,7 +1036,7 @@ final class stack_converter {
         $prosecheck = preg_replace(
             '/_\{\s*\\\\(?:text|mathrm)\s*\{\s*[^{}]*?\s*\}\s*\}/u',
             '_label',
-            $s
+            preg_replace(self::UNIT, 'unit', $s)
         );
         // Prose inside a formula is what Mathpix marks as \\text{...}; a word
         // list would only guess at it.
@@ -945,9 +1064,18 @@ final class stack_converter {
             return trim($s);
         }
 
+        // A unit after a number belongs to the quantity: keep it through the
+        // prose removal below.
+        $units = [];
+        $s = preg_replace_callback(self::UNIT, static function(array $m) use (&$units): string {
+            $token = '§U' . count($units) . '§';
+            $units[$token] = $m[0];
+            return $token;
+        }, $s);
         $s = preg_replace('/\\\\text\s*\{\s*[^{}]*?\s*\}/u', ' ', $s);
         $s = preg_replace('/(?<!\\\\)\btext\s*\{\s*[^{}]*?\s*\}/u', ' ', $s);
         $s = preg_replace('/\\\\mathrm\s*\{\s*[^{}]*?\s*\}/u', ' ', $s);
+        $s = strtr($s, $units);
         $s = preg_replace('/\s+/', ' ', $s);
 
         // A bound such as k=1 is part of the surrounding operator, not a
@@ -1076,8 +1204,18 @@ final class stack_converter {
         $closer = '/^\s*(?:\\\\right\s*)?(?:\)|\]|\||\.|\\\\\}|\\\\vert|\\\\rvert)/';
         $prefix = trim(preg_replace($opener, '', $before));
         $suffix = trim(preg_replace($closer, '', $after));
-        $wrap = static function(string $core) use ($prefix, $suffix): string {
-            return ($prefix === '' ? '' : self::normalize($prefix)) . $core . ($suffix === '' ? '' : self::normalize($suffix));
+        // \det\begin{pmatrix}...\end{pmatrix} is the determinant of the matrix.
+        $det = '/\\\\(?:det(?![A-Za-z])|operatorname\s*\{\s*det\s*\})\s*$/';
+        $determinant = (bool)preg_match($det, $prefix);
+        $prefix = trim(preg_replace($det, '', $prefix));
+        $wrap = static function(string $core) use ($prefix, $suffix, $determinant): string {
+            $core = $determinant ? 'determinant(' . $core . ')' : $core;
+            $head = $prefix === '' ? '' : self::normalize($prefix);
+            $tail = $suffix === '' ? '' : self::normalize($suffix);
+            // A factor written next to the matrix multiplies it: 2\begin{pmatrix}..
+            $head .= preg_match('/[A-Za-z0-9)\]]$/', $head) ? '*' : '';
+            $tail = (preg_match('/^[A-Za-z0-9(%]/', $tail) ? '*' : '') . $tail;
+            return $head . $core . $tail;
         };
         $onecolumn = !preg_match('/,/', implode('', array_map(static function(string $row): string {
             return preg_replace('/\([^()]*\)|\[[^\[\]]*\]/', '', substr($row, 1, -1));
@@ -1229,43 +1367,6 @@ final class stack_converter {
         return $depth === 0 ? $normalized : $output;
     }
 
-    private static function normalize_accents(string $input): string {
-        $output = $input;
-        $offset = 0;
-        while (preg_match(
-            '/\\\\(?:hat|widehat|bar|overline|dot|ddot)\s*\{/',
-            $output,
-            $match,
-            PREG_OFFSET_CAPTURE,
-            $offset
-        )) {
-            $start = $match[0][1];
-            $open = $start + strlen($match[0][0]) - 1;
-            $depth = 1;
-            $cursor = $open + 1;
-            $length = strlen($output);
-            while ($cursor < $length && $depth > 0) {
-                if ($output[$cursor] === '{') {
-                    $depth++;
-                } else if ($output[$cursor] === '}') {
-                    $depth--;
-                }
-                $cursor++;
-            }
-
-            if ($depth !== 0) {
-                $offset = $open + 1;
-                continue;
-            }
-
-            $inner = substr($output, $open + 1, $cursor - $open - 2);
-            $output = substr($output, 0, $start) . $inner . substr($output, $cursor);
-            $offset = $start;
-        }
-
-        return $output;
-    }
-
     private static function normalize_limit(string $input): string {
         return preg_replace_callback(
             '/\\\\lim\s*_\s*\{\s*([a-zA-Z])\s*(?:\\\\to|\\\\rightarrow|\\\\longrightarrow|->|→)\s*([^{}]+?)\s*\}\s*(.+)$/u',
@@ -1410,16 +1511,9 @@ final class stack_converter {
             if (strlen($m[0]) >= 3 && !empty($m[1])) {
                 return $m[0];
             }
-            // "sinx" typed for sin(x).
-            if (preg_match('/^(sin|cos|tan|ln|log|exp)([a-zA-Z])$/', $m[0], $fn)) {
-                return $fn[1] . '(' . $fn[2] . ')';
-            }
-            if (preg_match('/\d$/', $m[0])) {
-                // x2 is the variable x2; only log10 and atan2 end in digits.
-                $letters = rtrim($m[0], '0123456789');
-                return implode('*', str_split($letters)) . substr($m[0], strlen($letters));
-            }
-            return implode('*', str_split($m[0]));
+            // An unknown continuous name may itself be a variable name. Keep
+            // it instead of guessing that every letter is a separate factor.
+            return $m[0];
         }, $input);
     }
 
@@ -1505,9 +1599,8 @@ final class stack_converter {
         $s = preg_replace('/\(([a-zA-Z]\[[^\[\]()]+\])\)\/\(([a-zA-Z0-9]+)\)/', '$1/$2', $s);
         $s = preg_replace('/%e\^\(([a-zA-Z0-9]+)\)/', '%e^$1', $s);
         $s = preg_replace('/__ALL__([a-zA-Z])__IN__([A-Z])__/', '$1 in $2', $s);
-        $s = preg_replace('/^\(([a-zA-Z](?:,[a-zA-Z])+)\)=/', '[$1]=', $s);
-        $s = preg_replace('/=\(\s*([A-Za-z0-9%+\-*\/^.\[\]\s]+(?:,[A-Za-z0-9%+\-*\/^.\[\]\s]+)+)\s*\)/', '=[$1]', $s);
-        $s = preg_replace('/^\(\s*([A-Za-z0-9%+\-*\/^.\[\]\s]+(?:,[A-Za-z0-9%+\-*\/^.\[\]\s]+)+)\s*\)$/', '[$1]', $s);
+        // Parenthesised comma-separated notation may be a point, tuple or open
+        // interval. Keep the delimiters instead of guessing a STACK list.
         return $s;
     }
 }

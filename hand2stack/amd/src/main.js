@@ -80,7 +80,8 @@ define([], function() {
         pollingfailed: 'The mobile connection was interrupted. Retrying...',
         partialselectionfailed: 'Could not convert the selected text.',
         handwritebtn: 'Handwrite math',
-        handwriteinstructions: 'Write with Apple Pencil, your finger, or a mouse. To scroll, drag outside the writing area.',
+        handwriteinstructions: 'Write with Apple Pencil, a stylus, or a mouse. Fingers do not write, '
+            + 'so a resting hand leaves no marks. To scroll, drag outside the writing area.',
         resizehandwriting: 'Drag to resize the writing area',
         draw: 'Pen',
         eraser: 'Eraser',
@@ -202,26 +203,24 @@ define([], function() {
 
     const processValueForLines = lines => {
         if (!Array.isArray(lines)) return '';
+        // An edited row is what the learner wrote now: its validated STACK
+        // value once the server has converted that edit, its ASCII until then.
+        const value = line => line.edited
+            ? (line._validatedAscii === line.ascii && line._validatedStack ? line._validatedStack : line.ascii)
+            : (line._validatedStack || line.stack || line.ascii || line.math);
         return lines.filter(line => !line.synthetic
                 && String((line && line.type) || 'expression').toLowerCase() !== 'text')
-            .map(line => String((line && (line._validatedStack || line.stack || line.ascii || line.math)) || '').trim())
+            .map(line => String((line && value(line)) || '').trim())
             .filter(Boolean)
             .join('\n');
     };
 
-    // One backtick-marked Free-text row, normalised like the server normalises
-    // recognized lines: list numbering is layout, and Maxima has no "~~", so a
-    // restated decimal after an exact value is dropped.
+    // One backtick-marked Free-text row. List numbering is layout, but the
+    // mathematical content is kept exactly as the learner/OCR supplied it.
     const processRowFromFreeText = row => {
-        let value = String(row || '').trim()
+        return String(row || '').trim()
             .replace(/^(?:\d+[.)]|\(\d+\))\s+(?=[A-Za-z(])/, '')
-            .replace(/^(?:~~|≈)\s*/, '');
-        const approx = /~~|≈/.exec(value);
-        if (approx) {
-            const head = value.slice(0, approx.index);
-            value = /(^|[^<>!#:])=/.test(head) ? head : value.replace(/~~|≈/, '=');
-        }
-        return value.trim();
+            .trim();
     };
 
     // The Free-text working marks each maths row with backticks; prose stays
@@ -687,17 +686,6 @@ define([], function() {
     // Scan from the end: when a label is restated after an earlier derivation
     // step (e.g. "g(1)=..." mid-working, then "g(1)~~..." as the final
     // answer), the later line is the intended answer.
-    // A box whose own Syntax hint is a label ("x=") expects only what follows
-    // it, so a recognized "x=3" is inserted as "3". A value that goes on to
-    // another relation or connective ("x=2 or x=3") is inserted whole.
-    const stripOwnAnchor = (anchor, value) => {
-        const rest = extractAnchoredValue(anchor, value);
-        if (!rest || /[=<>#]/.test(rest) || /(^|[^A-Za-z])(?:or|and)([^A-Za-z]|$)/.test(rest)) {
-            return value;
-        }
-        return rest;
-    };
-
     // A prose label such as "Answer:" or "答え:" (no digits, brackets or
     // operators) names the final result rather than a specific quantity like
     // "f(2)=". Learners often just underline that result instead of writing
@@ -1894,23 +1882,27 @@ define([], function() {
         }, {modality: panel._hand2stackSource || null});
     };
 
-    const convertSelectedLatex = async (panel, latex) => {
+    // A clicked or shift-extended selection is what Insert inserts, exactly as
+    // the Converted for STACK box shows it, like a dragged one.
+    const convertSelectedLatex = async (panel, latex, lineIndex) => {
         const requestId = (panel._selectionRequestId || 0) + 1;
         panel._selectionRequestId = requestId;
         const fallback = clientSideStackFallback(latex);
         panel._stackTextarea.value = fallback || latex;
+        panel._partialSelection = {lineIndex, value: panel._stackTextarea.value};
 
         try {
             const stack = await postLatex(latex);
             if (panel._selectionRequestId === requestId) {
                 panel._stackTextarea.value = stack || fallback || latex;
-                logPartialSelection(panel, panel._partialSelection ? panel._partialSelection.lineIndex : null,
-                    latex, panel._stackTextarea.value);
+                panel._partialSelection.value = panel._stackTextarea.value;
+                logPartialSelection(panel, lineIndex, latex, panel._stackTextarea.value);
             }
         } catch (error) {
             window.console.warn('[hand2stack] partial selection conversion failed:', error);
             if (panel._selectionRequestId === requestId) {
                 panel._stackTextarea.value = fallback || latex;
+                panel._partialSelection.value = panel._stackTextarea.value;
             }
         }
     };
@@ -1993,7 +1985,8 @@ define([], function() {
             if (convert) {
                 const selectedLatex = latexForLeafRange(rendered.dataset.latex || '', leaves, start, end);
                 if (selectedLatex) {
-                    convertSelectedLatex(panel, selectedLatex);
+                    const option = rendered.closest('[data-result-line-index]');
+                    convertSelectedLatex(panel, selectedLatex, option ? Number(option.dataset.resultLineIndex) : -1);
                 }
             }
         };
@@ -2453,9 +2446,19 @@ define([], function() {
                 defaultIndex
             }, logOptions());
         };
-        const syncDiagnosticProcess = () => syncProcessInput(answerBox, resultLines);
-        // Free-text mode syncs from the submitted text instead (bindFreeTextProcess).
-        if (!freeTextMode && !restore) syncDiagnosticProcess();
+        // The process input holds the working behind the inserted answer: it
+        // is written on Insert, then follows every edit of that working.
+        // Recognizing alone leaves it as it was. Free-text mode syncs from the
+        // submitted text instead (bindFreeTextProcess).
+        let processBound = false;
+        if (!freeTextMode && restore) {
+            const processInput = findProcessInput(answerBox);
+            processBound = Boolean(processInput && processInput.value
+                && processInput.value === processValueForLines(resultLines));
+        }
+        const syncDiagnosticProcess = () => {
+            if (processBound) syncProcessInput(answerBox, resultLines);
+        };
 
         if (freeTextMode) {
             panel._options.innerHTML = '';
@@ -2562,11 +2565,9 @@ define([], function() {
             if (line._validatedAscii === line.ascii && line._validatedStack) return line._validatedStack;
             return clientSideStackFallback(line.ascii) || line.ascii || line.stack || '';
         };
+        // The Converted for STACK box shows exactly what Insert inserts.
         const updateSelectedPreview = () => {
-            const selectedLine = resultLines[selectedIndex];
-            const value = stackValueForLine(selectedLine);
-            const ownAnchor = answerBox.dataset.hand2stackAnchor || '';
-            panel._stackTextarea.value = ownAnchor ? stripOwnAnchor(ownAnchor, value) : value;
+            panel._stackTextarea.value = stackValueForLine(resultLines[selectedIndex]);
         };
         const renderFormatRows = () => {
             panel._formatRows.innerHTML = '';
@@ -2710,6 +2711,26 @@ define([], function() {
                     line._editTimer = window.setTimeout(() => {
                         refreshCandidateLine(index);
                     }, 250);
+                    // Show the server's conversion of the edit, the value Insert
+                    // will insert, once the learner pauses.
+                    window.clearTimeout(line._validateTimer);
+                    const ascii = line.ascii;
+                    if (line.edited) {
+                        line._validateTimer = window.setTimeout(async () => {
+                            try {
+                                const stack = await postAscii(ascii);
+                                if (line.ascii !== ascii || !stack) return;
+                                line._validatedAscii = ascii;
+                                line._validatedStack = stack;
+                                if (resultLines[selectedIndex] === line && !panel._partialSelection) {
+                                    updateSelectedPreview();
+                                }
+                                syncDiagnosticProcess();
+                            } catch (error) {
+                                // Invalid for now; Insert reports the reason.
+                            }
+                        }, 600);
+                    }
                 });
                 field.addEventListener('blur', () => tracker.commit('blur'));
             }
@@ -2992,22 +3013,22 @@ define([], function() {
                 if (!stackValue) {
                     throw new Error(config.recognizefailed || 'Conversion failed.');
                 }
-                const ownAnchor = answerBox.dataset.hand2stackAnchor || '';
-                const insertedValue = ownAnchor ? stripOwnAnchor(ownAnchor, stackValue) : stackValue;
-                panel._stackTextarea.value = insertedValue;
+                // Inserted exactly as shown: the learner checks it, the plugin
+                // does not reshape it to the box's Syntax hint.
+                panel._stackTextarea.value = stackValue;
                 const previousValue = answerBox.value;
-                setAnswerValue(answerBox, insertedValue);
+                setAnswerValue(answerBox, stackValue);
                 research.log(answerBox, 'answer_inserted', {
                     via: 'apply',
-                    value: research.clip(insertedValue),
+                    value: research.clip(stackValue),
                     converted: research.clip(stackValue),
-                    strippedAnchor: insertedValue !== stackValue ? normalizeAnchorText(ownAnchor) : null,
                     previousValue: research.clip(previousValue),
                     lineIndex,
                     partial,
                     lineEdited: Boolean(line && line.edited),
                     ocrValue: research.clip(line && line.stack)
                 }, logOptions());
+                processBound = true;
                 syncDiagnosticProcess();
                 setRequestStatus(panel);
             } catch (error) {
