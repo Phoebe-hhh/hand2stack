@@ -181,6 +181,13 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame('', $japanese[0]['stack']);
     }
 
+    /** Handwriting wraps every row in one inline array; each row is still its own line. */
+    public function test_inline_multirow_block_keeps_its_rows(): void {
+        $lines = mathpix_client::build_document_lines('\\( \\begin{array}{l}4 x-7=2 x+9 \\\\ 2 x=16 \\\\ x=8\\end{array} \\)');
+
+        $this->assertSame(['4*x-7=2*x+9', '2*x=16', 'x=8'], array_column($lines, 'stack'));
+    }
+
     public function test_freetext_preserves_prose_paragraphs_and_marks_only_math(): void {
         $text = "First explain the method.\n\nTherefore, \\(x=\\frac{3}{2}\\), so the result follows.";
 

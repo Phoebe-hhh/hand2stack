@@ -477,8 +477,13 @@ final class mathpix_client {
             $group = static function(int $index) use ($match): ?string {
                 return isset($match[$index]) && $match[$index][1] !== -1 ? $match[$index][0] : null;
             };
-            if ($group(3) !== null || $group(4) !== null) {
-                $segments[] = ['inline', trim($group(3) ?? $group(4))];
+            $inline = $group(3) ?? $group(4);
+            // Handwriting comes back as "\\(\\begin{array}...\\end{array}\\)":
+            // a multi-row block is display maths whatever its delimiters.
+            if ($inline !== null && self::extract_multiline_body(trim($inline)) === null) {
+                $segments[] = ['inline', trim($inline)];
+            } else if ($inline !== null) {
+                $segments[] = ['display', trim($inline)];
             } else {
                 $segments[] = ['display', trim($group(1) ?? $group(2) ?? $match[0][0])];
             }
