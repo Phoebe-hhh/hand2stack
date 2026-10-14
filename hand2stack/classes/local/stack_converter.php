@@ -18,6 +18,24 @@ namespace local_hand2stack\local;
 defined('MOODLE_INTERNAL') || die();
 
 final class stack_converter {
+    /** True while converting Free-text working, which keeps f'(x) as written. */
+    private static bool $keepprimes = false;
+
+    /**
+     * Run a conversion that keeps prime derivatives as the learner wrote them.
+     * Free-text working is read, not graded, so f'(x) and f'(2) stay alike
+     * instead of one becoming diff(f(x),x).
+     */
+    public static function keeping_primes(callable $convert) {
+        $previous = self::$keepprimes;
+        self::$keepprimes = true;
+        try {
+            return $convert();
+        } finally {
+            self::$keepprimes = $previous;
+        }
+    }
+
     /**
      * Words that \\operatorname{...} may name as a function. Mathpix also
      * wraps handwritten prose such as "cuz" in \\operatorname; any other
@@ -1420,6 +1438,9 @@ final class stack_converter {
     }
 
     private static function normalize_prime_derivative(string $input): string {
+        if (self::$keepprimes) {
+            return $input;
+        }
         $output = preg_replace('/([a-zA-Z])\s*\^\s*\{\s*\\\\prime\s*\\\\prime\s*\}\s*\(\s*([a-zA-Z])\s*\)/', 'diff($1($2),$2,2)', $input);
         $output = preg_replace('/([a-zA-Z])\s*\^\s*\{\s*\\\\prime\s*\}\s*\(\s*([a-zA-Z])\s*\)/', 'diff($1($2),$2)', $output);
         $output = preg_replace('/([a-zA-Z])\'\'\s*\(\s*([a-zA-Z])\s*\)/', 'diff($1($2),$2,2)', $output);

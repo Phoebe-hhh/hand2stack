@@ -265,6 +265,16 @@ final class stack_converter_test extends \advanced_testcase {
         );
     }
 
+    /**
+     * Free-text working is read, not graded: f'(x) stays as written, alike
+     * with f'(2), while a single answer still gets diff(f(x),x).
+     */
+    public function test_freetext_keeps_prime_derivatives_as_written(): void {
+        $doc = "\\(f^{\\prime}(x)=2 x\\)\n\\(f^{\\prime}(2)=4\\)\n\\(g''(t)=6 t\\)";
+        $this->assertSame("`f'(x)=2*x`\n\n`f'(2)=4`\n\n`g''(t)=6*t`", mathpix_client::build_freetext($doc));
+        $this->assertSame('diff(f(x),x)=2*x', stack_converter::normalize("f^{\\prime}(x)=2 x"));
+    }
+
     public function test_freetext_uses_ascii_fallback_without_losing_lines(): void {
         $this->assertSame("`x=1\ny=2`", mathpix_client::build_freetext('', "x=1\ny=2"));
     }

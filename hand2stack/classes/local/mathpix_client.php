@@ -193,6 +193,12 @@ final class mathpix_client {
      * into STACK free-text inline mathematics.
      */
     public static function build_freetext(string $text, string $ascii = '', string $latex = ''): string {
+        return stack_converter::keeping_primes(static function() use ($text, $ascii, $latex): string {
+            return self::convert_freetext($text, $ascii, $latex);
+        });
+    }
+
+    private static function convert_freetext(string $text, string $ascii, string $latex): string {
         $text = trim(str_replace(["\r\n", "\r"], "\n", $text));
         if ($text === '') {
             $fallback = trim(str_replace(["\r\n", "\r"], "\n", $ascii));

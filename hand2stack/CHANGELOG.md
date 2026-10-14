@@ -3,6 +3,10 @@
 Hand2STACK was previously known as STACK Input Helper. Releases from 0.3.0 onward
 use the Moodle component name `local_hand2stack` and install in `local/hand2stack`.
 
+## Unreleased
+
+- In Free text, keep a prime derivative as written: `f'(x)` became `diff(f(x),x)` while `f'(2)` on the next row stayed `f'(2)`; both now stay as written, `f'(x)` and `f'(2)`. Free-text working is read, not graded. A single answer box still converts `f'(x)` to `diff(f(x),x)` for STACK.
+
 ## 0.5.0-alpha - 2026-10-15
 
 - Keep the letters of a name together after its backslash goes. `r\pi` became `r*p*%i` and `e^{i\pi}` became `%e^(%i*p*%i)`, which STACK accepts with a different value; they are now `r*%pi` and `%e^(%i*%pi)`. Likewise `\alpha\pi` is `alpha*%pi` and `n\infty` is `n*inf`.
