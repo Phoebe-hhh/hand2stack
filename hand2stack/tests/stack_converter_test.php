@@ -188,6 +188,33 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame(['4*x-7=2*x+9', '2*x=16', 'x=8'], array_column($lines, 'stack'));
     }
 
+    /** Mathpix may answer 200 with an error; that is a failed request, not an empty result. */
+    public function test_mathpix_error_in_a_successful_response_fails(): void {
+        $parse = new \ReflectionMethod(mathpix_client::class, 'parse_response');
+        $this->expectException(\moodle_exception::class);
+        $this->expectExceptionMessage(get_string('mathpixrequestfailed', 'local_hand2stack'));
+        $parse->invoke(null, json_encode(['error' => 'Image too large']), 0, '', 200);
+    }
+
+    /** An inequation is a condition, and an approximation's normalized value is its STACK value. */
+    public function test_inequation_and_approximation_rows(): void {
+        $lines = mathpix_client::build_lines('x \\neq 1');
+        $this->assertSame('condition', $lines[0]['type']);
+
+        $lines = mathpix_client::build_lines('x \\approx 2.71.');
+        $this->assertSame(['x=2.71', 'x=2.71', 'approximation'],
+            [$lines[0]['stack'], $lines[0]['normalized'], $lines[0]['type']]);
+    }
+
+    /** Free text numbers only kept rows, drops the filename header, and keeps spaces around prose. */
+    public function test_freetext_numbering_filename_and_prose_spacing(): void {
+        $doc = "IMG_01.PNG\nSolve.\n\\[\\begin{aligned}1.&\\ x=1 \\\\\n2.&\\ y=2\\end{aligned}\\]\nso \\(x=1\\) and then \\(y=2\\)";
+        $this->assertSame("Solve.\n`1. x=1`\n`2. y=2`\nso `x=1` and then `y=2`", mathpix_client::build_freetext($doc));
+
+        $lines = mathpix_client::build_document_lines($doc);
+        $this->assertSame(' and then ', $lines[count($lines) - 1]['display_parts'][2]['text']);
+    }
+
     /** A row starting with a decimal keeps it; only an item number such as "1." or "2)" is removed. */
     public function test_leading_decimal_is_not_an_item_number(): void {
         $lines = mathpix_client::build_document_lines("\\[\\begin{aligned}1.5 x&=3 \\\\ x&=2\\end{aligned}\\]");
@@ -404,6 +431,11 @@ final class stack_converter_test extends \advanced_testcase {
     public static function valid_but_wrong_cases(): array {
         return [
             'subscript i is an index' => ['latex', 'a_{i}+a_{i+1}', 'a[i]+a[i+1]'],
+            'scientific number times a variable' => ['latex', '2.5e-3 x', '2.5e-3*x'],
+            'variable times a scientific number' => ['latex', 'x 2.5e-3', 'x*2.5e-3'],
+            'unbraced text subscript' => ['latex', 'x_\\text{max}=3', 'x[max]=3'],
+            'sentence period after an approximation' => ['latex', 'x \\approx 2.71.', 'x=2.71'],
+            'sentence period after a lone approximation' => ['latex', '\\approx 2.71.', '2.71'],
             'subscript i makes i a variable' => ['latex', 'x_{i}=i^2', 'x[i]=i^2'],
             'imaginary unit after a root' => ['latex', 'z = 1 + \\sqrt{3}i', 'z=1+sqrt(3)*%i'],
             'eta' => ['latex', '2\\eta x', '2*eta*x'],

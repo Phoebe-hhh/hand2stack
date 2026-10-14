@@ -5,6 +5,12 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+- Multiply a number in scientific notation by the variable next to it: `2.5e-3 x` became `2.5e-3x`, which STACK rejects; it is now `2.5e-3*x`.
+- Drop the sentence period after an approximation: `x \approx 2.71.` became `x=2.71.`; it is now `x=2.71`. The review row's `normalized` value no longer joins both sides of the approximation (`x2.71`).
+- Read `x_\text{max}` as the label of `x`, like `x_{\text{max}}`: it became `x_` and the prose `max`; it is now `x[max]`.
+- Classify a row with `\neq` as a condition instead of an expression.
+- In Free text, number only the rows that are kept (a `\\` followed by a newline lost `2.`), leave out the uploaded filename header, and keep the space before prose that follows a formula in the review row (` and then`, not `and then`).
+- Report a Mathpix response that carries an error with status 200 as a failed recognition instead of an empty result.
 - Keep a decimal at the start of a row. `1.5x=3` lost `1.` as if it were an item number and became `5*x=3`; it is now `1.5*x=3`. Item numbers such as `1.` and `2)` are still removed.
 - Translate the remaining Japanese strings (pen, eraser, the mobile URL setting, the request-failed message and the session cleanup task), and name the `local/hand2stack:use` capability and the rate-limit cache in both languages.
 - Leave out the empty "Original work" heading in a Free-text panel that has no image, as after a mobile upload, which brings back only the recognized text.

@@ -53,7 +53,16 @@ final class stack_converter {
      *
      * @return array<int,array{0:string,1:string}> ['math'|'prose', text] segments.
      */
+    /**
+     * "x_\\text{max}" is the label of x, written without the braces of
+     * "x_{\\text{max}}"; brace it so the label is not read as prose.
+     */
+    private static function brace_script_labels(string $latex): string {
+        return preg_replace('/([_^])\s*(\\\\(?:text|mathrm)\s*\{[^{}]*\})/u', '$1{$2}', $latex);
+    }
+
     public static function split_statements(string $latex): array {
+        $latex = self::brace_script_labels($latex);
         $connectives = '/^(?:' . implode('|', array_map('preg_quote', array_keys(self::CONNECTIVES))) . ')$/iu';
         $chunks = [];
         $start = 0;
@@ -502,7 +511,7 @@ final class stack_converter {
     }
 
     public static function normalize(string $input): string {
-        $s = trim($input);
+        $s = self::brace_script_labels(trim($input));
 
         if ($s === '') {
             return '';
@@ -552,12 +561,17 @@ final class stack_converter {
         // exact value restates it as a decimal, so keep the exact part; a
         // lone approximation ("x ≈ 3.83", "≈ 2.71") keeps the decimal.
         $approx = '(?:\\\\(?:approx|simeq|thickapprox|sim)(?![A-Za-z])|(?<![A-Za-z\\\\])approx(?![A-Za-z])|≈|~~)';
+        $approximate = (bool)preg_match('/' . $approx . '/u', $s);
         $s = preg_replace('/^\s*' . $approx . '\s*/u', '', $s);
         if (preg_match('/' . $approx . '/u', $s, $match, PREG_OFFSET_CAPTURE)) {
             $head = substr($s, 0, $match[0][1]);
             $s = preg_match('/(?<![<>!#:])=/', $head)
                 ? rtrim($head)
                 : preg_replace('/' . $approx . '/u', '=', $s, 1);
+        }
+        if ($approximate) {
+            // The period closing "x ≈ 2.71." ends the sentence, not the number.
+            $s = preg_replace('/(?<=\d)\s*[.。]\s*$/u', '', $s);
         }
 
         $piecewise = self::normalize_piecewise($s);
@@ -740,6 +754,10 @@ final class stack_converter {
         $s = self::protect_functions($s);
         $s = self::beautify($s);
         if ($scientific) {
+            // A placeholder is not a letter, so implicit multiplication never
+            // saw "2.5e-3 x"; the number and its neighbour are two factors.
+            $s = preg_replace('/(§S\d+§)(?=[A-Za-z(%])/u', '$1*', $s);
+            $s = preg_replace('/(?<=[A-Za-z0-9)])(§S\d+§)/u', '*$1', $s);
             $s = strtr($s, $scientific);
         }
 
@@ -800,7 +818,7 @@ final class stack_converter {
     }
 
     private static function extract_math_candidate(string $input): string {
-        $s = trim($input);
+        $s = self::brace_script_labels(trim($input));
         if ($s === '') {
             return '';
         }

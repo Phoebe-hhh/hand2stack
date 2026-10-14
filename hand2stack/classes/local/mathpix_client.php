@@ -157,6 +157,12 @@ final class mathpix_client {
             $message = $data['error'] ?? $data['message'] ?? ('HTTP ' . $status);
             throw new \moodle_exception('mathpixrequestfailed', 'local_hand2stack', '', null, $message);
         }
+        // Mathpix can answer 200 with an error (an unreadable image, for
+        // example); without this the learner would only see an empty result.
+        if (!empty($data['error'])) {
+            $message = is_string($data['error']) ? $data['error'] : json_encode($data['error']);
+            throw new \moodle_exception('mathpixrequestfailed', 'local_hand2stack', '', null, $message);
+        }
 
         $rawlatex = self::extract_latex($data);
         $rawascii = self::extract_data_value($data, 'asciimath');
@@ -203,7 +209,10 @@ final class mathpix_client {
         $converted = '';
         foreach (self::document_segments($text) as [$type, $value]) {
             if ($type === 'text') {
-                $converted .= $value;
+                // The review rows drop the uploaded filename header too.
+                $converted .= implode("\n", array_filter(explode("\n", $value), static function(string $row): bool {
+                    return !self::is_filename_row($row);
+                }));
                 continue;
             }
             [$prose, $latex] = stack_converter::split_leading_prose($value);
@@ -260,7 +269,9 @@ final class mathpix_client {
         $numbering = [];
         $multilinebody = self::extract_multiline_body(trim($latex));
         if ($multilinebody !== null) {
-            $rawrows = preg_split('/(?:\n+|\\\\\\\\)/', $multilinebody);
+            // Number only the rows build_lines() keeps, so "\\\\" followed by a
+            // newline does not shift every later number by one.
+            $rawrows = array_filter(preg_split('/(?:\n+|\\\\\\\\)/', $multilinebody), [self::class, 'is_kept_math_row']);
             foreach ($rawrows as $rawrow) {
                 if (preg_match('/^\s*&?\s*(\d+)\s*[\.\)]\s*/', $rawrow, $match)) {
                     $numbering[] = $match[1] . '. ';
@@ -354,25 +365,32 @@ final class mathpix_client {
 
         $lines = [];
         foreach ($parts as $part) {
-            // Mathpix may put display-math delimiters on their own physical
-            // rows. They are document markup, not recognized student content.
-            if (preg_match('/^\s*(?:\\\\\[|\\\\\]|\$\$?)\s*$/u', $part)) {
-                continue;
-            }
-            // The text endpoint may prepend the uploaded filename as a header.
-            if (preg_match('#^\s*[^/\\\\]+\.(?:png|jpe?g|heic|webp|gif)\s*$#iu', $part)) {
+            if (!self::is_kept_math_row($part)) {
                 continue;
             }
             $part = self::clean_line_latex($part);
-            if ($part === '') {
-                continue;
-            }
 
             $math = stack_converter::extract_math($part);
             $lines[] = self::candidate_line($part, $math, self::display_parts($part, $math));
         }
 
         return $lines;
+    }
+
+    /** The text endpoint may prepend the uploaded filename as a header row. */
+    private static function is_filename_row(string $row): bool {
+        return (bool)preg_match('#^\s*[^/\\\\]+\.(?:png|jpe?g|heic|webp|gif)\s*$#iu', $row);
+    }
+
+    /**
+     * Whether build_math_lines() makes a line of this raw row. Mathpix may
+     * put display-math delimiters on their own rows; they are document
+     * markup, not recognized student content, as is a filename header.
+     */
+    private static function is_kept_math_row(string $row): bool {
+        return !preg_match('/^\s*(?:\\\\\[|\\\\\]|\$\$?)\s*$/u', $row)
+            && !self::is_filename_row($row)
+            && self::clean_line_latex($row) !== '';
     }
 
     /** Build every visible document row, retaining prose around its maths. */
@@ -536,7 +554,7 @@ final class mathpix_client {
             return null;
         }
         // The text endpoint may prepend the uploaded filename as a header.
-        if (!$maths && preg_match('#^[^/\\\\]+\.(?:png|jpe?g|heic|webp|gif)$#iu', $text)) {
+        if (!$maths && self::is_filename_row($text)) {
             return null;
         }
 
@@ -546,7 +564,9 @@ final class mathpix_client {
             if ($type === 'text') {
                 $source .= $value;
                 if (trim($value) !== '') {
-                    $display[] = ['type' => 'text', 'text' => self::display_latex($value) . (preg_match('/\s$/u', $value) ? ' ' : '')];
+                    // Keep the spaces that separate this text from the maths around it.
+                    $display[] = ['type' => 'text', 'text' => ($display && preg_match('/^\s/u', $value) ? ' ' : '')
+                        . self::display_latex($value) . (preg_match('/\s$/u', $value) ? ' ' : '')];
                 }
                 continue;
             }
@@ -574,7 +594,9 @@ final class mathpix_client {
     private static function candidate_line(string $source, string $math, array $displayparts): array {
         $metadata = self::classify_candidate($source, $math);
         $stack = $math === '' ? '' : stack_converter::normalize($math);
-        $normalized = $math === '' ? '' : stack_converter::normalize($metadata['value']);
+        // normalize() already resolves an approximation; converting the value
+        // with "\\approx" removed would join both sides ("x 2.71" -> "x2.71").
+        $normalized = $stack;
         return [
             'raw' => $source,
             'latex' => $source,
@@ -609,7 +631,7 @@ final class mathpix_client {
         $type = 'expression';
         if ($relation === 'approximate') {
             $type = 'approximation';
-        } else if (preg_match('/(?:<=|>=|<|>|\\\\leq|\\\\geq|≤|≥)/u', $value)) {
+        } else if (preg_match('/(?:<=|>=|<|>|\\\\leq|\\\\geq|≤|≥|\\\\neq?(?![A-Za-z])|≠)/u', $value)) {
             $type = 'condition';
         } else if (preg_match('/(?<![<>!#])=(?!=)/', $value)) {
             $type = 'equation';
