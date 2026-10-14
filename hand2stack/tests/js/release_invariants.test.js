@@ -106,6 +106,15 @@ test('the review panel and its source image survive the reload after a submit', 
     assert.match(source, /if \(unsubmitted\) setBackgroundValue\(answerBox, working\);/);
 });
 
+test('fixed interface text comes from the language pack', () => {
+    for (const key of ['textline', 'mobilescantip', 'mobilesessionnotcreated']) {
+        assert.match(hook, new RegExp(`'${key}' => get_string\\('${key}'`));
+    }
+    assert.match(source, /\? \(config\.textline \|\| 'text'\)/);
+    assert.match(source, /tip\.textContent = config\.mobilescantip \|\|/);
+    assert.match(source, /status\.textContent = config\.mobilesessionnotcreated \|\|/);
+});
+
 test('a Free-text panel without a source image has no empty Original work column', () => {
     assert.match(source, /panel\._candidateColumn\.style\.display = freeTextMode && !sourceUrl \? 'none' : 'block';/);
     assert.match(source, /panel\._sourceTitle\.style\.display = freeTextMode && sourceUrl \? 'block' : 'none';/);
@@ -123,8 +132,6 @@ test('free-text mode is configured with localized review labels', () => {
     assert.match(hook, /'recognizedworking' => get_string\('recognizedworking'/);
     assert.match(hook, /'freetextpreview' => get_string\('freetextpreview'/);
     assert.match(hook, /'originalwork' => get_string\('originalwork'/);
-    assert.match(hook, /'appendfreetext' => get_string\('appendfreetext'/);
-    assert.match(hook, /'insertfreetext' => get_string\('insertfreetext'/);
     assert.match(hook, /'zoomin' => get_string\('zoomin'/);
     assert.match(hook, /'zoomout' => get_string\('zoomout'/);
     assert.match(source, /answerBox\.style\.display = 'none'/);
@@ -133,7 +140,6 @@ test('free-text mode is configured with localized review labels', () => {
     assert.match(source, /config\.confirmrecognition \|\| 'Review recognized content'/);
     assert.match(source, /config\.recognizedfullanswer \|\| 'Complete recognized answer · editable'/);
     assert.match(source, /panel\._freeTextHelp\.style\.display = freeTextMode \? 'block' : 'none'/);
-    assert.match(source, /panel\._appendHint\.style\.display = 'none'/);
 });
 
 test('quiz content is widened for side-by-side free-text review only', () => {
@@ -172,8 +178,9 @@ test('conversion review distinguishes editable OCR from read-only STACK output',
 test('free-text review does not show a redundant candidate summary', () => {
     assert.match(source, /normalized: String\(line\.normalized/);
     assert.match(source, /relation: line\.relation/);
-    assert.match(source, /candidateSummaryList/);
-    assert.match(source, /if \(freeTextMode\)[\s\S]*panel\._candidateSummary\.style\.display = 'none'/);
+    // The always-hidden candidate summary, append hint, insert-at-cursor
+    // button and raw textarea were removed rather than kept hidden.
+    assert.doesNotMatch(source, /candidateSummary|appendHint|insertBtn|rawTextarea/);
     assert.doesNotMatch(source, /line\.relation === 'approximate'/);
 });
 
@@ -181,7 +188,7 @@ test('algebraic review uses a responsive candidate-and-single-editor layout', ()
     assert.match(source, /reviewGrid\.style\.display = 'grid'/);
     assert.match(source, /candidateColumn\.append\(title, instruction, options, sourceTitle, sourceViewer\)/);
     assert.match(source, /reviewGrid\.append\(candidateColumn, recognizedColumn\)/);
-    assert.match(source, /recognizedColumn\.append\(editableHeader, formatRows, rawTextarea, candidateSummary,[\s\S]*convertedColumn, actionButtons, requestStatus\)/);
+    assert.match(source, /recognizedColumn\.append\(editableHeader, formatRows, convertedColumn, actionButtons, requestStatus\)/);
     assert.match(source, /panel\.style\.width = 'auto'[\s\S]*panel\.style\.maxWidth = '100%'/);
     assert.match(source, /panel\._freeTextMode[\s\S]*\? !isMobileOrTablet[\s\S]*width >= 820/);
     assert.match(source, /reviewGrid\.style\.gridTemplateColumns = useColumns[\s\S]*'minmax\(0, 1fr\) minmax\(0, 1fr\)'/);
@@ -237,7 +244,9 @@ test('algebraic edits use the same blue edit cue and suggested wording', () => {
 
 test('algebraic editing synchronizes the formula without changing OCR prose styling', () => {
     assert.match(source, /Keep the OCR prose styling, while synchronizing only its formula/);
-    assert.match(source, /part\.type !== 'math' \|\| formulaUpdated \|\| !line\.edited/);
+    // The edit is the row's statement: its last formula, not its first.
+    assert.match(source, /if \(part\.type === 'math'\) statementIndex = partIndex;/);
+    assert.match(source, /if \(partIndex !== statementIndex \|\| !line\.edited\) return part;/);
     assert.match(source, /Object\.assign\(\{\}, part, \{latex: line\.latex, text: line\.latex\}\)/);
     assert.doesNotMatch(source, /const editedPreview = document\.createElement/);
 });

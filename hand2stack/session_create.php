@@ -34,6 +34,10 @@ try {
         throw new moodle_exception('mobilenotenabled', 'local_hand2stack');
     }
 
+    // Each session is a database row; a counter of its own keeps this from
+    // using up the learner's recognition requests.
+    \local_hand2stack\local\request_limiter::enforce('mobilesession');
+
     $now = time();
     $DB->delete_records_select('local_hand2stack_sess', 'expiresat < ?', [$now]);
 
@@ -66,8 +70,7 @@ try {
     $mobilehost = strtolower((string)parse_url($mobileurlout, PHP_URL_HOST));
     if ($mobilehost === 'localhost' || substr($mobilehost, -10) === '.localhost'
             || $mobilehost === '127.0.0.1' || $mobilehost === '::1') {
-        $warning = 'This QR code uses localhost, which only works on this computer. '
-            . 'For phone upload, open Moodle using a network-accessible site URL or set Mobile public base URL in the plugin settings.';
+        $warning = get_string('mobilelocalhostwarning', 'local_hand2stack');
     }
 
     // Generate the QR code inside Moodle so the private mobile URL and session

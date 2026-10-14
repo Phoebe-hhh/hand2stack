@@ -31,7 +31,11 @@ try {
     \local_hand2stack\local\request_limiter::enforce();
 
     $json = required_param('strokes', PARAM_RAW);
-    $strokes = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+    try {
+        $strokes = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+    } catch (JsonException $error) {
+        throw new moodle_exception('invalidstrokes', 'local_hand2stack');
+    }
     if (!is_array($strokes)) {
         throw new moodle_exception('invalidstrokes', 'local_hand2stack');
     }

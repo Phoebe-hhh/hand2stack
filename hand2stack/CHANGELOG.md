@@ -11,6 +11,11 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 - Classify a row with `\neq` as a condition instead of an expression.
 - In Free text, number only the rows that are kept (a `\\` followed by a newline lost `2.`), leave out the uploaded filename header, and keep the space before prose that follows a formula in the review row (` and then`, not `and then`).
 - Report a Mathpix response that carries an error with status 200 as a failed recognition instead of an empty result.
+- Show the remaining fixed interface text from the language pack (the "text" row status, the mobile QR tip and session status, and the localhost warning), and translate it into Japanese.
+- Report malformed handwriting data as invalid strokes instead of a generic failure, and limit how often a user can create mobile upload sessions (counted apart from recognitions).
+- Declare every stored field in the privacy metadata: the mobile session's ID, status and document text, and the research event's study, trace, page, order, slot, input, modality, question and times.
+- After editing a review row that holds several formulas ("Since x>2, x=4"), update the formula the row's answer comes from, its last one, instead of the first.
+- Remove unused code from the browser script (an old token selector and LaTeX parser) and four interface elements that were always hidden.
 - Keep a decimal at the start of a row. `1.5x=3` lost `1.` as if it were an item number and became `5*x=3`; it is now `1.5*x=3`. Item numbers such as `1.` and `2)` are still removed.
 - Translate the remaining Japanese strings (pen, eraser, the mobile URL setting, the request-failed message and the session cleanup task), and name the `local/hand2stack:use` capability and the rate-limit cache in both languages.
 - Leave out the empty "Original work" heading in a Free-text panel that has no image, as after a mobile upload, which brings back only the recognized text.

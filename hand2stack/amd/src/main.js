@@ -46,7 +46,6 @@ define([], function() {
         selectpart: 'Click a symbol, or drag across the formula to select a range.',
         recommendedanswer: 'Suggested',
         approximation: 'Approximation',
-        detectedcandidates: 'Detected mathematical candidates (not automatically treated as answers)',
         edited: 'Edited',
         restoreocr: 'Restore OCR result',
         stackpreview: 'STACK input preview:',
@@ -59,9 +58,6 @@ define([], function() {
         freetexthelp: 'Edit text directly; formulas use ASCII math markers. Paragraphs and line breaks are preserved.',
         editedhighlighthelp: 'Blue text shows your changes.',
         directsubmithelp: 'Edits here are used directly as your Free-text answer.',
-        appendhint: 'Keep the existing answer and add this section.',
-        appendfreetext: 'Append to Free text',
-        insertfreetext: 'Insert at cursor',
         zoomin: 'Zoom in',
         zoomout: 'Zoom out',
         resetzoom: 'Reset zoom',
@@ -73,6 +69,9 @@ define([], function() {
         lineprefix: 'Line',
         creatingmobilesession: 'Creating mobile upload session...',
         waitingmobileupload: 'Waiting for mobile upload...',
+        textline: 'text',
+        mobilescantip: 'Scan the QR code with your phone, log in if needed, and upload the image.',
+        mobilesessionnotcreated: 'Session not created',
         mobileuploadreceived: 'Successfully received mobile result. You can upload another photo with the same QR code.',
         mobileuploadexpired: 'This mobile upload session has expired.',
         mobileuploadtimeout: 'Timeout waiting for result. Please create a new session.',
@@ -1267,10 +1266,6 @@ define([], function() {
         formatTabs.appendChild(asciiTab);
         formatTabs.appendChild(latexTab);
 
-        const rawTextarea = createTextarea('', true);
-        rawTextarea.setAttribute('role', 'tabpanel');
-        rawTextarea.style.marginTop = '0';
-
         const formatRows = document.createElement('div');
         formatRows.style.display = 'grid';
         formatRows.style.gap = '6px';
@@ -1294,18 +1289,11 @@ define([], function() {
         applyBtn.style.display = 'block';
         applyBtn.style.marginLeft = 'auto';
 
-        const insertBtn = document.createElement('button');
-        insertBtn.type = 'button';
-        insertBtn.textContent = config.insertfreetext || 'Insert at cursor';
-        insertBtn.style.padding = '4px 8px';
-        insertBtn.style.cursor = 'pointer';
-        insertBtn.style.display = 'none';
-
         const actionButtons = document.createElement('div');
         actionButtons.style.display = 'flex';
         actionButtons.style.justifyContent = 'flex-end';
         actionButtons.style.gap = '8px';
-        actionButtons.append(insertBtn, applyBtn);
+        actionButtons.append(applyBtn);
 
         const freeTextHelp = document.createElement('div');
         freeTextHelp.textContent = (config.freetexthelp
@@ -1316,27 +1304,6 @@ define([], function() {
         freeTextHelp.style.color = '#667085';
         freeTextHelp.style.fontSize = '13px';
         freeTextHelp.style.marginTop = '8px';
-
-        const candidateSummary = document.createElement('div');
-        candidateSummary.style.display = 'none';
-        candidateSummary.style.marginBottom = '14px';
-        const candidateSummaryTitle = document.createElement('div');
-        candidateSummaryTitle.textContent = config.detectedcandidates
-            || 'Detected mathematical candidates (not automatically treated as answers)';
-        candidateSummaryTitle.style.fontWeight = 'bold';
-        candidateSummaryTitle.style.marginBottom = '6px';
-        const candidateSummaryList = document.createElement('div');
-        candidateSummaryList.style.display = 'grid';
-        candidateSummaryList.style.gap = '6px';
-        candidateSummary.append(candidateSummaryTitle, candidateSummaryList);
-
-        const appendHint = document.createElement('div');
-        appendHint.textContent = config.appendhint || 'Keep the existing answer and add this section.';
-        appendHint.style.display = 'none';
-        appendHint.style.color = '#667085';
-        appendHint.style.fontSize = '13px';
-        appendHint.style.marginRight = 'auto';
-        actionButtons.prepend(appendHint);
 
         const requestStatus = document.createElement('div');
         requestStatus.setAttribute('role', 'status');
@@ -1468,8 +1435,7 @@ define([], function() {
         convertedColumn.style.marginTop = '10px';
         convertedColumn.style.display = 'none';
         convertedColumn.append(stackTitle, changeHighlighter.wrapper, freeTextHelp);
-        recognizedColumn.append(editableHeader, formatRows, rawTextarea, candidateSummary,
-            convertedColumn, actionButtons, requestStatus);
+        recognizedColumn.append(editableHeader, formatRows, convertedColumn, actionButtons, requestStatus);
         reviewGrid.append(candidateColumn, recognizedColumn);
 
         const updateReviewLayout = () => {
@@ -1494,7 +1460,6 @@ define([], function() {
         panel._instruction = instruction;
         panel._formatTitle = formatTitle;
         panel._formatTabs = formatTabs;
-        panel._rawTextarea = rawTextarea;
         panel._formatRows = formatRows;
         panel._stackTitle = stackTitle;
         panel._reviewGrid = reviewGrid;
@@ -1513,11 +1478,7 @@ define([], function() {
         panel._changeHighlighter = changeHighlighter;
         panel._actionButtons = actionButtons;
         panel._applyBtn = applyBtn;
-        panel._insertBtn = insertBtn;
         panel._freeTextHelp = freeTextHelp;
-        panel._candidateSummary = candidateSummary;
-        panel._candidateSummaryList = candidateSummaryList;
-        panel._appendHint = appendHint;
         panel._requestStatus = requestStatus;
         panel._choiceName = choiceName;
 
@@ -1547,7 +1508,7 @@ define([], function() {
         title.style.marginBottom = '8px';
 
         const tip = document.createElement('div');
-        tip.textContent = 'Scan the QR code with your phone, log in if needed, and upload the image.';
+        tip.textContent = config.mobilescantip || 'Scan the QR code with your phone, log in if needed, and upload the image.';
         tip.style.marginBottom = '8px';
 
         const qrImg = document.createElement('img');
@@ -1572,7 +1533,7 @@ define([], function() {
         warning.style.color = '#6b4b00';
 
         const status = document.createElement('div');
-        status.textContent = 'Session not created';
+        status.textContent = config.mobilesessionnotcreated || 'Session not created';
         status.style.color = '#555';
 
         panel.appendChild(title);
@@ -1587,21 +1548,6 @@ define([], function() {
         panel._warning = warning;
         panel._status = status;
         return panel;
-    };
-
-    const escapeHtml = (value) => {
-        return String(value || '').replace(/[&<>"']/g, (char) => ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
-        }[char]));
-    };
-
-    const renderLatex = (latex) => {
-        const value = String(latex || '').trim();
-        return value ? '\\(' + escapeHtml(value) + '\\)' : '';
     };
 
     // Moodle loads MathJax 2 with delayStartupUntil=configured and only calls
@@ -1795,15 +1741,6 @@ define([], function() {
         }] : [];
     };
 
-    const selectionInside = (selection, container) => {
-        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-            return false;
-        }
-
-        const range = selection.getRangeAt(0);
-        return container.contains(range.commonAncestorContainer);
-    };
-
     const normalizeSelectableText = (value) => {
         return String(value || '')
             .replace(/[−–—]/g, '-')
@@ -1908,28 +1845,6 @@ define([], function() {
         return mapped.source.slice(sourceStart, sourceEnd).trim();
     };
 
-    const readSelectedLatex = (container) => {
-        const selection = window.getSelection ? window.getSelection() : null;
-        if (!selectionInside(selection, container)) {
-            return '';
-        }
-
-        const range = selection.getRangeAt(0);
-        const selectedText = selection.toString().replace(/\s+/g, ' ').trim();
-        const mathNodes = Array.from(container.querySelectorAll('[data-latex]')).filter(node => {
-            return typeof range.intersectsNode === 'function' && range.intersectsNode(node);
-        });
-
-        if (mathNodes.length === 1) {
-            const latex = selectedLatexFromLine(selectedText, mathNodes[0].dataset.latex || '');
-            if (latex) {
-                return latex;
-            }
-        }
-
-        return selectedText;
-    };
-
     const clientSideStackFallback = (value) => {
         let stack = String(value || '').trim();
         if (!stack) {
@@ -1958,157 +1873,6 @@ define([], function() {
         stack = stack.replace(/\b([A-Za-z])\(/g, '$1*(');
 
         return stack;
-    };
-
-    const superscriptDisplay = (value) => {
-        const superscripts = {
-            '0': '⁰',
-            '1': '¹',
-            '2': '²',
-            '3': '³',
-            '4': '⁴',
-            '5': '⁵',
-            '6': '⁶',
-            '7': '⁷',
-            '8': '⁸',
-            '9': '⁹',
-            '+': '⁺',
-            '-': '⁻'
-        };
-
-        return String(value || '').split('').map(char => superscripts[char] || char).join('');
-    };
-
-    const parseLatexGroup = (source, start) => {
-        let i = start;
-        while (/\s/.test(source[i] || '')) {
-            i++;
-        }
-        if (source[i] !== '{') {
-            return null;
-        }
-
-        let depth = 1;
-        let j = i + 1;
-        while (j < source.length && depth > 0) {
-            if (source[j] === '{') {
-                depth++;
-            } else if (source[j] === '}') {
-                depth--;
-            }
-            j++;
-        }
-        if (depth !== 0) {
-            return null;
-        }
-
-        return {
-            value: source.slice(i + 1, j - 1).trim(),
-            end: j
-        };
-    };
-
-    const parseLatexFraction = (source, start) => {
-        const numerator = parseLatexGroup(source, start);
-        if (!numerator) {
-            return null;
-        }
-        const denominator = parseLatexGroup(source, numerator.end);
-        if (!denominator) {
-            return null;
-        }
-
-        return {
-            numerator: numerator.value,
-            denominator: denominator.value,
-            end: denominator.end
-        };
-    };
-
-    const latexTokens = (latex) => {
-        const source = String(latex || '');
-        const tokens = [];
-
-        for (let i = 0; i < source.length; i++) {
-            const char = source[i];
-            if (/\s/.test(char) || char === '&') {
-                continue;
-            }
-
-            if (char === '\\') {
-                const match = source.slice(i).match(/^\\[a-zA-Z]+/);
-                if (match) {
-                    const command = match[0];
-                    if (command === '\\frac') {
-                        const parsed = parseLatexFraction(source, i + command.length);
-                        if (parsed) {
-                            // Use STACK-compatible linear punctuation around the recursively
-                            // tokenized operands. This keeps the whole fraction selectable while
-                            // also allowing a user to pick just one symbol from either operand.
-                            tokens.push({latex: '(', display: '('});
-                            tokens.push(...latexTokens(parsed.numerator));
-                            tokens.push({latex: ')/(', display: ')/('});
-                            tokens.push(...latexTokens(parsed.denominator));
-                            tokens.push({latex: ')', display: ')'});
-                            i = parsed.end - 1;
-                            continue;
-                        }
-                    }
-                    const commandDisplay = {
-                        '\\cdot': '·', '\\times': '×', '\\div': '÷', '\\pi': 'π',
-                        '\\infty': '∞', '\\rightarrow': '→', '\\longrightarrow': '→',
-                        '\\to': '→', '\\sum': 'Σ', '\\prod': '∏', '\\int': '∫',
-                        '\\sqrt': '√', '\\partial': '∂', '\\leq': '≤', '\\leqslant': '≤',
-                        '\\geq': '≥', '\\geqslant': '≥', '\\neq': '≠', '\\ne': '≠'
-                    };
-                    tokens.push({
-                        latex: command,
-                        display: commandDisplay[command] || command.replace(/^\\/, '')
-                    });
-                    i += command.length - 1;
-                    continue;
-                }
-            }
-
-            if (char === '^') {
-                if (source[i + 1] === '{') {
-                    let depth = 1;
-                    let j = i + 2;
-                    while (j < source.length && depth > 0) {
-                        if (source[j] === '{') {
-                            depth++;
-                        } else if (source[j] === '}') {
-                            depth--;
-                        }
-                        j++;
-                    }
-                    const exponent = source.slice(i + 2, j - 1).replace(/\s+/g, '');
-                    tokens.push({
-                        latex: '^{' + exponent + '}',
-                        display: superscriptDisplay(exponent)
-                    });
-                    i = j - 1;
-                    continue;
-                }
-
-                if (source[i + 1]) {
-                    tokens.push({
-                        latex: '^' + source[i + 1],
-                        display: superscriptDisplay(source[i + 1])
-                    });
-                    i++;
-                }
-                continue;
-            }
-
-            if (char === '{' || char === '}') {
-                continue;
-            }
-
-            tokens.push({ latex: char, display: char });
-        }
-
-        return tokens;
     };
 
     // A token or formula range the learner selected instead of a whole line.
@@ -2277,7 +2041,6 @@ define([], function() {
                 if (option && panel._activateLine) {
                     panel._activateLine(Number(option.dataset.resultLineIndex));
                 }
-                clearTokenSelections(panel);
                 clearNativeSelection();
                 rendered._stackDragStart = index;
                 rendered._stackDragEnd = index;
@@ -2360,106 +2123,11 @@ define([], function() {
         });
     };
 
-    const selectTokenRange = (row, start, end) => {
-        const min = Math.min(start, end);
-        const max = Math.max(start, end);
-        row.querySelectorAll('[data-token-index]').forEach(token => {
-            const index = Number(token.dataset.tokenIndex);
-            token.style.background = index >= min && index <= max ? '#cfe3ff' : '';
-        });
-
-        row._selectionStart = min;
-        row._selectionEnd = max;
-    };
-
-    const clearTokenSelections = (panel, exceptRow = null) => {
-        (panel._tokenRows || []).forEach(row => {
-            if (row === exceptRow) {
-                return;
-            }
-            row.querySelectorAll('[data-token-index]').forEach(token => {
-                token.style.background = '';
-            });
-            row._selectionStart = null;
-            row._selectionEnd = null;
-            row._dragging = false;
-        });
-    };
-
     const clearFormulaSelections = panel => {
         panel._options.querySelectorAll('[data-stack-part-index]').forEach(node => {
             node.style.background = '';
             node.style.borderRadius = '';
         });
-    };
-
-    const createTokenSelector = (panel, latex) => {
-        const tokens = latexTokens(latex);
-        if (!tokens.length) {
-            return null;
-        }
-
-        const row = document.createElement('span');
-        row.style.display = 'inline-flex';
-        row.style.flexWrap = 'wrap';
-        row.style.alignItems = 'baseline';
-        row.style.gap = '2px';
-        row.style.marginTop = '0';
-        row.style.padding = '2px 0';
-        row.style.fontFamily = 'serif';
-        row.style.fontSize = '20px';
-        row.style.userSelect = 'none';
-        row._tokens = tokens;
-        panel._tokenRows = panel._tokenRows || [];
-        panel._tokenRows.push(row);
-
-        tokens.forEach((token, index) => {
-            const tokenEl = document.createElement('span');
-            tokenEl.dataset.tokenIndex = String(index);
-            tokenEl.dataset.latex = token.latex;
-            tokenEl.textContent = token.display;
-            tokenEl.style.cursor = 'text';
-            tokenEl.style.borderRadius = '2px';
-            tokenEl.style.padding = '0 1px';
-
-            tokenEl.addEventListener('mousedown', event => {
-                event.preventDefault();
-                event.stopPropagation();
-                const option = row.closest('[data-result-line-index]');
-                if (option && panel._activateLine) {
-                    panel._activateLine(Number(option.dataset.resultLineIndex));
-                }
-                clearFormulaSelections(panel);
-                clearTokenSelections(panel, row);
-                row._dragging = true;
-                selectTokenRange(row, index, index);
-            });
-
-            tokenEl.addEventListener('mouseenter', () => {
-                if (row._dragging) {
-                    selectTokenRange(row, row._selectionStart, index);
-                }
-            });
-
-            row.appendChild(tokenEl);
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (!row._dragging) {
-                return;
-            }
-
-            row._dragging = false;
-            const selected = row._tokens
-                .slice(row._selectionStart, row._selectionEnd + 1)
-                .map(token => token.latex)
-                .join('');
-            if (selected) {
-                convertSelectedLatex(panel, selected);
-            }
-        }, {signal: panel._selectionAbortController.signal});
-
-        return row;
     };
 
     const createLineContent = (panel, line) => {
@@ -2704,7 +2372,6 @@ define([], function() {
         panel._options.style.display = freeTextMode ? 'none' : 'grid';
         panel._formatTitle.style.display = freeTextMode ? 'none' : 'block';
         panel._formatTabs.style.display = freeTextMode ? 'none' : 'flex';
-        panel._rawTextarea.style.display = freeTextMode ? 'none' : 'block';
         panel._formatRows.style.display = freeTextMode ? 'none' : 'grid';
         panel._editableHeader.style.display = freeTextMode ? 'none' : 'flex';
         // A mobile upload brings back no image, so a Free-text panel without
@@ -2741,7 +2408,6 @@ define([], function() {
         panel._stackTextarea.style.caretColor = freeTextMode ? '#111827' : '';
         panel._changeHighlighter.backdrop.style.display = freeTextMode ? 'block' : 'none';
         panel._freeTextHelp.style.display = freeTextMode ? 'block' : 'none';
-        panel._appendHint.style.display = 'none';
         panel._actionButtons.style.display = freeTextMode ? 'none' : 'flex';
         const resultLines = normalizeResultLines(rawLatex, stackResult, lines);
         const recognition = panel._hand2stackRecognition || null;
@@ -2785,8 +2451,6 @@ define([], function() {
 
         if (freeTextMode) {
             panel._options.innerHTML = '';
-            panel._candidateSummaryList.replaceChildren();
-            panel._candidateSummary.style.display = 'none';
             const recognizedWorking = formatFreeTextWorking(recognizedText, rawAscii, rawLatex, stackResult, lines);
             if (panel._answerBoxDisplay === undefined) {
                 panel._answerBoxDisplay = answerBox.style.display;
@@ -2853,7 +2517,6 @@ define([], function() {
             };
             return;
         }
-        panel._candidateSummary.style.display = 'none';
         if (panel._answerBoxDisplay !== undefined) {
             answerBox.style.display = panel._answerBoxDisplay;
         }
@@ -2861,7 +2524,6 @@ define([], function() {
         panel._applyBtn.className = '';
         panel._applyBtn.style.padding = '4px 8px';
         panel._applyBtn.style.marginTop = '';
-        panel._insertBtn.style.display = 'none';
 
         let defaultIndex = Math.max(0, resultLines.length - 1);
         for (let i = resultLines.length - 1; i >= 0; i--) {
@@ -2870,7 +2532,6 @@ define([], function() {
                 break;
             }
         }
-        panel._rawTextarea.style.display = 'none';
         logRecognition(defaultIndex);
         let selectedIndex = defaultIndex;
         // Created when a line's row is first rendered, so its baseline is the
@@ -3060,7 +2721,6 @@ define([], function() {
         panel._asciiTab.onclick = () => selectFormat('ascii');
         panel._options.innerHTML = '';
         panel._options.scrollTop = 0;
-        panel._tokenRows = [];
         panel._selectionBoxes = [];
         panel._optionWrappers = [];
 
@@ -3084,7 +2744,6 @@ define([], function() {
             window.clearTimeout(panel._dragConversionTimer);
             panel._partialSelection = null;
             panel._selectionRequestId = (panel._selectionRequestId || 0) + 1;
-            clearTokenSelections(panel);
             clearFormulaSelections(panel);
             showSelectionBoxes(index);
             showSelectedLine(index);
@@ -3173,7 +2832,7 @@ define([], function() {
             const lineContent = createLineContent(panel, line);
             const status = document.createElement('span');
             status.textContent = !hasMath
-                ? 'text'
+                ? (config.textline || 'text')
                 : isDefault && resultLines.length > 1
                 ? (config.recommendedanswer || 'Suggested')
                 : '';
@@ -3201,7 +2860,7 @@ define([], function() {
             panel._optionWrappers.push(wrapper);
 
             wrapper.addEventListener('pointerdown', event => {
-                if (!event.target.closest('[data-token-index], [data-stack-part-index]')) {
+                if (!event.target.closest('[data-stack-part-index]')) {
                     panel._partialSelection = null;
                 }
             }, true);
@@ -3222,7 +2881,7 @@ define([], function() {
                     panel._stackTextarea.value = panel._partialSelection.value;
                     return;
                 }
-                if (event.target.closest('[data-token-index], [data-stack-part-index]')) {
+                if (event.target.closest('[data-stack-part-index]')) {
                     return;
                 }
                 input.checked = true;
@@ -3257,10 +2916,14 @@ define([], function() {
             line._status.textContent = statuses.join(' · ');
             line._lineContent.innerHTML = '';
             // Keep the OCR prose styling, while synchronizing only its formula.
-            let formulaUpdated = false;
-            const synchronizedParts = line.displayParts.map(part => {
-                if (part.type !== 'math' || formulaUpdated || !line.edited) return part;
-                formulaUpdated = true;
+            // The row's ASCII is its statement, the last formula of the row
+            // ("Since x>2, x=4"), so an edit replaces that one.
+            let statementIndex = -1;
+            line.displayParts.forEach((part, partIndex) => {
+                if (part.type === 'math') statementIndex = partIndex;
+            });
+            const synchronizedParts = line.displayParts.map((part, partIndex) => {
+                if (partIndex !== statementIndex || !line.edited) return part;
                 return Object.assign({}, part, {latex: line.latex, text: line.latex});
             });
             const synchronizedLine = Object.assign({}, line, {

@@ -38,6 +38,9 @@ class provider implements
             'timecreated' => 'privacy:metadata:session:timecreated',
             'timemodified' => 'privacy:metadata:session:timemodified',
             'expiresat' => 'privacy:metadata:session:expiresat',
+            'sessionid' => 'privacy:metadata:session:sessionid',
+            'status' => 'privacy:metadata:session:status',
+            'rawtext' => 'privacy:metadata:session:rawtext',
         ], 'privacy:metadata:session');
 
         $collection->add_database_table('local_hand2stack_event', [
@@ -46,6 +49,16 @@ class provider implements
             'eventtype' => 'privacy:metadata:event:eventtype',
             'clienttime' => 'privacy:metadata:event:clienttime',
             'payload' => 'privacy:metadata:event:payload',
+            'studyid' => 'privacy:metadata:event:studyid',
+            'traceid' => 'privacy:metadata:event:traceid',
+            'pageid' => 'privacy:metadata:event:pageid',
+            'eventseq' => 'privacy:metadata:event:eventseq',
+            'slot' => 'privacy:metadata:event:slot',
+            'inputname' => 'privacy:metadata:event:inputname',
+            'modality' => 'privacy:metadata:event:modality',
+            'questionid' => 'privacy:metadata:event:questionid',
+            'elapsedms' => 'privacy:metadata:event:elapsedms',
+            'servertime' => 'privacy:metadata:event:servertime',
         ], 'privacy:metadata:event');
 
         return $collection;
