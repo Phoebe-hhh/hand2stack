@@ -70,6 +70,16 @@ final class stack_converter {
         $length = strlen($latex);
         for ($i = 0; $i < $length; $i++) {
             $char = $latex[$i];
+            if ($char === '\\' && $depth === 0
+                    && preg_match('/\G\\\\begin\s*\{([A-Za-z]+\*?)\}/', $latex, $environment, 0, $i)) {
+                // A cases or array block is one statement; the \\text{otherwise}
+                // of a branch is its condition, not prose between statements.
+                $end = strpos($latex, '\\end{' . $environment[1] . '}', $i);
+                if ($end !== false) {
+                    $i = $end + strlen('\\end{' . $environment[1] . '}') - 1;
+                    continue;
+                }
+            }
             if ($char === '{') {
                 $depth++;
             } else if ($char === '}') {
@@ -437,6 +447,33 @@ final class stack_converter {
      *
      * @return array{0:string,1:string}
      */
+    /**
+     * The body of \\lim, \\sum, \\prod or d/dx and what follows it. Like a
+     * function argument (\\sin x+1 is sin(x)+1), the body ends at a "+" or "-"
+     * outside brackets, or at a relation: \\lim f(x) + 1 is (lim f(x)) + 1.
+     * A sign that starts the body or follows an operator belongs to it.
+     */
+    private static function split_operator_body(string $input): array {
+        [$body, $rest] = self::split_at_relation($input);
+        $depth = 0;
+        $previous = '';
+        for ($i = 0, $length = strlen($body); $i < $length; $i++) {
+            $char = $body[$i];
+            if (strpos('({[', $char) !== false) {
+                $depth++;
+            } else if (strpos(')}]', $char) !== false) {
+                $depth--;
+            } else if ($depth === 0 && ($char === '+' || $char === '-') && $previous !== ''
+                    && strpos('^_*/(,{[=<>+-', $previous) === false) {
+                return [rtrim(substr($body, 0, $i)), substr($body, $i) . $rest];
+            }
+            if (!ctype_space($char)) {
+                $previous = $char;
+            }
+        }
+        return [$body, $rest];
+    }
+
     private static function split_at_relation(string $input): array {
         $depth = 0;
         for ($i = 0, $length = strlen($input); $i < $length; $i++) {
@@ -643,8 +680,10 @@ final class stack_converter {
         $s = preg_replace('/\^\s*\{\s*\\\\prime\s*\\\\prime\s*\}|\^\s*\\\\prime\s*\\\\prime(?![A-Za-z])/', "''", $s);
         $s = preg_replace('/\^\s*\{\s*\\\\prime\s*\}|\^\s*\\\\prime(?![A-Za-z])/', "'", $s);
         $s = self::normalize_prime_derivative($s);
-        $s = preg_replace("/(?<![A-Za-z])([a-zA-Z])''(?![A-Za-z0-9(])/", 'diff($1,x,2)', $s);
-        $s = preg_replace("/(?<![A-Za-z])([a-zA-Z])'(?![A-Za-z0-9('])/", 'diff($1,x)', $s);
+        // A bare y' or y'' is by x, as usual; x' itself has no stated variable
+        // (often a time derivative), so it stays unconverted for STACK to reject.
+        $s = preg_replace("/(?<![A-Za-z])([a-wyzA-Z])''(?![A-Za-z0-9(])/", 'diff($1,x,2)', $s);
+        $s = preg_replace("/(?<![A-Za-z])([a-wyzA-Z])'(?![A-Za-z0-9('])/", 'diff($1,x)', $s);
         $s = str_replace(['\\,', '\\!', '\\;', '\\:', '\\ '], '', $s);
         $s = preg_replace('/\^\{([^{}]+)\}/', '^($1)', $s);
 
@@ -821,6 +860,15 @@ final class stack_converter {
         $s = self::brace_script_labels(trim($input));
         if ($s === '') {
             return '';
+        }
+        // A cases or array block is maths throughout: the \\text{otherwise} of a
+        // branch is its condition. Only prose outside the block needs picking out.
+        $block = '/\\\\begin\s*\{(cases|array)\}[\s\S]*?\\\\end\s*\{\1\}/';
+        if (preg_match($block, $s)) {
+            $math = self::split_leading_prose($s)[1];
+            if (!preg_match('/\\\\(?:text|mathrm|operatorname)\s*\{/', preg_replace($block, '', $math))) {
+                return $math;
+            }
         }
 
         if (preg_match('/^\\\\text\s*\{\s*([ei])\s*\}$/u', $s, $match)) {
@@ -1074,6 +1122,14 @@ final class stack_converter {
             $parts = explode('&', $row);
             $expression = trim(preg_replace('/[,\s]+$/', '', array_shift($parts)));
             $condition = trim(implode('&', $parts));
+            // A condition written only in words ("otherwise", "その他") is the
+            // remaining case, whatever the word: the branch is the else.
+            if (preg_match('/^\(?\s*\\\\(?:text|mathrm)\s*\{[^{}]*\}\s*\)?\s*[.,]?$/u', $condition)) {
+                $condition = '';
+            } else if ($condition !== '') {
+                // "\\text{if } x>0": the leading words are prose, the rest the condition.
+                $condition = self::split_leading_prose($condition)[1];
+            }
             if ($expression !== '') {
                 $branches[] = [
                     'expression' => self::normalize($expression),
@@ -1194,7 +1250,7 @@ final class stack_converter {
         return preg_replace_callback(
             '/\\\\lim\s*_\s*\{\s*([a-zA-Z])\s*(?:\\\\to|\\\\rightarrow|\\\\longrightarrow|->|→)\s*([^{}]+?)\s*\}\s*(.+)$/u',
             static function($m) {
-                [$body, $rest] = self::split_at_relation(trim($m[3]));
+                [$body, $rest] = self::split_operator_body(trim($m[3]));
                 return 'limit(' . $body . ',' . trim($m[1]) . ',' . trim($m[2]) . ')' . $rest;
             },
             $input
@@ -1226,7 +1282,7 @@ final class stack_converter {
             static function($m) {
                 $num = $m[2] ?: $m[3];
                 $den = $m[5] ?: $m[6];
-                [$body, $rest] = self::split_at_relation(trim($m[7]));
+                [$body, $rest] = self::split_operator_body(trim($m[7]));
                 return $num === $den ? 'diff(' . $body . ',' . trim($m[4]) . ',' . $num . ')' . $rest : $m[0];
             },
             $output
@@ -1235,7 +1291,7 @@ final class stack_converter {
         return preg_replace_callback(
             '/\\\\frac\s*\{\s*(d|\\\\partial)\s*\}\s*\{\s*\1\s*([a-zA-Z])\s*\}\s*(.+)$/',
             static function($m) {
-                [$body, $rest] = self::split_at_relation(trim($m[3]));
+                [$body, $rest] = self::split_operator_body(trim($m[3]));
                 return 'diff(' . $body . ',' . trim($m[2]) . ')' . $rest;
             },
             $output
@@ -1285,7 +1341,7 @@ final class stack_converter {
             static function($m) {
                 $name = $m[1] === 'sum' ? 'sum' : 'product';
                 $upper = $m[4] !== '' ? $m[4] : ($m[5] !== '' ? $m[5] : $m[6]);
-                [$body, $rest] = self::split_at_relation(trim($m[7]));
+                [$body, $rest] = self::split_operator_body(trim($m[7]));
                 return $name . '(' . $body . ',' . trim($m[2]) . ',' . trim($m[3]) . ',' . trim($upper) . ')' . $rest;
             },
             $input
