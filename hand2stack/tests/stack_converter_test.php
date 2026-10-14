@@ -194,6 +194,29 @@ final class stack_converter_test extends \advanced_testcase {
         $this->assertSame(['a<-2,2<a', 'x>2,x=4'], array_column($lines, 'stack'));
     }
 
+    /**
+     * A piecewise function is laid out as written: a row per branch, its value
+     * and condition each converted alone, words kept as words, the brace kept
+     * as text on the first row. Handwriting nests it inside the page's array.
+     */
+    public function test_piecewise_function_keeps_its_rows(): void {
+        $handwriting = '\\( \\begin{array}{l}1.5 x=3 \\\\ \\left\\{\\begin{array}{l}y=x^{2}+1 \\quad x>1 \\\\ '
+            . 'y=x^{-\\sin x}-\\log _{2} x \\quad x \\leq 1\\end{array}\\right.\\end{array} \\)';
+        $lines = mathpix_client::build_document_lines($handwriting);
+        $this->assertSame(['1.5*x=3', 'y=x^2+1,x>1', 'y=x^(-sin(x))-(log(x)/log(2)),x<=1'], array_column($lines, 'stack'));
+        $this->assertSame(['type' => 'text', 'text' => '{ '], $lines[1]['display_parts'][0]);
+        $this->assertSame("`1.5*x=3`\n{ `y=x^2+1` `x>1`\n`y=x^(-sin(x))-(log(x)/log(2))` `x<=1`",
+            mathpix_client::build_freetext($handwriting));
+
+        $cases = '\\[ f(x)=\\begin{cases} x^2 & x>0 \\\\ 0 & \\text{otherwise} \\end{cases} \\]';
+        $this->assertSame(['f(x)=', 'x^2,x>0', '0'], array_column(mathpix_client::build_document_lines($cases), 'stack'));
+        $this->assertSame("`f(x)=`\n{ `x^2` `x>0`\n`0` otherwise", mathpix_client::build_freetext($cases));
+
+        // A system of equations has no conditions and stays one list.
+        $system = '\\[\\begin{cases} x+y=3 \\\\ x-y=1 \\end{cases}\\]';
+        $this->assertSame(['[x+y=3,x-y=1]'], array_column(mathpix_client::build_document_lines($system), 'stack'));
+    }
+
     /** Mathpix may answer 200 with an error; that is a failed request, not an empty result. */
     public function test_mathpix_error_in_a_successful_response_fails(): void {
         $parse = new \ReflectionMethod(mathpix_client::class, 'parse_response');
@@ -364,7 +387,7 @@ final class stack_converter_test extends \advanced_testcase {
             ],
             'piecewise' => [
                 "f(x)=\\left\\{\\begin{array}{ll}\n0, & x<0 \\\\\n1, & x \\geqslant 0\n\\end{array}\\right.",
-                'f(x)=if x<0 then 0 elseif x>=0 then 1',
+                '1,x>=0', // the last branch row; a piecewise function is laid out a row per branch
             ],
         ];
     }
@@ -549,7 +572,8 @@ final class stack_converter_test extends \advanced_testcase {
     public function test_freetext_keeps_prose_between_statements_outside_the_maths(): void {
         $latex = "\\begin{array}{l}\nx>0 \\text { and } x-2>0, \\text { so } x>2 . \\\\\nx(x-2)=8\n\\end{array}";
         $this->assertSame("`x>0 and x-2>0`, so `x>2`.\n`x*(x-2)=8`", mathpix_client::build_freetext($latex));
-        $this->assertSame("because `x-2>0`\n`x>2`", mathpix_client::build_freetext('because $x-2>0 \\quad x>2$'));    }
+        // Statements written on one row with a gap stay on that row.
+        $this->assertSame("because `x-2>0` `x>2`", mathpix_client::build_freetext('because $x-2>0 \\quad x>2$'));    }
 
     public function test_relations_mathpix_joins_with_a_connective_word_stay_one_statement(): void {
         // Read as two formulas, only the last one (x=-2) would be the answer.

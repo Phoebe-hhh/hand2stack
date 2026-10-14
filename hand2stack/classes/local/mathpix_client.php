@@ -217,11 +217,17 @@ final class mathpix_client {
             }
             [$prose, $latex] = stack_converter::split_leading_prose($value);
             $math = $latex === '' ? '' : self::freetext_math_to_ascii($latex);
-            $converted .= trim($prose . ' ' . ($math === '' ? $latex : self::wrap_freetext_math($math)));
+            $piece = trim($prose . ' ' . ($math === '' ? $latex : self::wrap_freetext_math($math)));
+            // Two formulas with nothing but spaces between them are two rows.
+            // Only segment boundaries break: the value and condition of a
+            // piecewise row ("`y=x^2+1` `x>1`") stay on their row.
+            if (preg_match('/`[ \t]*$/u', $converted) && strpos($piece, '`') === 0) {
+                $converted = rtrim($converted, " \t") . "\n";
+            }
+            $converted .= $piece;
         }
         $text = $converted;
 
-        $text = preg_replace('/`[ \t]*`/u', "`\n`", $text);
         return trim(preg_replace("/\\n{3,}/", "\n\n", $text));
     }
 
@@ -266,22 +272,6 @@ final class mathpix_client {
     /** Convert one Free-text maths region without treating TeX layout as algebra. */
     private static function freetext_math_to_ascii(string $latex): string {
         $converted = [];
-        $numbering = [];
-        $multilinebody = self::extract_multiline_body(trim($latex));
-        if ($multilinebody !== null) {
-            // Number only the rows build_lines() keeps, so "\\\\" followed by a
-            // newline does not shift every later number by one.
-            $rawrows = array_filter(preg_split('/(?:\n+|\\\\\\\\)/', $multilinebody), [self::class, 'is_kept_math_row']);
-            foreach ($rawrows as $rawrow) {
-                // "1.5x=3" starts with a decimal, not the item number "1.".
-                if (preg_match('/^\s*&?\s*(\d+)\s*(?:\.(?!\d)|\))\s*/', $rawrow, $match)) {
-                    $numbering[] = $match[1] . '. ';
-                } else {
-                    $numbering[] = '';
-                }
-            }
-        }
-        $rowindex = 0;
         foreach (self::build_lines($latex) as $line) {
             $stack = trim((string)($line['stack'] ?? ''));
             $linelatex = (string)($line['latex'] ?? '');
@@ -306,10 +296,13 @@ final class mathpix_client {
             if ($statements !== null) {
                 $stack = $statements;
             }
-            if ($stack !== '') {
-                $converted[] = ($numbering[$rowindex] ?? '') . $stack;
+            if (isset($line['freetextrow'])) {
+                // A piecewise branch: its pieces already marked, words as words.
+                $stack = $line['freetextrow'];
             }
-            $rowindex++;
+            if ($stack !== '') {
+                $converted[] = (isset($line['itemnumber']) ? $line['itemnumber'] . '. ' : '') . $stack;
+            }
         }
         if ($converted) {
             return implode("\n", $converted);
@@ -349,7 +342,7 @@ final class mathpix_client {
 
         $multiline = self::extract_multiline_body($normalized);
         if ($multiline !== null) {
-            $parts = preg_split('/(?:\n+|\\\\\\\\)/', $multiline);
+            $parts = self::split_rows($multiline);
         } else if (preg_match_all('/\\\\begin\{(?:pmatrix|bmatrix|matrix|vmatrix)\}/', $normalized) > 1) {
             $marked = preg_replace(
                 '/(\\\\end\{(?:pmatrix|bmatrix|matrix|vmatrix)\})\s*\n+\s*(?=\\\\begin\{(?:pmatrix|bmatrix|matrix|vmatrix)\})/',
@@ -361,21 +354,142 @@ final class mathpix_client {
                 || preg_match('/\\\\left\s*\\\\?[({\[]?\s*\\\\begin\{array\}/', $normalized)) {
             $parts = [$normalized];
         } else {
-            $parts = preg_split('/(?:\n+|\\\\\\\\)/', $normalized);
+            $parts = self::split_rows($normalized);
         }
 
         $lines = [];
         foreach ($parts as $part) {
+            $piecewise = self::piecewise_rows($part);
+            if ($piecewise !== null) {
+                // A piecewise function as the learner laid it out: a row per
+                // branch, its value and condition in the order written.
+                [$prefix, $rows] = $piecewise;
+                if ($prefix !== '') {
+                    $lines = array_merge($lines, self::build_math_lines($prefix));
+                }
+                foreach ($rows as $index => $pieces) {
+                    $lines[] = self::piecewise_row_line($pieces, $index === 0);
+                }
+                continue;
+            }
             if (!self::is_kept_math_row($part)) {
                 continue;
             }
+            // "1.5x=3" starts with a decimal, not the item number "1.".
+            $number = preg_match('/^\s*&?\s*(\d+)\s*(?:\.(?!\d)|\))\s*/', $part, $match) ? $match[1] : null;
             $part = self::clean_line_latex($part);
 
             $math = stack_converter::extract_math($part);
-            $lines[] = self::candidate_line($part, $math, self::display_parts($part, $math));
+            $line = self::candidate_line($part, $math, self::display_parts($part, $math));
+            if ($number !== null && $multiline !== null) {
+                $line['itemnumber'] = $number;
+            }
+            $lines[] = $line;
         }
 
         return $lines;
+    }
+
+    /**
+     * The review row of one piecewise branch: each piece converted alone,
+     * words kept as words. The first row carries the learner's brace.
+     */
+    private static function piecewise_row_line(array $pieces, bool $first): array {
+        $display = $first ? [['type' => 'text', 'text' => '{ ']] : [];
+        $maths = [];
+        $stacks = [];
+        $freetext = [];
+        $source = [];
+        foreach ($pieces as [$type, $text]) {
+            if ($type === 'prose') {
+                $display[] = ['type' => 'text', 'text' => $text];
+                $freetext[] = $text;
+                $source[] = '\\text{' . $text . '}';
+                continue;
+            }
+            $stack = stack_converter::normalize($text);
+            $display[] = ['type' => 'math', 'latex' => $text];
+            $maths[] = $text;
+            $stacks[] = $stack;
+            $freetext[] = '`' . $stack . '`';
+            $source[] = $text;
+        }
+        $line = self::candidate_line(implode(' \\quad ', $source), implode(', ', $maths), $display);
+        $line['stack'] = $line['ascii'] = $line['normalized'] = implode(',', $stacks);
+        $line['freetextrow'] = ($first ? '{ ' : '') . implode(' ', $freetext);
+        return $line;
+    }
+
+    /**
+     * Rows of a multi-row body, split at "\\\\" or a newline but never inside
+     * a nested \\begin...\\end block: handwriting wraps the whole page in one
+     * array, and a piecewise function inside it is still one block.
+     */
+    private static function split_rows(string $body): array {
+        $rows = [];
+        $start = 0;
+        $depth = 0;
+        for ($i = 0, $length = strlen($body); $i < $length; $i++) {
+            if (substr($body, $i, 7) === '\\begin{') {
+                $depth++;
+            } else if (substr($body, $i, 5) === '\\end{') {
+                $depth--;
+            } else if ($depth === 0 && ($body[$i] === "\n" || substr($body, $i, 2) === '\\\\')) {
+                $rows[] = substr($body, $start, $i - $start);
+                $i += $body[$i] === "\n" ? 0 : 1;
+                $start = $i + 1;
+            }
+        }
+        $rows[] = substr($body, $start);
+        return $rows;
+    }
+
+    /**
+     * The branches of a brace block whose rows hold a value and a condition
+     * ("x^2 & x>0", "0 & \\text{otherwise}", or handwriting's
+     * "y=x^2+1 \\quad x>1"), and the maths before the brace ("f(x)="). Each
+     * row is its pieces in the order written: a "&" column, or a statement
+     * split_statements() finds, as ['math'|'prose', text]. Null for anything
+     * else, such as a system of equations with one statement per row, which
+     * stays one list.
+     *
+     * @return array{0:string,1:array<int,array<int,array{0:string,1:string}>>}|null
+     */
+    private static function piecewise_rows(string $part): ?array {
+        if (!preg_match('/^([\s\S]*?)(\\\\left\s*\\\\(?:\{|lbrace)\s*)?\\\\begin\{(cases|array)\}(?:\{[^{}]*\})?([\s\S]*)\\\\end\{\3\}\s*(?:\\\\right\s*\.)?\s*$/',
+                trim($part), $match)) {
+            return null;
+        }
+        if ($match[3] === 'array' && $match[2] === '') {
+            return null;
+        }
+        $rows = [];
+        $conditional = false;
+        foreach (self::split_rows($match[4]) as $row) {
+            $pieces = [];
+            foreach (explode('&', $row) as $column) {
+                $column = trim(preg_replace('/^(?:\s|\\\\q?quad)+|(?:\s|,|\\\\q?quad)+$/', '', $column));
+                if ($column === '') {
+                    continue;
+                }
+                if (preg_match('/^\\\\(?:text|mathrm)\s*\{([^{}]*)\}$/u', $column, $words)) {
+                    // A column of words alone ("otherwise") is prose.
+                    $pieces[] = ['prose', trim($words[1])];
+                    continue;
+                }
+                foreach (stack_converter::split_statements($column) as $segment) {
+                    if (trim($segment[1]) !== '') {
+                        $pieces[] = [$segment[0], trim($segment[1])];
+                    }
+                }
+            }
+            if (!$pieces) {
+                continue;
+            }
+            $conditional = $conditional || count($pieces) > 1;
+            $rows[] = $pieces;
+        }
+        return $conditional ? [trim($match[1]), $rows] : null;
     }
 
     /** The text endpoint may prepend the uploaded filename as a header row. */
@@ -499,7 +613,8 @@ final class mathpix_client {
             $inline = $group(3) ?? $group(4);
             // Handwriting comes back as "\\(\\begin{array}...\\end{array}\\)":
             // a multi-row block is display maths whatever its delimiters.
-            if ($inline !== null && self::extract_multiline_body(trim($inline)) === null) {
+            if ($inline !== null && self::extract_multiline_body(trim($inline)) === null
+                    && self::piecewise_rows($inline) === null) {
                 $segments[] = ['inline', trim($inline)];
             } else if ($inline !== null) {
                 $segments[] = ['display', trim($inline)];
