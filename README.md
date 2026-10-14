@@ -41,6 +41,7 @@ Do not upload GitHub's automatically generated **Source code** archives to Moodl
 - Moodle 4.4 or later.
 - STACK question type installed and configured.
 - PHP cURL, Fileinfo, and GD extensions.
+- PHP intl extension (recommended): without it, full-width characters typed on a Japanese keyboard, such as `ｘ＝３`, are not folded to `x=3` when a learner edits a recognized answer.
 - Moodle cron running every minute.
 - Outbound HTTPS access to `api.mathpix.com`.
 - Mathpix App ID and App Key.
