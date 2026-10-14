@@ -4455,10 +4455,12 @@ define([], function() {
                 || document.body.id === 'page-question-bank-previewquestion-preview')) {
             mainContent.style.maxWidth = '1200px';
         }
-        findLockedFreeTextBoxes().forEach(showSavedSourceImage);
+        const lockedBoxes = findLockedFreeTextBoxes();
+        lockedBoxes.forEach(showSavedSourceImage);
         const boxes = findAnswerBoxes();
         if (!boxes.length) {
-            window.console.warn(config.nofieldfound || 'No visible STACK input found');
+            // A review page, or a question locked after Check, has only locked answers.
+            if (!lockedBoxes.length) window.console.warn(config.nofieldfound || 'No visible STACK input found');
             return;
         }
         // One capture interaction per question: anchored inputs next to a

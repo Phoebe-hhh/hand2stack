@@ -109,7 +109,9 @@ test('the review panel and its source image survive the reload after a submit', 
 test('a locked Free-text answer shows only its original image', () => {
     assert.match(hook, /'\/mod\/quiz\/review\.php'/);
     assert.match(source, /isFreeTextInput\(input\) && !isEditableAnswerBox\(input\)/);
-    assert.match(source, /findLockedFreeTextBoxes\(\)\.forEach\(showSavedSourceImage\);/);
+    assert.match(source, /lockedBoxes\.forEach\(showSavedSourceImage\);/);
+    // A page with only locked answers is expected, not worth a warning.
+    assert.match(source, /if \(!lockedBoxes\.length\) window\.console\.warn/);
 });
 
 test('free-text mode is configured with localized review labels', () => {

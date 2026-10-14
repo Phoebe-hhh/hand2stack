@@ -43,6 +43,7 @@ Migrating from 0.2.x is a component migration rather than an ordinary upgrade. D
 - Keeps the Free-text review compact by showing the original work and one complete editable transcription, without a redundant candidate list.
 - Preserves complete Mathpix document text, including prose and every mathematical line, across mobile-upload polling.
 - Shows the uploaded source image beside free-text recognition with zoom, reset, and drag inspection.
+- Keeps the review panel and the source image of each Free-text answer after Check, Next, or Save, with the learner's corrections still marked, and puts unsubmitted working back after a plain reload. On the quiz review page, and under a Free-text answer locked after Check, the source image is shown below the answer.
 - Matches labelled results such as `f(2)=...` or `Answer: ...` to sibling STACK fields through their syntax hints while protecting newer recognition results and concurrent student edits.
 - When a prose label such as `Answer:` is not written, fills that field from the last mathematical line of the working (a common "underlined final answer" habit) and asks the learner to check it; specific labels such as `f(2)=` never guess.
 - Inserts only the value when an answer field's own syntax hint is a label (`x=`), so a recognized `x=3` is inserted as `3`; values with a further relation or connective are inserted unchanged.
@@ -176,6 +177,7 @@ For the ILAS Nagoya University STACK testing environment:
 - Credentials are not exposed to browser JavaScript.
 - Mobile upload sessions are temporary and expire automatically.
 - Uploaded image files are not permanently stored by this plugin.
+- To show the review panel again after Check, Next, or Save, the browser keeps the last recognition of each answer, and a downscaled JPEG of a Free-text answer's source image, in the tab's `sessionStorage`. It is never sent to the server and is cleared when the tab is closed. On a shared computer, learners should close the browser tab when they finish.
 - Browser-provided filenames and MIME types are not trusted. Moodle verifies the actual file type, dimensions, and decodability before sending an image to Mathpix.
 
 - Research event logging is off by default and limited to consenting participants. Its events use pseudonymous IDs, are included in Moodle privacy exports, and are removed by privacy deletion requests.
