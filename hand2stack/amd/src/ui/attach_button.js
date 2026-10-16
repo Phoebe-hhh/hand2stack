@@ -327,15 +327,27 @@ define([
         // STACK lays a free-text box beside its [[ascii]] preview in a flex
         // .free-text-container that stretches every child into an equal,
         // full-height column. Inside it the buttons and panels would become
-        // columns too, so they follow the container instead.
+        // columns too, so they go outside the container. Before it, so the
+        // page reads handwriting, recognition, then STACK's rendering; the
+        // preview iframe itself is never moved, since moving it reloads it.
         const boxParent = answerBox.parentElement;
-        const flowAnchor = boxParent
-            && /^(inline-)?(flex|grid)$/.test(window.getComputedStyle(boxParent).display) ? boxParent : answerBox;
-        flowAnchor.insertAdjacentElement('afterend', buttonGroup);
+        const inFlexParent = Boolean(boxParent
+            && /^(inline-)?(flex|grid)$/.test(window.getComputedStyle(boxParent).display));
+        const beforeContainer = inFlexParent && boxParent.classList.contains('free-text-container');
+        if (beforeContainer) {
+            boxParent.insertAdjacentElement('beforebegin', buttonGroup);
+        } else {
+            (inFlexParent ? boxParent : answerBox).insertAdjacentElement('afterend', buttonGroup);
+        }
 
         // Beside the box the group just needs a small gap. Once it has wrapped
         // below, line it up with the box's left edge and give it room to breathe.
+        // Above a container it starts the row, with room before the panels.
         const layoutButtonGroup = () => {
+            if (beforeContainer) {
+                buttonGroup.style.margin = '0 0 8px 0';
+                return;
+            }
             if (answerBox.offsetParent === null) return;
             buttonGroup.style.margin = '0 0 0 10px';
             const boxRect = answerBox.getBoundingClientRect();
@@ -359,6 +371,10 @@ define([
             buttonGroup.insertAdjacentElement('afterend', handwritingPanel);
         }
         handwritingPanel.insertAdjacentElement('afterend', resultPanel);
+        if (beforeContainer) {
+            handwritingPanel.style.marginBottom = '12px';
+            resultPanel.style.marginBottom = '12px';
+        }
 
         const savedResult = loadSavedResult(answerBox);
         if (savedResult) {

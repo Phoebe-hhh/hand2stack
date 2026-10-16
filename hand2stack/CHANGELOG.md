@@ -6,7 +6,7 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 ## Unreleased
 
 - Reorganise the code without changing what it does. The server side is split by task: `classes/converter/` turns LaTeX into STACK syntax, one rule class per kind of notation; `classes/ocr/` calls Mathpix; `classes/layout/` builds the review rows and the Free-text working. The browser code is 25 AMD modules under `amd/src/` (`core/`, `ui/`, `modes/lines/`, `modes/freetext/`) instead of one 4200-line `main.js`; `npm run build` minifies each to `amd/build/`. Purge Moodle caches after updating.
-- When a free-text box sits beside an `[[ascii]]` preview, put the Upload, Handwrite and Mobile buttons below the pair. STACK's side-by-side container stretched them into a tall, empty middle column between the box and the preview. The README now recommends laying out a Free-text question without that container.
+- When a free-text box sits beside an `[[ascii]]` preview in STACK's side-by-side container, put the Upload, Handwrite and Mobile buttons, the handwriting canvas and the review panel above the pair. Inside the container they were stretched into a tall, empty middle column between the box and the preview; placed after it, STACK's rendering came above the handwriting. The page now reads handwriting, recognition, then rendering. The README now recommends laying out a Free-text question without that container.
 - In Free text, keep a prime derivative as written: `f'(x)` became `diff(f(x),x)` while `f'(2)` on the next row stayed `f'(2)`; both now stay as written, `f'(x)` and `f'(2)`. Free-text working is read, not graded. A single answer box still converts `f'(x)` to `diff(f(x),x)` for STACK.
 
 ## 0.5.0-alpha - 2026-10-15

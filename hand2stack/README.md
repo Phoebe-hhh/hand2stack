@@ -84,7 +84,7 @@ Lay out a Free-text question with the input, its validation and any `[[ascii]]` 
 [[ascii input="ans1"]][[/ascii]]
 ```
 
-The plugin's buttons and review panel follow the input, and the preview follows them. The side-by-side container pairs the input with its preview, but after recognition the plugin hides the input and the learner edits in the review panel, so the preview is left alone in a narrow column. If a question does use the container, the buttons and review panel are placed after it rather than stretched into a column inside it.
+The plugin's buttons and review panel follow the input, and the preview follows them. The side-by-side container pairs the input with its preview, but after recognition the plugin hides the input and the learner edits in the review panel, so the preview is left alone in a narrow column. If a question does use the container, the buttons, the handwriting canvas and the review panel are placed before it, so the page still reads handwriting, recognition, then STACK's rendering. The preview itself is never moved: it is an iframe that STACK sizes and connects to the input, and moving it in the page would reload it.
 
 When the same question also contains short algebraic inputs with syntax hints such as `f(2)=`, the plugin can match corresponding labelled lines in the recognized working and fill those inputs after server-side STACK validation. A match is discarded if a newer recognition request starts or the student edits the target field while validation is in progress.
 
