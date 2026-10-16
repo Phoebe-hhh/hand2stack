@@ -9,7 +9,7 @@ const test = require('node:test');
 const pluginRoot = path.resolve(__dirname, '../..');
 const source = fs.readFileSync(path.join(pluginRoot, 'amd/src/main.js'), 'utf8');
 const hook = fs.readFileSync(path.join(pluginRoot, 'classes/local/hook_callbacks.php'), 'utf8');
-const mathpix = fs.readFileSync(path.join(pluginRoot, 'classes/local/mathpix_client.php'), 'utf8');
+const mathpix = fs.readFileSync(path.join(pluginRoot, 'classes/ocr/mathpix_client.php'), 'utf8');
 
 // A declaration from main.js: up to its first top-level semicolon.
 const constSource = name => {

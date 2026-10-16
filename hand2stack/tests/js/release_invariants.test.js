@@ -329,7 +329,7 @@ test('mobile polling preserves the complete Mathpix document text', () => {
     assert.match(installXml, /FIELD NAME="rawtext" TYPE="text"/);
     assert.match(mobileUpload, /\$record->rawtext = \$result\['raw_text'\]/);
     assert.match(sessionResult, /'raw_text' => \$record->rawtext/);
-    assert.match(sessionResult, /mathpix_client::build_document_lines\(/);
+    assert.match(sessionResult, /document_builder::build_document_lines\(/);
 });
 
 test('matched sibling answers reject stale recognition and concurrent edits', () => {

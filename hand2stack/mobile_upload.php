@@ -51,7 +51,7 @@ try {
 
     $upload = \local_hand2stack\local\image_upload_validator::validate($_FILES['image'] ?? []);
 
-    $result = \local_hand2stack\local\mathpix_client::recognize(
+    $result = \local_hand2stack\ocr\mathpix_client::recognize(
         $upload['filepath'],
         $upload['filename'],
         $upload['mimetype']

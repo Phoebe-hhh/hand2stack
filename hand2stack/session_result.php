@@ -56,7 +56,7 @@ try {
         'stack' => $record->stack,
         'text' => $record->resulttext,
         'freetext' => $record->resulttext,
-        'lines' => \local_hand2stack\local\mathpix_client::build_document_lines(
+        'lines' => \local_hand2stack\layout\document_builder::build_document_lines(
             (string)$record->rawtext,
             (string)$record->rawlatex
         ),

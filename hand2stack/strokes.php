@@ -40,7 +40,7 @@ try {
         throw new moodle_exception('invalidstrokes', 'local_hand2stack');
     }
 
-    $result = \local_hand2stack\local\mathpix_client::recognize_strokes(
+    $result = \local_hand2stack\ocr\mathpix_client::recognize_strokes(
         $strokes['x'] ?? [],
         $strokes['y'] ?? []
     );
