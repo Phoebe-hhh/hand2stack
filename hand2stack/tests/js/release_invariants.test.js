@@ -8,6 +8,10 @@ const test = require('node:test');
 
 const pluginRoot = path.resolve(__dirname, '../..');
 const source = require('./amd_source');
+// Each review mode lays the panel out in its own module.
+const moduleSource = name => fs.readFileSync(path.join(pluginRoot, 'amd/src', name + '.js'), 'utf8');
+const freeTextView = moduleSource('modes/freetext/view');
+const linesView = moduleSource('modes/lines/view');
 const hook = fs.readFileSync(path.join(pluginRoot, 'classes/local/hook_callbacks.php'), 'utf8');
 const endpoints = [
     'recognize.php', 'strokes.php', 'convert.php',
@@ -79,8 +83,10 @@ test('free-text inputs preserve multiline AsciiMath instead of selecting one ans
     assert.match(source, /formatFreeTextWorking\(recognizedText, rawAscii, rawLatex, stackResult, lines\)/);
     assert.match(source, /result\.freetext \|\| result\.raw_text/);
     assert.match(source, /return '`\\n' \+ working \+ '\\n`'/);
-    assert.match(source, /panel\._options\.style\.display = freeTextMode \? 'none' : 'grid'/);
-    assert.match(source, /panel\._stackTextarea\.rows = freeTextMode \? 14 : 1/);
+    assert.match(freeTextView, /panel\._options\.style\.display = 'none'/);
+    assert.match(linesView, /panel\._options\.style\.display = 'grid'/);
+    assert.match(freeTextView, /panel\._stackTextarea\.rows = 14;/);
+    assert.match(linesView, /panel\._stackTextarea\.rows = 1;/);
 });
 
 test('free-text edits are visually distinguished without changing submitted text', () => {
@@ -100,7 +106,7 @@ test('the review panel and its source image survive the reload after a submit', 
     // A restored panel shows the working and marks corrections against the recognition.
     assert.match(source, /panel\._stackTextarea\.value = working;\n\s+panel\._changeHighlighter\.compare\(recognizedWorking, working\);/);
     // A restored panel keeps the process input bound only if it was inserted from.
-    assert.match(source, /if \(!freeTextMode && restore\) \{\s*const processInput = findProcessInput\(answerBox\);/);
+    assert.match(linesView, /if \(restore\) \{\s*const processInput = findProcessInput\(answerBox\);/);
     assert.match(source, /savedResult\.sourceUrl \|\| '', \{restore: true, savedWorking: savedResult\.working\}\)/);
     // A plain reload brings back an older saved answer; the newer working wins.
     assert.match(source, /saveFreeTextWorking\(answerBox, panel\._stackTextarea\.value\)/);
@@ -117,8 +123,10 @@ test('fixed interface text comes from the language pack', () => {
 });
 
 test('a Free-text panel without a source image has no empty Original work column', () => {
-    assert.match(source, /panel\._candidateColumn\.style\.display = freeTextMode && !sourceUrl \? 'none' : 'block';/);
-    assert.match(source, /panel\._sourceTitle\.style\.display = freeTextMode && sourceUrl \? 'block' : 'none';/);
+    assert.match(freeTextView, /panel\._candidateColumn\.style\.display = !sourceUrl \? 'none' : 'block';/);
+    assert.match(freeTextView, /panel\._sourceTitle\.style\.display = sourceUrl \? 'block' : 'none';/);
+    assert.match(linesView, /panel\._candidateColumn\.style\.display = 'block';/);
+    assert.match(linesView, /panel\._sourceTitle\.style\.display = 'none';/);
 });
 
 test('a locked Free-text answer shows only its original image', () => {
@@ -136,11 +144,13 @@ test('free-text mode is configured with localized review labels', () => {
     assert.match(hook, /'zoomin' => get_string\('zoomin'/);
     assert.match(hook, /'zoomout' => get_string\('zoomout'/);
     assert.match(source, /answerBox\.style\.display = 'none'/);
-    assert.match(source, /panel\._actionButtons\.style\.display = freeTextMode \? 'none' : 'flex'/);
+    assert.match(freeTextView, /panel\._actionButtons\.style\.display = 'none'/);
+    assert.match(linesView, /panel\._actionButtons\.style\.display = 'flex'/);
     assert.match(source, /setAnswerValue\(answerBox, panel\._stackTextarea\.value\)/);
     assert.match(source, /config\.confirmrecognition \|\| 'Review recognized content'/);
     assert.match(source, /config\.recognizedfullanswer \|\| 'Complete recognized answer · editable'/);
-    assert.match(source, /panel\._freeTextHelp\.style\.display = freeTextMode \? 'block' : 'none'/);
+    assert.match(freeTextView, /panel\._freeTextHelp\.style\.display = 'block'/);
+    assert.match(linesView, /panel\._freeTextHelp\.style\.display = 'none'/);
 });
 
 test('quiz content is widened for side-by-side free-text review only', () => {
@@ -169,7 +179,8 @@ test('single-line STACK answer inputs are compact', () => {
 
 test('conversion review distinguishes editable OCR from read-only STACK output', () => {
     assert.match(source, /config\.convertedstack \|\| 'Converted for STACK:'/);
-    assert.match(source, /panel\._stackTextarea\.readOnly = !freeTextMode/);
+    assert.match(freeTextView, /panel\._stackTextarea\.readOnly = false/);
+    assert.match(linesView, /panel\._stackTextarea\.readOnly = true/);
     assert.match(source, /let defaultIndex = Math\.max\(0, resultLines\.length - 1\)/);
     assert.match(source, /index === defaultIndex && resultLines\.length > 1/);
     assert.match(source, /stack\.replace\(\/\\b\(\[A-Za-z\]\)\\\(\/g, '\$1\*\('/);
@@ -196,19 +207,22 @@ test('algebraic review uses a responsive candidate-and-single-editor layout', ()
     assert.match(source, /candidateColumn\.style\.overflow = 'hidden'/);
     assert.match(source, /container\.style\.overflowX = 'auto'/);
     assert.match(source, /new ResizeObserver\(updateReviewLayout\)/);
-    assert.match(source, /panel\._sourceViewer\.style\.display = freeTextMode && sourceUrl \? 'block' : 'none'/);
-    assert.match(source, /const index = selectedIndex[\s\S]*const line = resultLines\[index\][\s\S]*panel\._formatRows\.appendChild\(row\)/);
+    assert.match(freeTextView, /panel\._sourceViewer\.style\.display = sourceUrl \? 'block' : 'none'/);
+    assert.match(linesView, /panel\._sourceViewer\.style\.display = 'none'/);
+    assert.match(linesView, /getSelectedIndex: \(\) => selectedIndex/);
+    assert.match(source, /const index = getSelectedIndex\(\)[\s\S]*const line = resultLines\[index\][\s\S]*panel\._formatRows\.appendChild\(row\)/);
     assert.doesNotMatch(source, /resultLines\.forEach\(\(line, index\) => \{[\s\S]*panel\._formatRows\.appendChild\(row\)/);
     assert.doesNotMatch(source, /field\.addEventListener\('focus', \(\) => panel\._activateLine/);
     assert.match(source, /convertedColumn\.style\.display = 'none'/);
     // Both modes show the converted value; line-by-line it is read-only.
     assert.match(source, /panel\._convertedColumn\.style\.display = 'block';/);
-    assert.match(source, /panel\._stackTextarea\.readOnly = !freeTextMode;/);
+    assert.match(linesView, /panel\._stackTextarea\.readOnly = true;/);
     assert.match(source, /wrapper\.style\.minHeight = '38px'/);
     assert.match(source, /wrapper\.style\.borderRadius = '3px'/);
     assert.match(source, /selectionMarker\.style\.height = '38px'/);
     assert.match(source, /field\.style\.height = '38px'/);
-    assert.match(source, /panel\._stackTextarea\.style\.height = freeTextMode \? '' : '38px'/);
+    assert.match(freeTextView, /panel\._stackTextarea\.style\.height = '';/);
+    assert.match(linesView, /panel\._stackTextarea\.style\.height = '38px'/);
     assert.match(source, /body\.style\.display = 'flex'/);
     assert.match(source, /line\._status\.textContent = statuses\.join\(' · '\)/);
     assert.match(source, /const synchronizedContent = createLineContent\(panel, synchronizedLine\)/);

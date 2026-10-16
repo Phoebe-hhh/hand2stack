@@ -10,9 +10,9 @@
 // @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 
 /**
- * Lines mode: the recognized rows a learner chooses an answer from.
+ * One recognized row, its prose and its selectable formulas, as shown in the review list.
  *
- * @module local_hand2stack/modes/lines
+ * @module local_hand2stack/modes/lines/line_content
  */
 define(['local_hand2stack/config', 'local_hand2stack/core/math_text'], function(Config, MathText) {
     const {config} = Config;
