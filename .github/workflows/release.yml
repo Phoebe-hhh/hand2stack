@@ -32,7 +32,7 @@ jobs:
           npm ci
           npm test
           npm run build
-          git diff --exit-code -- amd/build/main.min.js
+          git diff --exit-code -- amd/build
 
       - name: Validate PHP syntax
         run: find hand2stack -name '*.php' -print0 | xargs -0 -n1 php -l

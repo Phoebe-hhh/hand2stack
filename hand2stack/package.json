@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.5.0-alpha",
   "scripts": {
-    "build": "terser amd/src/main.js --compress --mangle --comments '/^!|@license|@copyright/' -o amd/build/main.min.js",
+    "build": "node scripts/build-amd.js",
     "test": "node --test tests/js/*.test.js",
     "check": "npm test && node --check amd/src/main.js && node --check amd/build/main.min.js"
   },

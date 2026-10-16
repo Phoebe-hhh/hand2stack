@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const source = fs.readFileSync(path.join(__dirname, '../../amd/src/main.js'), 'utf8');
+const source = require('./amd_source');
 const body = source.match(/const asciiToLatexPreview = value => \{([\s\S]*?)\n    \};/);
 assert.ok(body, 'asciiToLatexPreview must remain available for regression tests');
 // This evaluates only the extracted pure conversion function, with no DOM access.

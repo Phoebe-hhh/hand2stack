@@ -7,7 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const pluginRoot = path.resolve(__dirname, '../..');
-const source = fs.readFileSync(path.join(pluginRoot, 'amd/src/main.js'), 'utf8');
+const source = require('./amd_source');
 const hook = fs.readFileSync(path.join(pluginRoot, 'classes/local/hook_callbacks.php'), 'utf8');
 const endpoints = [
     'recognize.php', 'strokes.php', 'convert.php',

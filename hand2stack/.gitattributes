@@ -5,3 +5,4 @@
 /package.json       export-ignore
 /package-lock.json  export-ignore
 /.gitattributes     export-ignore
+/scripts           export-ignore

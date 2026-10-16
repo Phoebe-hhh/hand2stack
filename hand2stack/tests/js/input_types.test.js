@@ -7,14 +7,14 @@ const path = require('node:path');
 const test = require('node:test');
 
 const pluginRoot = path.resolve(__dirname, '../..');
-const source = fs.readFileSync(path.join(pluginRoot, 'amd/src/main.js'), 'utf8');
+const source = require('./amd_source');
 const hook = fs.readFileSync(path.join(pluginRoot, 'classes/local/hook_callbacks.php'), 'utf8');
 const mathpix = fs.readFileSync(path.join(pluginRoot, 'classes/ocr/mathpix_client.php'), 'utf8');
 
-// A declaration from main.js: up to its first top-level semicolon.
+// A declaration from the AMD modules: up to its first top-level semicolon.
 const constSource = name => {
     const start = source.indexOf(`const ${name} = `);
-    assert.ok(start >= 0, `${name} not found in amd/src/main.js`);
+    assert.ok(start >= 0, `${name} not found in amd/src`);
     let depth = 0;
     for (let i = start; i < source.length; i++) {
         if ('([{'.includes(source[i])) depth++;

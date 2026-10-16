@@ -7,15 +7,15 @@ const path = require('node:path');
 const test = require('node:test');
 
 const pluginRoot = path.resolve(__dirname, '../..');
-const source = fs.readFileSync(path.join(pluginRoot, 'amd/src/main.js'), 'utf8');
+const source = require('./amd_source');
 
-// Pull the real function bodies out of main.js by brace-counting from each
+// Pull the real function bodies out of the AMD modules by brace-counting from each
 // `const <name> = ... => {` declaration, so these tests exercise the exact
 // code that ships rather than a re-typed copy that could drift from it.
 function extractFunctionSource(name) {
     const marker = `const ${name} = `;
     const start = source.indexOf(marker);
-    assert.ok(start >= 0, `${name} not found in amd/src/main.js`);
+    assert.ok(start >= 0, `${name} not found in amd/src`);
     const braceStart = source.indexOf('{', start);
     let depth = 0;
     let end = -1;

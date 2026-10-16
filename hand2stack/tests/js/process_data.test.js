@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const source = fs.readFileSync(path.resolve(__dirname, '../../amd/src/main.js'), 'utf8');
+const source = require('./amd_source');
 
 function extractFunctionSource(name) {
     const start = source.indexOf(`const ${name} = `);
