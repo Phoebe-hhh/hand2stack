@@ -91,6 +91,16 @@ define([
             panel._answerBoxDisplay = answerBox.style.display;
         }
         answerBox.style.display = 'none';
+        // In STACK's side-by-side container the hidden box leaves the
+        // [[ascii]] preview alone in a column sized to its content. Let the
+        // container span the question like the review panel above it, without
+        // the gap that kept the box apart from the preview: the editor's <br>
+        // around the placeholders are flex items too and would indent it.
+        const container = answerBox.parentElement;
+        if (container && container.classList.contains('free-text-container')) {
+            container.style.width = '100%';
+            container.style.gap = '0';
+        }
         if (restore) {
             // After a submit the answer box holds the working. After a plain
             // reload it holds an older saved answer, so put the learner's
