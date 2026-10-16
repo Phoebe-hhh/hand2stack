@@ -16,7 +16,7 @@
 namespace local_hand2stack;
 
 use local_hand2stack\local\mathpix_client;
-use local_hand2stack\local\stack_converter;
+use local_hand2stack\converter\stack_converter;
 
 defined('MOODLE_INTERNAL') || die();
 

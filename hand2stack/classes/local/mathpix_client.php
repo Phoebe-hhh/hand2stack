@@ -15,6 +15,11 @@
  */
 namespace local_hand2stack\local;
 
+use local_hand2stack\converter\math_extractor;
+use local_hand2stack\converter\notation_keeper;
+use local_hand2stack\converter\stack_converter;
+use local_hand2stack\converter\statement_splitter;
+
 defined('MOODLE_INTERNAL') || die();
 
 final class mathpix_client {
@@ -193,7 +198,7 @@ final class mathpix_client {
      * into STACK free-text inline mathematics.
      */
     public static function build_freetext(string $text, string $ascii = '', string $latex = ''): string {
-        return stack_converter::keeping_primes(static function() use ($text, $ascii, $latex): string {
+        return notation_keeper::keeping_primes(static function() use ($text, $ascii, $latex): string {
             return self::convert_freetext($text, $ascii, $latex);
         });
     }
@@ -221,7 +226,7 @@ final class mathpix_client {
                 }));
                 continue;
             }
-            [$prose, $latex] = stack_converter::split_leading_prose($value);
+            [$prose, $latex] = statement_splitter::split_leading_prose($value);
             $math = $latex === '' ? '' : self::freetext_math_to_ascii($latex);
             $piece = trim($prose . ' ' . ($math === '' ? $latex : self::wrap_freetext_math($math)));
             // Two formulas with nothing but spaces between them are two rows.
@@ -255,7 +260,7 @@ final class mathpix_client {
      * "`x>0 and x-2>0`, so `x>2`". Null when the row is a single statement.
      */
     private static function freetext_statements(string $latex): ?string {
-        $segments = stack_converter::split_statements($latex);
+        $segments = statement_splitter::split_statements($latex);
         if (count($segments) < 2) {
             return null;
         }
@@ -385,7 +390,7 @@ final class mathpix_client {
             $number = preg_match('/^\s*&?\s*(\d+)\s*(?:\.(?!\d)|\))\s*/', $part, $match) ? $match[1] : null;
             $part = self::clean_line_latex($part);
 
-            $math = stack_converter::extract_math($part);
+            $math = math_extractor::extract($part);
             $line = self::candidate_line($part, $math, self::display_parts($part, $math));
             if ($number !== null && $multiline !== null) {
                 $line['itemnumber'] = $number;
@@ -483,7 +488,7 @@ final class mathpix_client {
                     $pieces[] = ['prose', trim($words[1])];
                     continue;
                 }
-                foreach (stack_converter::split_statements($column) as $segment) {
+                foreach (statement_splitter::split_statements($column) as $segment) {
                     if (trim($segment[1]) !== '') {
                         $pieces[] = [$segment[0], trim($segment[1])];
                     }
@@ -651,8 +656,8 @@ final class mathpix_client {
             $count = count($joined);
             if ($segment[0] === 'inline' && $count >= 2 && $joined[$count - 2][0] === 'inline'
                     && $joined[$count - 1][0] === 'text' && strpos($joined[$count - 1][1], "\n") === false
-                    && stack_converter::connective($joined[$count - 1][1]) !== null
-                    && stack_converter::has_relation($joined[$count - 2][1]) && stack_converter::has_relation($segment[1])) {
+                    && statement_splitter::connective($joined[$count - 1][1]) !== null
+                    && statement_splitter::has_relation($joined[$count - 2][1]) && statement_splitter::has_relation($segment[1])) {
                 $word = trim(array_pop($joined)[1]);
                 $joined[$count - 2][1] .= ' \\text{' . $word . '} ' . $segment[1];
                 continue;
@@ -709,7 +714,7 @@ final class mathpix_client {
         if ($text === '' && count($maths) === 1) {
             $source = $maths[0];
         }
-        $math = implode(', ', array_map([stack_converter::class, 'extract_math'], $maths));
+        $math = implode(', ', array_map([math_extractor::class, 'extract'], $maths));
         return self::candidate_line($source, $math, $display);
     }
 

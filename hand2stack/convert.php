@@ -35,8 +35,8 @@ try {
     }
 
     $stack = $ascii !== ''
-        ? \local_hand2stack\local\stack_converter::normalize_ascii($ascii)
-        : \local_hand2stack\local\stack_converter::normalize_selection($latex);
+        ? \local_hand2stack\converter\stack_converter::normalize_ascii($ascii)
+        : \local_hand2stack\converter\stack_converter::normalize_selection($latex);
     if ($stack === '') {
         throw new moodle_exception('invalidstackexpression', 'local_hand2stack');
     }
