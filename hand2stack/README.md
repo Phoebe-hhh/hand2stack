@@ -76,6 +76,16 @@ the plugin displays each recognized line separately and waits for the student to
 
 For a STACK 4.13 or later free-text input, the workflow changes automatically: the plugin keeps the complete Mathpix document, converts delimited mathematics to displayed AsciiMath while retaining surrounding prose, and presents the source image beside one editable transcription. Edits remain synchronized with the hidden STACK answer field; no answer-line selector is shown. Algebraic inputs continue to use the line-selection workflow above.
 
+Lay out a Free-text question with the input, its validation and any `[[ascii]]` preview one after another, not inside STACK's side-by-side `<div class="free-text-container">`:
+
+```
+[[input:ans1]] [[validation:ans1]]
+
+[[ascii input="ans1"]][[/ascii]]
+```
+
+The plugin's buttons and review panel follow the input, and the preview follows them. The side-by-side container pairs the input with its preview, but after recognition the plugin hides the input and the learner edits in the review panel, so the preview is left alone in a narrow column. If a question does use the container, the buttons and review panel are placed after it rather than stretched into a column inside it.
+
 When the same question also contains short algebraic inputs with syntax hints such as `f(2)=`, the plugin can match corresponding labelled lines in the recognized working and fill those inputs after server-side STACK validation. A match is discarded if a newer recognition request starts or the student edits the target field while validation is in progress.
 
 If the OCR result contains natural language such as `Therefore, x = -1`, the review display keeps the text visible so the student can understand the recognition result. The STACK preview extracts the mathematical part, for example `x=-1`.

@@ -3886,7 +3886,14 @@ define([], function() {
             buttonGroup.appendChild(mobileBtn);
         }
 
-        answerBox.insertAdjacentElement('afterend', buttonGroup);
+        // STACK lays a free-text box beside its [[ascii]] preview in a flex
+        // .free-text-container that stretches every child into an equal,
+        // full-height column. Inside it the buttons and panels would become
+        // columns too, so they follow the container instead.
+        const boxParent = answerBox.parentElement;
+        const flowAnchor = boxParent
+            && /^(inline-)?(flex|grid)$/.test(window.getComputedStyle(boxParent).display) ? boxParent : answerBox;
+        flowAnchor.insertAdjacentElement('afterend', buttonGroup);
 
         // Beside the box the group just needs a small gap. Once it has wrapped
         // below, line it up with the box's left edge and give it room to breathe.

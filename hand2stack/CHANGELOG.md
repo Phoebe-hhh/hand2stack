@@ -5,6 +5,7 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+- When a free-text box sits beside an `[[ascii]]` preview, put the Upload, Handwrite and Mobile buttons below the pair. STACK's side-by-side container stretched them into a tall, empty middle column between the box and the preview. The README now recommends laying out a Free-text question without that container.
 - In Free text, keep a prime derivative as written: `f'(x)` became `diff(f(x),x)` while `f'(2)` on the next row stayed `f'(2)`; both now stay as written, `f'(x)` and `f'(2)`. Free-text working is read, not graded. A single answer box still converts `f'(x)` to `diff(f(x),x)` for STACK.
 
 ## 0.5.0-alpha - 2026-10-15
