@@ -45,8 +45,7 @@ Migrating from 0.2.x is a component migration rather than an ordinary upgrade. D
 - Preserves complete Mathpix document text, including prose and every mathematical line, across mobile-upload polling.
 - Shows the uploaded source image beside free-text recognition with zoom, reset, and drag inspection.
 - Keeps the review panel and the source image of each Free-text answer after Check, Next, or Save, with the learner's corrections still marked, and puts unsubmitted working back after a plain reload. On the quiz review page, and under a Free-text answer locked after Check, the source image is shown below the answer.
-- Matches labelled results such as `f(2)=...` or `Answer: ...` to sibling STACK fields through their syntax hints while protecting newer recognition results and concurrent student edits.
-- When a prose label such as `Answer:` is not written, fills that field from the last mathematical line of the working (a common "underlined final answer" habit) and asks the learner to check it; specific labels such as `f(2)=` never guess.
+- Filling sibling STACK fields from labelled results such as `f(2)=...` through their syntax hints is paused (see below).
 - Classifies recognized lines as text, equation, expression, approximation, or condition without inferring which is the answer.
 - Preserves approximate values as normalized candidates with an `approximate` relation instead of discarding them.
 - Lets users choose a different line, drag-select part of a line, or edit the selected recognized ASCII expression.
@@ -86,7 +85,7 @@ Lay out a Free-text question with the input, its validation and any `[[ascii]]` 
 
 The plugin's buttons and review panel follow the input, and the preview follows them. The side-by-side container pairs the input with its preview, but after recognition the plugin hides the input and the learner edits in the review panel, so the preview is left alone in a narrow column. If a question does use the container, the buttons, the handwriting canvas and the review panel are placed before it, so the page still reads handwriting, recognition, then STACK's rendering. The preview itself is never moved: it is an iframe that STACK sizes and connects to the input, and moving it in the page would reload it.
 
-When the same question also contains short algebraic inputs with syntax hints such as `f(2)=`, the plugin can match corresponding labelled lines in the recognized working and fill those inputs after server-side STACK validation. A match is discarded if a newer recognition request starts or the student edits the target field while validation is in progress.
+When the same question also contains short algebraic inputs, each of them has its own Upload, Handwrite and Mobile buttons, like any other input. Filling them from labelled lines of the Free-text working, matched by their syntax hints such as `f(2)=`, is paused: on handwritten working the match was unreliable, for example with numbered rows, prose before the label or `f'(x)`. The code stays in the plugin (`autofill` in `amd/src/config.js`, off by default) and may return with a per-question setting that lets the question author choose which inputs are filled.
 
 If the OCR result contains natural language such as `Therefore, x = -1`, the review display keeps the text visible so the student can understand the recognition result. The STACK preview extracts the mathematical part, for example `x=-1`.
 

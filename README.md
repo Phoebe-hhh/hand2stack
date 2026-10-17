@@ -28,7 +28,6 @@ Do not upload GitHub's automatically generated **Source code** archives to Moodl
 - Populate an optional hidden STACK textarea named `process` (or `processN`) with the recognized mathematical steps in order, excluding prose and generated summaries.
 - Preserve prose and every recognized mathematics line during desktop and mobile free-text recognition.
 - Show the uploaded source image beside the editable free-text transcription, with zoom and drag inspection.
-- Match labelled results such as `f(2)=...` or `Answer: ...` to sibling STACK inputs using their syntax hints without overwriting newer results or student edits.
 - Select part of a recognized formula and insert only the confirmed STACK expression.
 - Prevent stale recognition requests from replacing newer results and limit recognition requests per user.
 - Keep Mathpix credentials on the Moodle server rather than in browser JavaScript.
@@ -85,7 +84,7 @@ Temporary mobile-upload sessions are intentionally not migrated.
 2. Submit the image or handwritten strokes for recognition.
 3. For an algebraic input, select the relevant line or symbols; for a free-text input, compare the source image with the complete editable transcription.
 4. Correct the selected recognized ASCII expression or free-text working if necessary. Free-text edits stay synchronized with the hidden STACK answer field.
-5. Insert the confirmed algebraic expression. Labelled free-text results may also fill matching sibling inputs when their syntax hints agree.
+5. Insert the confirmed algebraic expression.
 
 The plugin does not submit the quiz answer automatically.
 

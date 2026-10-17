@@ -352,6 +352,15 @@ test('matched sibling answers reject stale recognition and concurrent edits', ()
     assert.match(source, /box\.value === valueBeforeValidation/);
 });
 
+test('syntax-hint auto-fill of sibling inputs is paused by default', () => {
+    const config = moduleSource('config');
+    const main = moduleSource('main');
+    const anchors = moduleSource('modes/freetext/anchors');
+    assert.match(config, /autofill: false,/);
+    assert.match(main, /if \(config\.autofill\) \{\s*boxes\.filter\(isFreeTextInput\)/);
+    assert.match(anchors, /applyMatchedAnswers: \(\.\.\.args\) => \(config\.autofill \? applyMatchedAnswers\(\.\.\.args\) : Promise\.resolve\(\[\]\)\)/);
+});
+
 test('syntax-hint recovery is limited to an authorized question usage', () => {
     assert.match(anchorsEndpoint, /require_login\(\)/);
     assert.match(anchorsEndpoint, /require_sesskey\(\)/);

@@ -53,14 +53,17 @@ define([
             if (!lockedBoxes.length) window.console.warn(config.nofieldfound || 'No visible STACK input found');
             return;
         }
-        // One capture interaction per question: anchored inputs next to a
-        // free-text box are filled from that box's working, not captured alone.
+        // With auto-fill on, anchored inputs next to a free-text box are filled
+        // from that box's working, not captured alone. While it is paused,
+        // every input gets its own buttons.
         boxes.forEach(captureAnswerAnchor);
         boxes.forEach(bindFreeTextProcess);
         const candidates = new Set();
-        boxes.filter(isFreeTextInput).forEach(source => {
-            findSiblingAnswerBoxes(source).forEach(box => candidates.add(box));
-        });
+        if (config.autofill) {
+            boxes.filter(isFreeTextInput).forEach(source => {
+                findSiblingAnswerBoxes(source).forEach(box => candidates.add(box));
+            });
+        }
         boxes.filter(box => !candidates.has(box)).forEach(attachButton);
         await fetchMissingAnchors(Array.from(candidates));
         candidates.forEach(box => (box.dataset.hand2stackAnchor ? setupTargetBox(box) : attachButton(box)));

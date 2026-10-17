@@ -40,6 +40,10 @@ define([], function() {
         research: {enabled: false, schemaVersion: 1},
         sesskey: '',
         enablemobile: true,
+        // Filling a Free-text question's other inputs from the working, by
+        // their Syntax hints, is paused: the match was unreliable on
+        // handwritten working. It may return with a per-question setting.
+        autofill: false,
         uploadbtn: 'Upload math image',
         mobilebtn: 'Mobile Math Upload',
         camerabtn: 'Take a photo',
