@@ -69,7 +69,7 @@ try {
     $warning = '';
     $mobilehost = strtolower((string)parse_url($mobileurlout, PHP_URL_HOST));
     if ($mobilehost === 'localhost' || substr($mobilehost, -10) === '.localhost'
-            || $mobilehost === '127.0.0.1' || $mobilehost === '::1') {
+            || $mobilehost === '127.0.0.1' || $mobilehost === '[::1]') {
         $warning = get_string('mobilelocalhostwarning', 'local_hand2stack');
     }
 

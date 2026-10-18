@@ -157,7 +157,10 @@ define([
 
             if (selectedFormat === 'ascii') {
                 field.addEventListener('input', () => {
+                    // Typing replaces a chosen formula part; a conversion of
+                    // that part still in flight must not write it back.
                     panel._partialSelection = null;
+                    panel._selectionRequestId = (panel._selectionRequestId || 0) + 1;
                     line.ascii = field.value;
                     tracker.input();
                     line.latex = asciiToLatexPreview(line.ascii);

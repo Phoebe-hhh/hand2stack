@@ -452,3 +452,18 @@ test('expired mobile sessions have a scheduled cleanup task', () => {
     assert.match(scheduledTasks, /local_hand2stack\\\\task\\\\cleanup_sessions/);
     assert.match(cleanupTask, /delete_records_select\('local_hand2stack_sess', 'expiresat < \?'/);
 });
+
+test('a Shift-click keeps the earlier anchor so it extends the formula selection', () => {
+    const formulaSelect = moduleSource('ui/formula_select');
+    assert.match(formulaSelect, /if \(didDrag \|\| !event\.shiftKey\) \{\s*rendered\._stackSelectionAnchor = start;/);
+});
+
+test('typing in the ASCII row discards a formula-part conversion still in flight', () => {
+    const formatRows = moduleSource('modes/lines/format_rows');
+    assert.match(formatRows, /panel\._partialSelection = null;\s*panel\._selectionRequestId = \(panel\._selectionRequestId \|\| 0\) \+ 1;/);
+});
+
+test('a mobile URL on the IPv6 loopback address warns like localhost', () => {
+    const sessionCreate = fs.readFileSync(path.join(pluginRoot, 'session_create.php'), 'utf8');
+    assert.match(sessionCreate, /\$mobilehost === '\[::1\]'/);
+});

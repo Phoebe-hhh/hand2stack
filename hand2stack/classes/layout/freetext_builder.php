@@ -60,8 +60,9 @@ final class freetext_builder {
             $piece = trim($prose . ' ' . ($math === '' ? $latex : self::wrap_math($math)));
             // Two formulas with nothing but spaces between them are two rows.
             // Only segment boundaries break: the value and condition of a
-            // piecewise row ("`y=x^2+1` `x>1`") stay on their row.
-            if (preg_match('/`[ \t]*$/u', $converted) && strpos($piece, '`') === 0) {
+            // piecewise row ("`y=x^2+1` `x>1`") stay on their row. \z, not $:
+            // $ also matches before a final newline, which doubled it.
+            if (preg_match('/`[ \t]*\z/u', $converted) && strpos($piece, '`') === 0) {
                 $converted = rtrim($converted, " \t") . "\n";
             }
             $converted .= $piece;

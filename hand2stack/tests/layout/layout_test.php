@@ -155,8 +155,14 @@ final class layout_test extends \advanced_testcase {
      */
     public function test_freetext_keeps_prime_derivatives_as_written(): void {
         $doc = "\\(f^{\\prime}(x)=2 x\\)\n\\(f^{\\prime}(2)=4\\)\n\\(g''(t)=6 t\\)";
-        $this->assertSame("`f'(x)=2*x`\n\n`f'(2)=4`\n\n`g''(t)=6*t`", freetext_builder::build($doc));
+        $this->assertSame("`f'(x)=2*x`\n`f'(2)=4`\n`g''(t)=6*t`", freetext_builder::build($doc));
         $this->assertSame('diff(f(x),x)=2*x', stack_converter::normalize("f^{\\prime}(x)=2 x"));
+    }
+
+    public function test_freetext_formula_rows_are_not_separated_by_an_extra_blank_line(): void {
+        $this->assertSame("`x=1`\n`y=2`", freetext_builder::build("\\(x=1\\)\n\\(y=2\\)"));
+        $this->assertSame("`x=1`\n`y=2`", freetext_builder::build("\\(x=1\\) \\(y=2\\)"));
+        $this->assertSame("`x=1`\n\n`y=2`", freetext_builder::build("\\(x=1\\)\n\n\\(y=2\\)"));
     }
 
     public function test_freetext_uses_ascii_fallback_without_losing_lines(): void {

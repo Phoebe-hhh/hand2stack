@@ -243,7 +243,12 @@ define([
             rendered._stackDragStart = undefined;
             rendered._stackDragEnd = undefined;
             rendered._stackPointerId = undefined;
-            rendered._stackSelectionAnchor = start;
+            // A Shift-click extends from the earlier anchor in the click
+            // handler, which runs after this; moving the anchor here first
+            // made it select only the clicked symbol.
+            if (didDrag || !event.shiftKey) {
+                rendered._stackSelectionAnchor = start;
+            }
             clearNativeSelection();
             if (didDrag) {
                 rendered._stackSuppressClick = true;
