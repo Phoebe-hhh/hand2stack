@@ -358,7 +358,20 @@ test('syntax-hint auto-fill of sibling inputs is paused by default', () => {
     const anchors = moduleSource('modes/freetext/anchors');
     assert.match(config, /autofill: false,/);
     assert.match(main, /if \(config\.autofill\) \{\s*boxes\.filter\(isFreeTextInput\)/);
-    assert.match(anchors, /applyMatchedAnswers: \(\.\.\.args\) => \(config\.autofill \? applyMatchedAnswers\(\.\.\.args\) : Promise\.resolve\(\[\]\)\)/);
+    // Nothing is extracted while it is paused: every call site checks the flag.
+    const callers = ['ui/attach_button', 'ui/handwriting_panel', 'modes/freetext/view'].map(moduleSource);
+    callers.forEach(caller => {
+        const calls = caller.match(/applyMatchedAnswers\(/g) || [];
+        const guarded = caller.match(/if \([^)]*config\.autofill\) \{\s*applyMatchedAnswers\(/g) || [];
+        const earlyReturn = caller.match(/if \(!config\.autofill\) return;[\s\S]{0,400}applyMatchedAnswers\(/g) || [];
+        assert.equal(guarded.length + earlyReturn.length, calls.length);
+    });
+});
+
+test('a locked answer\'s image follows a flex container instead of becoming a column in it', () => {
+    const locked = moduleSource('modes/freetext/locked_answer');
+    assert.match(locked, /\(inFlexParent \? parent : answerBox\)\.insertAdjacentElement\('afterend', figure\)/);
+    assert.match(freeTextView, /container\.style\.boxSizing = 'border-box'/);
 });
 
 test('syntax-hint recovery is limited to an authorized question usage', () => {

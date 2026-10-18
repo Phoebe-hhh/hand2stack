@@ -195,16 +195,16 @@ Site administrators should confirm that Mathpix use complies with institutional 
 
 ## Development
 
-Install the pinned JavaScript build dependency, run regression tests, and rebuild the Moodle AMD asset:
+Install the pinned JavaScript build dependency, edit the AMD modules in `amd/src/`, rebuild them, and run the checks:
 
 ```bash
 cd hand2stack
 npm ci
-npm run check
 npm run build
+npm run check
 ```
 
-`npm run check` runs the JavaScript regression suite and syntax-checks both the source and built AMD files. PHP files can be checked with:
+`npm run build` minifies every module in `amd/src/` to the same path under `amd/build/` (`.min.js`) and removes built files whose source is gone. `npm run check` runs the JavaScript regression suite, which loads every source and built module, then rebuilds and fails if `amd/build/` differs from the committed files, as the release workflow does. Purge Moodle caches after changing the AMD modules. PHP files can be checked with:
 
 ```bash
 find . -name '*.php' -print -exec php -l {} \;
@@ -212,22 +212,21 @@ find . -name '*.php' -print -exec php -l {} \;
 
 Moodle's full PHPUnit environment installs and tests the STACK question type as well as Hand2STACK. Its initialization therefore requires a working STACK CAS configuration. If the Moodle PHP container is configured to execute local Maxima, the `maxima` command must exist there; a separately running Goemaxima service used by the normal Moodle site does not automatically configure the isolated PHPUnit environment. This requirement affects full Moodle/STACK test initialization, not Hand2STACK's normal runtime or its JavaScript tests.
 
-The conversion logic is implemented in:
+PHPUnit tests are in `tests/converter/`, `tests/layout/` and `tests/research_logger_test.php`.
+
+Where the code is:
 
 ```text
-classes/local/stack_converter.php
-```
-
-The Mathpix client is implemented in:
-
-```text
-classes/local/mathpix_client.php
-```
-
-The browser script currently loads:
-
-```text
-amd/build/main.min.js
+classes/ocr/                 Mathpix requests and the parsed response
+classes/layout/              review rows and the Free-text working
+classes/converter/           LaTeX and typed input to STACK syntax
+classes/converter/rules/     one rule class per kind of notation
+classes/local/               hooks, endpoint helpers, research logging
+amd/src/main.js              entry point loaded on quiz and preview pages
+amd/src/core/                requests, saved results, STACK inputs, research logging
+amd/src/ui/                  buttons, panels, handwriting, formula selection
+amd/src/modes/lines/         line-by-line review of an algebraic input
+amd/src/modes/freetext/      review of a Free-text input's working
 ```
 
 ## Creating a Release
@@ -239,7 +238,7 @@ git tag v0.5.0-alpha
 git push origin v0.5.0-alpha
 ```
 
-The GitHub Actions workflow then runs the JavaScript tests, rebuilds `amd/build/main.min.js` and fails if it differs from the committed file, checks PHP syntax, and checks that the tag matches `$plugin->release` and that `$plugin->version` is greater than the previous tag's. It then creates a GitHub Release containing:
+The GitHub Actions workflow then runs the JavaScript tests, rebuilds `amd/build/` and fails if it differs from the committed files, checks PHP syntax, and checks that the tag matches `$plugin->release` and that `$plugin->version` is greater than the previous tag's. It then creates a GitHub Release containing:
 
 - a Moodle-installable ZIP whose root folder is `hand2stack/` (tests and Node build files are excluded through `.gitattributes`);
 - a changelog generated from commits since the previous version tag;

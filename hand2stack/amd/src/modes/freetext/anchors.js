@@ -328,8 +328,5 @@ define([
         });
     };
 
-    return {
-        applyMatchedAnswers: (...args) => (config.autofill ? applyMatchedAnswers(...args) : Promise.resolve([])),
-        reportTargetResult, setupTargetBox
-    };
+    return {applyMatchedAnswers, reportTargetResult, setupTargetBox};
 });

@@ -99,6 +99,7 @@ define([
         const container = answerBox.parentElement;
         if (container && container.classList.contains('free-text-container')) {
             container.style.width = '100%';
+            container.style.boxSizing = 'border-box';
             container.style.gap = '0';
         }
         if (restore) {
@@ -112,7 +113,7 @@ define([
             answerBox._hand2stackWorking = working;
             panel._stackTextarea.value = working;
             panel._changeHighlighter.compare(recognizedWorking, working);
-            if (unsubmitted) {
+            if (unsubmitted && config.autofill) {
                 applyMatchedAnswers(answerBox, linesFromFreeText(working), () => answerBox.value === working,
                     reportTargetResult, {convert: postAscii, via: 'freetext_restore'}).catch(error => {
                     window.console.error('[hand2stack] re-extraction failed:', error);
@@ -142,9 +143,11 @@ define([
             answerBox.value = panel._stackTextarea.value;
             saveFreeTextWorking(answerBox, panel._stackTextarea.value);
             answerBox.dispatchEvent(new Event('input', {bubbles: true}));
-            // The answer boxes were extracted from this working, so they
-            // follow the learner's corrections to it, unless the learner
-            // has typed in a box or a newer edit or recognition arrived.
+            // With auto-fill on, the answer boxes were extracted from this
+            // working, so they follow the learner's corrections to it, unless
+            // the learner has typed in a box or a newer edit or recognition
+            // arrived.
+            if (!config.autofill) return;
             window.clearTimeout(panel._reextractTimer);
             panel._reextractTimer = window.setTimeout(() => {
                 const text = panel._stackTextarea.value;

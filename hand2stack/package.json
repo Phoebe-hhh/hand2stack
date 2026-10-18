@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node scripts/build-amd.js",
     "test": "node --test tests/js/*.test.js",
-    "check": "npm test && node --check amd/src/main.js && node --check amd/build/main.min.js"
+    "check": "npm test && npm run build && git diff --exit-code -- amd/build"
   },
   "devDependencies": {
     "terser": "5.44.0"

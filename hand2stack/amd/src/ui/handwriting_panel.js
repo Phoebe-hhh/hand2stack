@@ -466,10 +466,12 @@ define([
                 resultPanel._hand2stackRecognition = {requestId, source: 'handwrite', latencyMs: Date.now() - startedAt};
                 updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
                     answerBox, result.lines || [], result.freetext || result.raw_text || '', canvas.toDataURL('image/png'));
-                applyMatchedAnswers(answerBox, result.lines || [],
-                    () => requestCoordinator.isCurrent(requestId), reportTargetResult).catch(error => {
-                    window.console.error('[hand2stack] applyMatchedAnswers failed:', error);
-                });
+                if (config.autofill) {
+                    applyMatchedAnswers(answerBox, result.lines || [],
+                        () => requestCoordinator.isCurrent(requestId), reportTargetResult).catch(error => {
+                        window.console.error('[hand2stack] applyMatchedAnswers failed:', error);
+                    });
+                }
                 status.textContent = '';
             } catch (error) {
                 if (requestCoordinator.isCurrent(requestId)) {

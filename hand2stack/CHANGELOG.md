@@ -5,6 +5,9 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+- Show the original image under a locked Free-text answer below STACK's side-by-side free-text container, not inside it, where it became a squeezed column between the box and the `[[ascii]]` preview. The widened container also keeps its padding inside its width.
+- While auto-fill is paused, no longer parse the working after each edit or recognition to match inputs that will not be filled.
+- `npm run check` now runs the tests, rebuilds `amd/build/` and fails if it differs, like the release workflow; the README's Development section lists where the reorganised code is.
 - In Free text, put two formulas written on consecutive rows on consecutive lines. `\(x=1\)` and `\(y=2\)` on two rows were separated by a blank line; a blank line the learner wrote between them is still kept.
 - Shift-click on a formula in the review panel now extends the selection from the symbol chosen before, as intended; it selected only the clicked symbol.
 - Typing in a review row's ASCII box right after choosing part of its formula no longer lets the late conversion of that part overwrite the Converted for STACK box or raise an error in the browser console.

@@ -43,7 +43,12 @@ define(['local_hand2stack/config', 'local_hand2stack/core/saved_result'], functi
         image.style.border = '1px solid #d8e1e8';
         image.style.borderRadius = '6px';
         figure.append(title, image);
-        answerBox.insertAdjacentElement('afterend', figure);
+        // In a flex or grid parent such as STACK's .free-text-container the
+        // figure would become a squeezed column beside the box, so it follows
+        // the container, as the buttons and panels of an editable box do.
+        const parent = answerBox.parentElement;
+        const inFlexParent = parent && /^(inline-)?(flex|grid)$/.test(window.getComputedStyle(parent).display);
+        (inFlexParent ? parent : answerBox).insertAdjacentElement('afterend', figure);
     };
 
     return {showSavedSourceImage};
