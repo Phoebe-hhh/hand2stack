@@ -49,8 +49,15 @@ final class hook_callbacks {
             return;
         }
 
+        // A quiz set to "off" behaves as if the plugin were not installed.
+        $inputmode = input_mode::for_context($PAGE->context);
+        if ($inputmode === input_mode::OFF) {
+            return;
+        }
+
         $research = research_logger::enabled_for_context($PAGE->context, (int)$USER->id);
         $config = [
+            'inputMode' => $inputmode,
             'recognizeUrl' => (new \moodle_url('/local/hand2stack/recognize.php'))->out(false),
             'strokesUrl' => (new \moodle_url('/local/hand2stack/strokes.php'))->out(false),
             'convertUrl' => (new \moodle_url('/local/hand2stack/convert.php'))->out(false),

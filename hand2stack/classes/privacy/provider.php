@@ -56,6 +56,7 @@ class provider implements
             'slot' => 'privacy:metadata:event:slot',
             'inputname' => 'privacy:metadata:event:inputname',
             'modality' => 'privacy:metadata:event:modality',
+            'studycondition' => 'privacy:metadata:event:studycondition',
             'questionid' => 'privacy:metadata:event:questionid',
             'elapsedms' => 'privacy:metadata:event:elapsedms',
             'servertime' => 'privacy:metadata:event:servertime',

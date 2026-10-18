@@ -154,6 +154,26 @@ final class research_logger {
         return \context::instance_by_id($usage->contextid, IGNORE_MISSING) ?: null;
     }
 
+    /**
+     * The study condition for this user's events on a usage: keyboard or
+     * hand2stack from the quiz's input mode, null for a question preview, or
+     * false when nothing may be recorded (not theirs, not a participant, or
+     * the quiz is set to off). Read when the event arrives, so a mode changed
+     * later never relabels what was already recorded.
+     *
+     * @return string|null|false
+     */
+    public static function usage_condition(int $usageid, int $userid) {
+        $context = self::own_usage_context($usageid, $userid);
+        if (!$context || !self::is_participant($context, $userid)) {
+            return false;
+        }
+        if ($context->contextlevel != CONTEXT_MODULE) {
+            return null;
+        }
+        return input_mode::condition(input_mode::for_context($context)) ?? false;
+    }
+
     /** Question identity for a slot, resolved on the server rather than trusted from the page. */
     public static function resolve_question(int $usageid, int $slot): ?\stdClass {
         global $DB;
@@ -197,10 +217,9 @@ final class research_logger {
             }
 
             if (!array_key_exists($record->usageid, $usages)) {
-                $context = self::own_usage_context($record->usageid, $userid);
-                $usages[$record->usageid] = $context && self::is_participant($context, $userid);
+                $usages[$record->usageid] = self::usage_condition($record->usageid, $userid);
             }
-            if (!$usages[$record->usageid]) {
+            if ($usages[$record->usageid] === false) {
                 $counts['rejected']++;
                 continue;
             }
@@ -225,6 +244,7 @@ final class research_logger {
             $record->questionid = (int)$question->questionid;
             $record->qbankentryid = $question->questionbankentryid !== null ? (int)$question->questionbankentryid : null;
             $record->questionversion = $question->version !== null ? (int)$question->version : null;
+            $record->studycondition = $usages[$record->usageid];
             $record->pluginversion = $pluginversion;
             $record->servertime = $servertime;
 

@@ -158,6 +158,19 @@ $string['privacy:metadata:event:eventseq'] = 'トレース内でのイベント�
 $string['privacy:metadata:event:slot'] = '受験内での問題の位置です。';
 $string['privacy:metadata:event:inputname'] = 'イベントに関係する STACK の解答欄です。';
 $string['privacy:metadata:event:modality'] = '解答の入力方法（アップロード、カメラ、手書き、モバイル、キーボード）です。';
+$string['privacy:metadata:event:studycondition'] = '解答が属する小テストの研究条件（キーボードまたは Hand2STACK）です。';
 $string['privacy:metadata:event:questionid'] = 'イベントに関係する問題です。';
 $string['privacy:metadata:event:elapsedms'] = '同じトレースの前のイベントからの経過時間です。';
 $string['privacy:metadata:event:servertime'] = 'サーバがイベントを受け取った時刻です。';
+$string['inputmode'] = '入力方式';
+$string['inputmode_help'] = 'この小テストでの Hand2STACK の表示方法です。
+
+* 通常: Hand2STACK のボタンを表示します。
+* 記録のみ（ボタンなし）: 通常の STACK と同じ見た目ですが、研究に同意した参加者のキーボード入力は記録されます。研究のキーボード条件に使います。
+* オフ: Hand2STACK がインストールされていないのと同じです。ボタンは表示されず、何も記録されません。
+
+記録される各イベントには、そのときの条件（キーボードまたは Hand2STACK）が保存されます。学生が受験を始めた後は変更できません。';
+$string['inputmode_normal'] = '通常（ボタンを表示）';
+$string['inputmode_logonly'] = '記録のみ、ボタンなし（キーボード条件）';
+$string['inputmode_off'] = 'オフ（ボタンなし、記録なし）';
+$string['inputmodelocked'] = 'この小テストはすでに受験されているため、入力方式は変更できません。';

@@ -165,6 +165,19 @@ $string['privacy:metadata:event:eventseq'] = 'The order of the event within its 
 $string['privacy:metadata:event:slot'] = 'The question slot within the attempt.';
 $string['privacy:metadata:event:inputname'] = 'The STACK answer field the event concerns.';
 $string['privacy:metadata:event:modality'] = 'How the answer was entered: upload, camera, handwriting, mobile or typing.';
+$string['privacy:metadata:event:studycondition'] = 'The study condition of the quiz the answer belongs to: keyboard or Hand2STACK.';
 $string['privacy:metadata:event:questionid'] = 'The question the event concerns.';
 $string['privacy:metadata:event:elapsedms'] = 'The time since the previous event of the trace.';
 $string['privacy:metadata:event:servertime'] = 'The time the server received the event.';
+$string['inputmode'] = 'Input mode';
+$string['inputmode_help'] = 'How Hand2STACK appears in this quiz.
+
+* Normal: the Hand2STACK buttons are shown.
+* Record only, no buttons: the quiz looks like plain STACK, but consenting research participants\' typing is still recorded. Use this for a study\'s keyboard condition.
+* Off: as if Hand2STACK were not installed. No buttons and nothing is recorded.
+
+Each recorded event keeps the condition it was made under (keyboard or Hand2STACK). The mode cannot be changed once students have attempted the quiz.';
+$string['inputmode_normal'] = 'Normal (show buttons)';
+$string['inputmode_logonly'] = 'Record only, no buttons (keyboard condition)';
+$string['inputmode_off'] = 'Off (no buttons, nothing recorded)';
+$string['inputmodelocked'] = 'Students have already attempted this quiz, so the input mode can no longer be changed.';

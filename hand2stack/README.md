@@ -151,6 +151,22 @@ Hand2STACK can record how learners move from recognition to submission, for educ
 
 For each question, the browser sends batches of events to `local/hand2stack/event.php`: recognition started and completed, candidate selection, edits (the value before and after each edit, not individual keystrokes), Hand2STACK and STACK validation, answer insertion, submission, observed feedback, and revision. Handwriting is summarised as counts and durations; coordinates and images are never stored.
 
+### Keyboard condition
+
+Each quiz's settings page has a **Hand2STACK** section with an **Input mode**:
+
+| Input mode | Buttons | Events recorded | `studycondition` |
+|---|---|---|---|
+| Normal (the default) | shown | yes | `hand2stack` |
+| Record only, no buttons | hidden | yes | `keyboard` |
+| Off | hidden | no | none |
+
+"Record only" is the keyboard condition of a study: the quiz looks like plain STACK, while typing, validation, submission and feedback are still recorded for participants. A Free-text question's hidden process input is still kept in sync. "Off" behaves as if the plugin were not installed. The mode cannot be changed once students have attempted the quiz (teacher previews do not count). Question previews outside a quiz always use Normal and record an empty `studycondition`.
+
+To counterbalance item sets and conditions, make one quiz per set and condition (for example A-keyboard, A-Hand2STACK, B-keyboard, B-Hand2STACK, all using the same questions) and show each to its groups with Moodle's access restrictions. A copied quiz starts as Normal, so set its mode after copying.
+
+The server writes the condition onto each event when it arrives, from the quiz the attempt belongs to, so the browser cannot choose it and a mode changed later does not relabel events already recorded.
+
 Events are stored in the `local_hand2stack_event` table. The server checks every event again, accepts it only for the learner's own attempt, and fills in the question, question version, and plugin version itself. Learners are identified by an HMAC of the study ID and user ID, keyed by a site secret that is generated on installation and never sent to the browser. The secret is stored as the plugin setting `researchsecret` in Moodle's database. Keep it in your database backups: if it is lost or regenerated, earlier events can no longer be matched to their learners, so privacy exports and deletion requests no longer find them. Grades and official submissions remain in Moodle's own question attempt tables.
 
 ## Mobile Upload URL

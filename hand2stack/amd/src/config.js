@@ -37,6 +37,8 @@ define([], function() {
         sessionCreateUrl: '',
         sessionResultUrl: '',
         eventUrl: '',
+        // normal, or logonly for a study's keyboard condition.
+        inputMode: 'normal',
         research: {enabled: false, schemaVersion: 1},
         sesskey: '',
         enablemobile: true,

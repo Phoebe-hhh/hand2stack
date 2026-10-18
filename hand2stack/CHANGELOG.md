@@ -5,6 +5,7 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+- Add an **Input mode** to each quiz's settings page, for a study's keyboard condition. **Record only, no buttons** hides every Hand2STACK control, so the quiz looks like plain STACK, but participants' typing, validation, submission and feedback are still recorded. **Off** behaves as if the plugin were not installed. **Normal** stays the default. Each research event now has a `studycondition` column, `keyboard` or `hand2stack`, written by the server from the quiz when the event arrives; question previews leave it empty. The mode is locked once students have attempted the quiz. Run the Moodle upgrade after updating.
 - Show the original image under a locked Free-text answer below STACK's side-by-side free-text container, not inside it, where it became a squeezed column between the box and the `[[ascii]]` preview. The widened container also keeps its padding inside its width.
 - While auto-fill is paused, no longer parse the working after each edit or recognition to match inputs that will not be filled.
 - `npm run check` now runs the tests, rebuilds `amd/build/` and fails if it differs, like the release workflow; the README's Development section lists where the reorganised code is.

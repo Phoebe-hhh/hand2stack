@@ -15,15 +15,18 @@
  */
 namespace local_hand2stack;
 
+use local_hand2stack\local\input_mode;
 use local_hand2stack\local\research_logger;
 
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
 require_once($CFG->dirroot . '/question/engine/lib.php');
+require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 
 /**
  * @covers \local_hand2stack\local\research_logger
+ * @covers \local_hand2stack\local\input_mode
  * @covers \local_hand2stack\privacy\provider
  */
 final class research_logger_test extends \advanced_testcase {
@@ -46,6 +49,24 @@ final class research_logger_test extends \advanced_testcase {
         $quba->start_all_questions();
         \question_engine::save_questions_usage_by_activity($quba);
         return [(int)$quba->get_id(), (int)$slot];
+    }
+
+    /** A quiz in the given input mode and the user's started attempt, as [quiz, usageid, slot]. */
+    private function create_quiz_attempt(\stdClass $user, string $mode): array {
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        input_mode::set_for_cm((int)$quiz->cmid, $mode);
+
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category();
+        $question = $questiongenerator->create_question('shortanswer', null, ['category' => $category->id]);
+        quiz_add_quiz_question($question->id, $quiz);
+        \mod_quiz\quiz_settings::create($quiz->id)->get_grade_calculator()->recompute_quiz_sumgrades();
+
+        $this->setUser($user);
+        $attempt = quiz_prepare_and_start_new_attempt(\mod_quiz\quiz_settings::create($quiz->id, $user->id), 1, null);
+        $this->setUser(null);
+        return [$quiz, (int)$attempt->uniqueid, 1];
     }
 
     private function make_participant(\stdClass $user): void {
@@ -180,5 +201,59 @@ final class research_logger_test extends \advanced_testcase {
         privacy\provider::delete_data_for_users(new \core_privacy\local\request\approved_userlist(
             $context, 'local_hand2stack', [(int)$user->id]));
         $this->assertSame(0, $DB->count_records('local_hand2stack_event'));
+    }
+
+    public function test_events_carry_the_condition_of_the_quiz_they_were_made_in(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->enable_study();
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->make_participant($user);
+        [, $handusage, $slot] = $this->create_quiz_attempt($user, input_mode::NORMAL);
+        [$keyboardquiz, $keyboardusage] = $this->create_quiz_attempt($user, input_mode::LOGONLY);
+        [, $offusage] = $this->create_quiz_attempt($user, input_mode::OFF);
+        [$previewusage, $previewslot] = $this->create_preview_usage($user);
+
+        $hand = $this->event($handusage, $slot);
+        $keyboard = $this->event($keyboardusage, $slot, ['modality' => 'keyboard']);
+        $preview = $this->event($previewusage, $previewslot);
+        $counts = research_logger::record_batch([$hand, $keyboard, $preview, $this->event($offusage, $slot)], (int)$user->id);
+        $this->assertSame(['accepted' => 3, 'duplicates' => 0, 'rejected' => 1], $counts);
+
+        $condition = fn(array $event) => $DB->get_field('local_hand2stack_event', 'studycondition',
+            ['eventid' => $event['eventid']], MUST_EXIST);
+        $this->assertSame('hand2stack', $condition($hand));
+        $this->assertSame('keyboard', $condition($keyboard));
+        $this->assertNull($condition($preview));
+
+        // Changing the mode later never relabels events already recorded.
+        input_mode::set_for_cm((int)$keyboardquiz->cmid, input_mode::NORMAL);
+        $this->assertSame('keyboard', $condition($keyboard));
+    }
+
+    public function test_input_mode_defaults_to_normal_and_locks_once_attempted(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $this->assertSame(input_mode::NORMAL, input_mode::for_cm((int)$quiz->cmid));
+        $this->assertFalse(input_mode::is_locked((int)$quiz->id));
+
+        // Saving normal on a quiz without a row stores nothing.
+        input_mode::set_for_cm((int)$quiz->cmid, input_mode::NORMAL);
+        $this->assertSame(0, $DB->count_records('local_hand2stack_cm'));
+        input_mode::set_for_cm((int)$quiz->cmid, input_mode::LOGONLY);
+        $this->assertSame(input_mode::LOGONLY, input_mode::for_cm((int)$quiz->cmid));
+        $this->assertSame(input_mode::LOGONLY,
+            input_mode::for_context(\context_module::instance((int)$quiz->cmid)));
+        $this->assertSame(input_mode::NORMAL, input_mode::for_context(\context_system::instance()));
+
+        [$attempted] = $this->create_quiz_attempt($this->getDataGenerator()->create_user(), input_mode::LOGONLY);
+        $this->assertTrue(input_mode::is_locked((int)$attempted->id));
+
+        course_delete_module((int)$quiz->cmid);
+        $this->assertFalse($DB->record_exists('local_hand2stack_cm', ['cmid' => $quiz->cmid]));
     }
 }

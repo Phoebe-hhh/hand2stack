@@ -368,6 +368,22 @@ test('syntax-hint auto-fill of sibling inputs is paused by default', () => {
     });
 });
 
+test('a quiz in the keyboard condition shows no controls but still records', () => {
+    const config = moduleSource('config');
+    const main = moduleSource('main');
+    assert.match(config, /inputMode: 'normal',/);
+    const branch = main.match(/if \(config\.inputMode === 'logonly'\) \{([\s\S]*?)\n {8}\}/);
+    assert.ok(branch, 'main must branch on the logonly input mode');
+    assert.match(branch[1], /startResearch\(boxes\)/);
+    assert.match(branch[1], /return;/);
+    assert.doesNotMatch(branch[1], /attachButton|setupTargetBox|fetchMissingAnchors/);
+    // The branch comes before any control is attached.
+    assert.ok(main.indexOf("config.inputMode === 'logonly'") < main.indexOf('.forEach(attachButton)'));
+    // A quiz set to off loads nothing at all.
+    assert.match(hook, /if \(\$inputmode === input_mode::OFF\) \{\s*return;/);
+    assert.match(hook, /'inputMode' => \$inputmode,/);
+});
+
 test('a locked answer\'s image follows a flex container instead of becoming a column in it', () => {
     const locked = moduleSource('modes/freetext/locked_answer');
     assert.match(locked, /\(inFlexParent \? parent : answerBox\)\.insertAdjacentElement\('afterend', figure\)/);

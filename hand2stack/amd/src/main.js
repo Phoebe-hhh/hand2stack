@@ -53,6 +53,13 @@ define([
             if (!lockedBoxes.length) window.console.warn(config.nofieldfound || 'No visible STACK input found');
             return;
         }
+        // The keyboard condition of a study: no Hand2STACK controls, but the
+        // process input is still kept in sync and typing is still recorded.
+        if (config.inputMode === 'logonly') {
+            boxes.forEach(bindFreeTextProcess);
+            startResearch(boxes);
+            return;
+        }
         // With auto-fill on, anchored inputs next to a free-text box are filled
         // from that box's working, not captured alone. While it is paused,
         // every input gets its own buttons.
