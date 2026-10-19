@@ -386,6 +386,8 @@ define([
                 savedResult.stackResult || '', answerBox, Array.isArray(savedResult.lines) ? savedResult.lines : [],
                 savedResult.recognizedText || '', savedResult.sourceUrl || '', {restore: true, savedWorking: savedResult.working});
         }
+        // Writing kept from before the reload is shown again, ready to change.
+        if (handwritingPanel._hand2stackRestoredStrokes) selectInputMode('handwrite');
 
         const cleanupObserver = new MutationObserver(() => {
             if (answerBox.isConnected) return;

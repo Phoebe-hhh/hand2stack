@@ -18,15 +18,17 @@ define([
     'local_hand2stack/config',
     'local_hand2stack/core/research',
     'local_hand2stack/core/api',
+    'local_hand2stack/core/saved_result',
     'local_hand2stack/ui/result_panel',
     'local_hand2stack/ui/result_view',
     'local_hand2stack/modes/freetext/anchors'
 ], function(
-    Config, Research, Api, ResultPanel, ResultView, Anchors
+    Config, Research, Api, SavedResult, ResultPanel, ResultView, Anchors
 ) {
     const {config, isIPadWebKit} = Config;
     const {logRecognitionFailure, research} = Research;
     const {postStrokes} = Api;
+    const {loadSavedStrokes, saveStrokes, snapshotCanvas} = SavedResult;
     const {setRequestStatus} = ResultPanel;
     const {updateResultPanel} = ResultView;
     const {applyMatchedAnswers, reportTargetResult} = Anchors;
@@ -167,6 +169,28 @@ define([
         let drawFrame = null;
         const dirtyStrokes = new Set();
         const context = canvas.getContext('2d');
+        // The strokes are saved shortly after each change, and at once when
+        // the page goes (a quiz Check, Next or Save), until the answer is final.
+        let saveTimer = null;
+        const persistStrokes = () => {
+            window.clearTimeout(saveTimer);
+            saveTimer = null;
+            saveStrokes(answerBox, {
+                width: canvas.width,
+                height: canvas.height,
+                cssHeight: canvas.style.height,
+                strokes: strokes.filter(stroke => stroke.x.length).map(stroke => ({
+                    x: stroke.x, y: stroke.y, width: Math.round(stroke.width * 100) / 100
+                }))
+            });
+        };
+        const schedulePersist = () => {
+            window.clearTimeout(saveTimer);
+            saveTimer = window.setTimeout(persistStrokes, 400);
+        };
+        window.addEventListener('pagehide', () => {
+            if (saveTimer !== null) persistStrokes();
+        }, {signal: lifecycleSignal});
         const cloneStrokes = () => strokes.map(stroke => ({
             x: stroke.x.slice(), y: stroke.y.slice(), drawn: stroke.x.length, width: stroke.width
         }));
@@ -255,6 +279,7 @@ define([
                 stroke.drawn = 0;
                 drawNewSegments(stroke);
             });
+            schedulePersist();
         };
         const distanceToSegment = (point, start, end) => {
             const dx = end.x - start.x;
@@ -358,6 +383,7 @@ define([
             if (event) addSamples(event, active);
             flushPendingDrawing();
             if (active.erasing && !active.changed) history.pop();
+            if (!active.erasing) schedulePersist();
             writing.lastEndAt = Date.now();
             active = null;
             canvasRect = null;
@@ -447,6 +473,24 @@ define([
             status.textContent = '';
         });
         setTool('draw');
+        // Strokes saved before a reload come back on a canvas of the size they
+        // were drawn on; the canvas's CSS width scales them to the panel.
+        const isPoints = values => Array.isArray(values) && values.every(Number.isFinite);
+        const saved = loadSavedStrokes(answerBox);
+        if (saved) {
+            const restored = saved.strokes.filter(stroke => stroke && isPoints(stroke.x) && isPoints(stroke.y)
+                && stroke.x.length && stroke.x.length === stroke.y.length && Number.isFinite(stroke.width));
+            if (restored.length) {
+                if (saved.width > 0 && saved.height > 0) {
+                    canvas.width = Math.round(saved.width);
+                    canvas.height = Math.round(saved.height);
+                }
+                if (/^\d+(\.\d+)?px$/.test(saved.cssHeight || '')) canvas.style.height = saved.cssHeight;
+                restored.forEach(stroke => strokes.push({x: stroke.x, y: stroke.y, drawn: 0, width: stroke.width}));
+                redraw();
+                panel._hand2stackRestoredStrokes = true;
+            }
+        }
         recognize.addEventListener('click', async () => {
             if (!strokes.length) { status.textContent = config.nostrokes; return; }
             const requestId = requestCoordinator.begin();
@@ -465,7 +509,7 @@ define([
                 const stackResult = result.stack || result.text || '';
                 resultPanel._hand2stackRecognition = {requestId, source: 'handwrite', latencyMs: Date.now() - startedAt};
                 updateResultPanel(resultPanel, result.raw_latex || '', result.raw_asciimath || '', stackResult,
-                    answerBox, result.lines || [], result.freetext || result.raw_text || '', canvas.toDataURL('image/png'));
+                    answerBox, result.lines || [], result.freetext || result.raw_text || '', snapshotCanvas(canvas));
                 if (config.autofill) {
                     applyMatchedAnswers(answerBox, result.lines || [],
                         () => requestCoordinator.isCurrent(requestId), reportTargetResult).catch(error => {

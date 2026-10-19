@@ -20,6 +20,9 @@ define([], function() {
     // quiz Check, Next or Save. Input names carry the question usage id, so a
     // new attempt or preview never picks up an older result.
     const SAVED_RESULT_PREFIX = 'hand2stack:result:';
+    // The strokes on each box's handwriting canvas, kept the same way, so a
+    // learner who checks an answer can still erase and rewrite part of it.
+    const SAVED_STROKES_PREFIX = 'hand2stack:strokes:';
 
     const SAVED_IMAGE_MAX_SIDE = 1600;
 
@@ -37,7 +40,7 @@ define([], function() {
         }
     };
 
-    const writeSavedResult = (key, value) => {
+    const writeSavedResult = (key, value, keep = key) => {
         const text = JSON.stringify(value);
         try {
             window.sessionStorage.setItem(key, text);
@@ -49,7 +52,7 @@ define([], function() {
         try {
             for (let i = 0; i < window.sessionStorage.length; i++) {
                 const other = window.sessionStorage.key(i);
-                if (other && other !== key && other.startsWith(SAVED_RESULT_PREFIX)) {
+                if (other && other !== key && other !== keep && other.startsWith(SAVED_RESULT_PREFIX)) {
                     let savedAt = 0;
                     try {
                         savedAt = Number(JSON.parse(window.sessionStorage.getItem(other)).savedAt) || 0;
@@ -77,26 +80,54 @@ define([], function() {
 
     // A downscaled JPEG keeps the image small enough for sessionStorage.
     // Handwriting canvases are transparent, so paint them on white first.
+    const toSavedJpeg = (source, width, height) => {
+        const scale = Math.min(1, SAVED_IMAGE_MAX_SIDE / Math.max(width, height, 1));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/jpeg', 0.85);
+    };
+
+    // Images made here from a canvas are saved as they are.
+    const savedJpegs = new Set();
+
+    // The handwriting canvas copied straight to a saved image. Loading the
+    // canvas's PNG into an <img> first came out blank on iPad Safari.
+    const snapshotCanvas = canvas => {
+        try {
+            const url = toSavedJpeg(canvas, canvas.width, canvas.height);
+            savedJpegs.add(url);
+            return url;
+        } catch (error) {
+            return '';
+        }
+    };
+
     const compressSourceImage = sourceUrl => new Promise(resolve => {
         if (!sourceUrl) {
             resolve('');
             return;
         }
+        if (savedJpegs.has(sourceUrl)) {
+            savedJpegs.delete(sourceUrl);
+            resolve(sourceUrl);
+            return;
+        }
         const image = new Image();
         image.onload = () => {
-            try {
-                const scale = Math.min(1, SAVED_IMAGE_MAX_SIDE / Math.max(image.naturalWidth, image.naturalHeight, 1));
-                const canvas = document.createElement('canvas');
-                canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-                canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-                const context = canvas.getContext('2d');
-                context.fillStyle = '#fff';
-                context.fillRect(0, 0, canvas.width, canvas.height);
-                context.drawImage(image, 0, 0, canvas.width, canvas.height);
-                resolve(canvas.toDataURL('image/jpeg', 0.85));
-            } catch (error) {
-                resolve('');
-            }
+            // Draw only once the image is decoded: WebKit may otherwise draw nothing.
+            const decoded = typeof image.decode === 'function' ? image.decode().catch(() => null) : Promise.resolve();
+            decoded.then(() => {
+                try {
+                    resolve(toSavedJpeg(image, image.naturalWidth, image.naturalHeight));
+                } catch (error) {
+                    resolve('');
+                }
+            });
         };
         image.onerror = () => resolve('');
         image.src = sourceUrl;
@@ -133,5 +164,33 @@ define([], function() {
         writeSavedResult(savedResultKey(answerBox), Object.assign(saved, {working}));
     };
 
-    return {loadSavedResult, saveRecognitionResult, saveFreeTextWorking};
+    const savedStrokesKey = answerBox => SAVED_STROKES_PREFIX + String((answerBox && answerBox.name) || '');
+
+    const loadSavedStrokes = answerBox => {
+        if (!answerBox || !answerBox.name) return null;
+        try {
+            const saved = JSON.parse(window.sessionStorage.getItem(savedStrokesKey(answerBox)) || 'null');
+            return saved && Array.isArray(saved.strokes) && saved.strokes.length ? saved : null;
+        } catch (error) {
+            return null;
+        }
+    };
+
+    // An empty canvas forgets its strokes. Saving may drop other boxes'
+    // saved results, never this box's own.
+    const saveStrokes = (answerBox, drawing) => {
+        if (!answerBox || !answerBox.name) return;
+        const key = savedStrokesKey(answerBox);
+        if (!drawing || !drawing.strokes.length) {
+            try {
+                window.sessionStorage.removeItem(key);
+            } catch (error) {
+                // Nothing kept.
+            }
+            return;
+        }
+        writeSavedResult(key, Object.assign({}, drawing, {savedAt: Date.now()}), savedResultKey(answerBox));
+    };
+
+    return {loadSavedResult, saveRecognitionResult, saveFreeTextWorking, loadSavedStrokes, saveStrokes, snapshotCanvas};
 });
