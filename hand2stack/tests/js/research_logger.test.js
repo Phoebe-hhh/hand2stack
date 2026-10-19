@@ -78,6 +78,7 @@ test('the acceptance scenario can be rebuilt from the event trace alone', async 
     // Page 1: photo, OCR mistake, fix in the candidate line, insert, Check.
     let research = tab.load();
     let box = answerBox('');
+    research.log(box, 'task_started', {answers: {ans1: '', process: ''}}, {input: null, modality: null});
     let line = {ascii: 'x^2+5x+8=0'};
     research.log(box, 'recognition_started', {requestId: 1, source: 'image'}, {modality: 'image'});
     research.log(box, 'recognition_completed', {ok: true, ocr: {rawAscii: 'x^2+5x+8=0'}}, {modality: 'image'});
@@ -99,8 +100,11 @@ test('the acceptance scenario can be rebuilt from the event trace alone', async 
     tab.advance(3000);
     research = tab.load();
     box = answerBox('x^2+5*x+6=0');
-    assert.ok(research.pendingSubmit(box));
-    research.log(box, 'feedback_observed', {state: 'incorrect'}, {input: null, modality: null});
+    let pending = research.pendingSubmit(box);
+    assert.ok(pending);
+    research.log(box, 'submit_confirmed', {submissionEventId: pending.eventid}, {input: null, modality: null});
+    research.log(box, 'feedback_observed', {state: 'incorrect', submissionEventId: pending.eventid},
+        {input: null, modality: null});
     const answerEdits = research.editTracker(box, () => box.value, () => ({target: 'answer'}),
         {logOptions: () => ({modality: 'keyboard'})});
     tab.advance(14000);
@@ -114,16 +118,22 @@ test('the acceptance scenario can be rebuilt from the event trace alone', async 
 
     // Page 3: correct.
     research = tab.load();
-    research.log(answerBox(box.value), 'feedback_observed', {state: 'correct'}, {input: null, modality: null});
+    pending = research.pendingSubmit(box);
+    research.log(answerBox(box.value), 'submit_confirmed', {submissionEventId: pending.eventid},
+        {input: null, modality: null});
+    research.log(answerBox(box.value), 'feedback_observed', {state: 'correct', submissionEventId: pending.eventid},
+        {input: null, modality: null});
+    research.log(answerBox(box.value), 'task_finished', {reason: 'graded_complete'},
+        {input: null, modality: null});
     research.flush(true);
     await settle();
 
     assert.deepEqual(tab.sent.map(event => event.type), [
-        'interaction_started', 'recognition_started', 'recognition_completed', 'edit_committed',
+        'interaction_started', 'task_started', 'recognition_started', 'recognition_completed', 'edit_committed',
         'validation_completed', 'answer_inserted', 'submit_triggered',
-        'interaction_started', 'feedback_observed', 'revision_started', 'edit_committed',
+        'interaction_started', 'submit_confirmed', 'feedback_observed', 'revision_started', 'edit_committed',
         'validation_completed', 'submit_triggered',
-        'interaction_started', 'feedback_observed'
+        'interaction_started', 'submit_confirmed', 'feedback_observed', 'task_finished'
     ]);
 
     // One trace across three pages, with a continuous sequence.
@@ -151,6 +161,27 @@ test('the acceptance scenario can be rebuilt from the event trace alone', async 
     const submit = tab.sent.find(event => event.type === 'submit_triggered');
     assert.equal(submit.input, null);
     assert.deepEqual([submit.usage, submit.slot, submit.schema], [43, 4, 1]);
+    const confirmations = tab.sent.filter(event => event.type === 'submit_confirmed');
+    assert.deepEqual(confirmations.map(event => event.payload.submissionEventId),
+        tab.sent.filter(event => event.type === 'submit_triggered').map(event => event.eventid));
+});
+
+test('task lifecycle events occur only once across page reloads', async () => {
+    const tab = createTab();
+    const box = answerBox('');
+    let research = tab.load();
+    research.log(box, 'task_started', {answers: {ans1: ''}}, {input: null, modality: null});
+    research.flush(true);
+    research = tab.load();
+    research.log(box, 'task_started', {answers: {ans1: 'x'}}, {input: null, modality: null});
+    research.log(box, 'task_finished', {answers: {ans1: 'x'}}, {input: null, modality: null});
+    research.flush(true);
+    research = tab.load();
+    research.log(box, 'task_finished', {answers: {ans1: 'x'}}, {input: null, modality: null});
+    research.flush(true);
+    await settle();
+    assert.equal(tab.sent.filter(event => event.type === 'task_started').length, 1);
+    assert.equal(tab.sent.filter(event => event.type === 'task_finished').length, 1);
 });
 
 test('an edit that returns to its starting value is not an edit', async () => {

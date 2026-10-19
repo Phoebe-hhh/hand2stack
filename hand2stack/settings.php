@@ -98,4 +98,12 @@ if ($hassiteconfig) {
     }
 
     $ADMIN->add('localplugins', $settings);
+
+    // A whole study at once spans every course, so only site administrators.
+    $ADMIN->add('localplugins', new admin_externalpage(
+        'local_hand2stack_export',
+        get_string('exportlogsadmin', 'local_hand2stack'),
+        new moodle_url('/local/hand2stack/export.php'),
+        'moodle/site:config'
+    ));
 }

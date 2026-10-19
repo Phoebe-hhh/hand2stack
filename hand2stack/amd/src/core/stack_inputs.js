@@ -74,6 +74,12 @@ define([], function() {
             && isSupportedAnswerBox(input) && isEditableAnswerBox(input);
     });
 
+    // Review pages contain read-only/disabled answers. Keep them available to
+    // the logger so it can confirm a pending Finish and capture its feedback.
+    const findResearchBoxes = () => findStackInputs().filter(input => {
+        return !isProcessInput(input) && isSupportedAnswerBox(input);
+    });
+
     // Locked Free-text answers: the review page, or a box locked after Check.
     const findLockedFreeTextBoxes = () => findStackInputs().filter(input => {
         return input.offsetParent !== null && isSupportedAnswerBox(input)
@@ -165,7 +171,8 @@ define([], function() {
     };
 
     return {
-        findStackInputs, processInputName, prepareProcessInputs, findAnswerBoxes, findLockedFreeTextBoxes,
+        findStackInputs, processInputName, prepareProcessInputs, findAnswerBoxes, findResearchBoxes,
+        findLockedFreeTextBoxes,
         setAnswerValue, setBackgroundValue, findProcessInput, processValueForLines, syncProcessValue,
         syncProcessInput, isFreeTextInput, captureAnswerAnchor, parseStackInputName, findSiblingAnswerBoxes
     };

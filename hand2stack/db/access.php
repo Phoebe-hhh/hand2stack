@@ -31,4 +31,15 @@ $capabilities = [
         'contextlevel' => CONTEXT_COURSE,
         'archetypes' => [],
     ],
+    // Download a quiz's research log. Teachers can already see their students'
+    // named answers and grades; the export is pseudonymised.
+    'local/hand2stack:exportlogs' => [
+        'riskbitmask' => RISK_PERSONAL,
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'editingteacher' => CAP_ALLOW,
+            'manager' => CAP_ALLOW,
+        ],
+    ],
 ];

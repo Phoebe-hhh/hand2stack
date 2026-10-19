@@ -117,7 +117,7 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
         box._hand2stackValidation = observeStackValidation(box);
     };
 
-    const startResearch = boxes => {
+    const startResearch = (boxes, mayStartTask = true) => {
         if (!research.enabled()) return;
         boxes.forEach(bindResearchAnswerBox);
 
@@ -131,17 +131,48 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
 
         questions.forEach(box => {
             const question = box.closest('.que');
-            if (!question || !research.pendingSubmit(box)) return;
-            const feedback = question.querySelector('.outcome, .stackprtfeedback');
+            if (!question) return;
+            const pending = research.pendingSubmit(box);
+            if (mayStartTask) {
+                research.log(box, 'task_started', {
+                    answers: questionAnswers(box),
+                    state: questionState(question)
+                }, {input: null, modality: null});
+            }
+            if (!pending) return;
+            const flatten = node => String((node && node.textContent) || '').replace(/\s+/g, ' ').trim();
+            const outcome = question.querySelector('.outcome');
+            const prtFeedback = Array.from(question.querySelectorAll('.stackprtfeedback')).map(node => ({
+                text: research.clip(flatten(node), 1000),
+                classes: Array.from(node.classList)
+            })).filter(item => item.text);
             const grade = question.querySelector('.grade');
-            research.log(box, 'feedback_observed', {
-                state: questionState(question),
-                queClasses: Array.from(question.classList),
-                hasPrtFeedback: Boolean(question.querySelector('.stackprtfeedback')),
-                feedbackText: research.clip(feedback ? feedback.textContent.replace(/\s+/g, ' ').trim() : '', 1000),
-                gradeText: grade ? grade.textContent.replace(/\s+/g, ' ').trim() : '',
+            research.log(box, 'submit_confirmed', {
+                submissionEventId: pending.eventid || null,
+                submitterKind: pending.kind || null,
+                submittedAt: pending.at,
+                roundTripMs: Math.max(0, Date.now() - pending.at),
+                submittedAnswers: pending.answers || {},
                 answers: questionAnswers(box)
             }, {input: null, modality: null});
+            research.log(box, 'feedback_observed', {
+                submissionEventId: pending.eventid || null,
+                state: questionState(question),
+                queClasses: Array.from(question.classList),
+                hasPrtFeedback: prtFeedback.length > 0,
+                feedbackText: research.clip(flatten(outcome), 1000),
+                prtFeedback,
+                gradeText: flatten(grade),
+                answers: questionAnswers(box)
+            }, {input: null, modality: null});
+            if (pending.kind === 'finish' || ['correct', 'complete'].includes(questionState(question))) {
+                research.log(box, 'task_finished', {
+                    reason: pending.kind === 'finish' ? 'quiz_finished' : 'graded_complete',
+                    submissionEventId: pending.eventid || null,
+                    state: questionState(question),
+                    answers: questionAnswers(box)
+                }, {input: null, modality: null});
+            }
             researchBoxes.filter(other => question.contains(other) && other._hand2stackValidation)
                 .forEach(other => other._hand2stackValidation.reportNow());
         });
@@ -152,11 +183,23 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
             const classified = classifySubmitter(submitter);
             questions.forEach((box, key) => {
                 if (box.form !== form || (classified.key && classified.key !== key)) return;
-                research.log(box, 'submit_triggered', {
+                const answers = questionAnswers(box);
+                const submitted = research.log(box, 'submit_triggered', {
                     submitter,
                     submitterKind: classified.kind,
-                    answers: questionAnswers(box)
+                    answers
                 }, {input: null, modality: null});
+                // Moodle's Finish attempt normally goes to a summary page
+                // with no question inputs, so record the learner's task-end
+                // action here. A later confirmed completion is de-duplicated.
+                if (classified.kind === 'finish') {
+                    research.log(box, 'task_finished', {
+                        reason: 'quiz_finish_triggered',
+                        submissionEventId: submitted ? submitted.eventid : null,
+                        state: questionState(box.closest('.que')),
+                        answers
+                    }, {input: null, modality: null});
+                }
             });
             research.flush(true);
         }));

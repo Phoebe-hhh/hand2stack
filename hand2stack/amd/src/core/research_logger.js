@@ -68,7 +68,10 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             if (stored && typeof stored.id === 'string' && Number.isInteger(stored.seq)) {
                 return {state: stored, resumed: true};
             }
-            return {state: {id: env.uuid(), seq: 0, pendingSubmit: null, feedback: null}, resumed: false};
+            return {state: {
+                id: env.uuid(), seq: 0, pendingSubmit: null, feedback: null,
+                taskStarted: false, taskFinished: false
+            }, resumed: false};
         };
 
         const saveTrace = (key, state) => {
@@ -155,7 +158,7 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             const push = (eventType, eventPayload) => {
                 const now = env.now();
                 state.seq += 1;
-                queue.push({
+                const event = {
                     eventid: env.uuid(),
                     traceid: state.id,
                     pageid: env.pageId,
@@ -169,8 +172,16 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
                     modality: ctx.modality,
                     schema: SCHEMA,
                     payload: eventPayload
-                });
+                };
+                queue.push(event);
+                return event;
             };
+            // These are trace-level lifecycle events. Page reloads after Check
+            // must not turn them into page-view counters.
+            if ((type === 'task_started' && state.taskStarted)
+                    || (type === 'task_finished' && state.taskFinished)) {
+                return;
+            }
             let segment = segments.get(ctx.key);
             if (!segment) {
                 segment = {startedAt: env.now()};
@@ -187,12 +198,18 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
                 });
                 state.feedback = null;
             }
-            if (type) {
-                push(type, payload || {});
-            }
+            const event = type ? push(type, payload || {}) : null;
+            if (type === 'task_started') state.taskStarted = true;
+            if (type === 'task_finished') state.taskFinished = true;
             if (type === 'submit_triggered') {
                 state.pendingSubmit = payload && FEEDBACK_SUBMITS.includes(payload.submitterKind)
-                    ? {answers: payload.answers || {}, at: env.now()}
+                    ? {
+                        answers: payload.answers || {},
+                        at: env.now(),
+                        eventid: event ? event.eventid : null,
+                        kind: payload.submitterKind,
+                        pageid: env.pageId
+                    }
                     : null;
             } else if (type === 'feedback_observed') {
                 state.feedback = {
@@ -204,6 +221,7 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             }
             saveTrace(ctx.key, state);
             schedule();
+            return event;
         };
 
         const commitEdits = trigger => trackers.forEach(tracker => tracker.commit(trigger));

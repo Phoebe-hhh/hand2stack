@@ -30,6 +30,7 @@ final class research_logger {
     public const PARTICIPANT_CAPABILITY = 'local/hand2stack:researchparticipant';
 
     public const EVENT_TYPES = [
+        'task_started',
         'interaction_started',
         'recognition_started',
         'recognition_completed',
@@ -38,8 +39,10 @@ final class research_logger {
         'validation_completed',
         'answer_inserted',
         'submit_triggered',
+        'submit_confirmed',
         'feedback_observed',
         'revision_started',
+        'task_finished',
     ];
 
     public const MODALITIES = ['keyboard', 'image', 'camera', 'mobile', 'handwrite'];
@@ -87,6 +90,16 @@ final class research_logger {
         self::ensure_secret();
         $secret = (string)get_config('local_hand2stack', 'researchsecret');
         return hash_hmac('sha256', $studyid . ':' . $userid, $secret);
+    }
+
+    /**
+     * Pseudonym for an attempt in exported data. usageid leads back to the
+     * learner through quiz_attempts, so exports carry this instead.
+     */
+    public static function anon_attempt_id(int $usageid, string $studyid): string {
+        self::ensure_secret();
+        $secret = (string)get_config('local_hand2stack', 'researchsecret');
+        return hash_hmac('sha256', $studyid . ':usage:' . $usageid, $secret);
     }
 
     /**

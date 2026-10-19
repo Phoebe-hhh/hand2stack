@@ -147,5 +147,16 @@ function xmldb_local_hand2stack_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026101900, 'local', 'hand2stack');
     }
 
+    if ($oldversion < 2026101901) {
+        // New capability local/hand2stack:exportlogs.
+        upgrade_plugin_savepoint(true, 2026101901, 'local', 'hand2stack');
+    }
+
+    if ($oldversion < 2026101902) {
+        // Research lifecycle events and rebuilt AMD modules. The version bump
+        // also invalidates Moodle's cached browser JavaScript.
+        upgrade_plugin_savepoint(true, 2026101902, 'local', 'hand2stack');
+    }
+
     return true;
 }

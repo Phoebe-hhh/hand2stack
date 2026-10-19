@@ -72,3 +72,27 @@ function local_hand2stack_coursemodule_edit_post_actions($data, $course) {
 function local_hand2stack_pre_course_module_delete($cm): void {
     input_mode::delete_for_cm((int)$cm->id);
 }
+
+/**
+ * Add "Hand2STACK log" to a quiz's More menu for those who may download it.
+ *
+ * @param settings_navigation $nav
+ * @param context $context
+ */
+function local_hand2stack_extend_settings_navigation(settings_navigation $nav, context $context): void {
+    if ($context->contextlevel != CONTEXT_MODULE) {
+        return;
+    }
+    $courseid = $context->get_course_context()->instanceid;
+    $cm = get_fast_modinfo($courseid)->get_cm($context->instanceid);
+    if ($cm->modname !== 'quiz' || !has_capability('local/hand2stack:exportlogs', $context)) {
+        return;
+    }
+    $modulesettings = $nav->find('modulesettings', navigation_node::TYPE_SETTING);
+    if (!$modulesettings) {
+        return;
+    }
+    $modulesettings->add(get_string('exportlogs', 'local_hand2stack'),
+        new moodle_url('/local/hand2stack/export.php', ['cmid' => $context->instanceid]),
+        navigation_node::TYPE_SETTING, null, 'local_hand2stack_export', new pix_icon('i/export', ''));
+}

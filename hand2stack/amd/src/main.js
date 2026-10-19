@@ -28,8 +28,8 @@ define([
 ) {
     const {pluginUrl, replaceLegacyNodeUrl, defaultConfig, config} = Config;
     const {
-        prepareProcessInputs, findAnswerBoxes, findLockedFreeTextBoxes, isFreeTextInput, captureAnswerAnchor,
-        findSiblingAnswerBoxes
+        prepareProcessInputs, findAnswerBoxes, findResearchBoxes, findLockedFreeTextBoxes, isFreeTextInput,
+        captureAnswerAnchor, findSiblingAnswerBoxes
     } = StackInputs;
     const {startResearch} = ResearchObserver;
     const {fetchMissingAnchors} = Api;
@@ -50,6 +50,7 @@ define([
         const boxes = findAnswerBoxes();
         if (!boxes.length) {
             // A review page, or a question locked after Check, has only locked answers.
+            startResearch(findResearchBoxes(), false);
             if (!lockedBoxes.length) window.console.warn(config.nofieldfound || 'No visible STACK input found');
             return;
         }
@@ -60,6 +61,9 @@ define([
             startResearch(boxes);
             return;
         }
+        // Start the research clock before any asynchronous UI setup so the
+        // initial snapshot means "when the question became available".
+        startResearch(boxes);
         // With auto-fill on, anchored inputs next to a free-text box are filled
         // from that box's working, not captured alone. While it is paused,
         // every input gets its own buttons.
@@ -74,7 +78,6 @@ define([
         boxes.filter(box => !candidates.has(box)).forEach(attachButton);
         await fetchMissingAnchors(Array.from(candidates));
         candidates.forEach(box => (box.dataset.hand2stackAnchor ? setupTargetBox(box) : attachButton(box)));
-        startResearch(boxes);
     };
 
     const init = suppliedConfig => {

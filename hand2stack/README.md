@@ -149,7 +149,7 @@ Hand2STACK can record how learners move from recognition to submission, for educ
 2. **Study ID** is set (for example `pilot2026a`). Participant pseudonyms differ between study IDs.
 3. The learner holds `local/hand2stack:researchparticipant` in the quiz context. No role has this capability by default, and site administrators are not included automatically. Grant it through a role assigned only to consenting participants.
 
-For each question, the browser sends batches of events to `local/hand2stack/event.php`: recognition started and completed, candidate selection, edits (the value before and after each edit, not individual keystrokes), Hand2STACK and STACK validation, answer insertion, submission, observed feedback, and revision. Handwriting is summarised as counts and durations; coordinates and images are never stored.
+For each question, the browser sends batches of events to `local/hand2stack/event.php`: task start (including the complete initial answer snapshot), recognition started and completed, candidate selection, edits (the value before and after each edit, not individual keystrokes), Hand2STACK and STACK validation, answer insertion, submission request and confirmation, the feedback actually rendered by STACK, revision, and task completion. Submission confirmation and feedback carry the triggering submission event ID, so repeated Check attempts remain distinguishable. Handwriting is summarised as counts and durations; coordinates and images are never stored.
 
 ### Keyboard condition
 
@@ -166,6 +166,14 @@ Each quiz's settings page has a **Hand2STACK** section with an **Input mode**:
 To counterbalance item sets and conditions, make one quiz per set and condition (for example A-keyboard, A-Hand2STACK, B-keyboard, B-Hand2STACK, all using the same questions) and show each to its groups with Moodle's access restrictions. A copied quiz starts as Normal, so set its mode after copying.
 
 The server writes the condition onto each event when it arrives, from the quiz the attempt belongs to, so the browser cannot choose it and a mode changed later does not relabel events already recorded.
+
+### Downloading the log
+
+Teachers download a quiz's log from the quiz's **More** menu → **Hand2STACK log**. Site administrators can download a whole study, or one course of it, from **Site administration → Plugins → Local plugins → Hand2STACK research log**. Choose the study ID and a file format (CSV, Excel, JSON, ODS…).
+
+The file has one row per event. Next to the event fields it has the course, quiz, `studycondition`, question name, and the question's final state, fraction and mark from Moodle's attempt data, so it can be analysed on its own. Learners appear only as `anonuserid`; the usage id, which leads back to a learner through the quiz attempt, is replaced by an HMAC pseudonym `anonattemptid`. Names and Moodle user ids are never included.
+
+Downloading needs `local/hand2stack:exportlogs` in the quiz. Editing teachers and managers have it by default, so a teacher sees only the quizzes of their own courses; non-editing teachers can be given it.
 
 Events are stored in the `local_hand2stack_event` table. The server checks every event again, accepts it only for the learner's own attempt, and fills in the question, question version, and plugin version itself. Learners are identified by an HMAC of the study ID and user ID, keyed by a site secret that is generated on installation and never sent to the browser. The secret is stored as the plugin setting `researchsecret` in Moodle's database. Keep it in your database backups: if it is lost or regenerated, earlier events can no longer be matched to their learners, so privacy exports and deletion requests no longer find them. Grades and official submissions remain in Moodle's own question attempt tables.
 

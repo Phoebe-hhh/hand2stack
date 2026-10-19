@@ -496,3 +496,16 @@ test('a mobile URL on the IPv6 loopback address warns like localhost', () => {
     const sessionCreate = fs.readFileSync(path.join(pluginRoot, 'session_create.php'), 'utf8');
     assert.match(sessionCreate, /\$mobilehost === '\[::1\]'/);
 });
+
+test('the research log download checks access and never exports a usage or user id', () => {
+    const page = fs.readFileSync(path.join(pluginRoot, 'export.php'), 'utf8');
+    const exporter = fs.readFileSync(path.join(pluginRoot, 'classes/local/research_export.php'), 'utf8');
+    const settings = fs.readFileSync(path.join(pluginRoot, 'settings.php'), 'utf8');
+    // A quiz's log needs the capability there; the whole study is a site admin page.
+    assert.match(page, /require_login\(\$cm->course, false, \$cm\);[\s\S]*require_capability\('local\/hand2stack:exportlogs', \$context\);/);
+    assert.match(page, /admin_externalpage_setup\('local_hand2stack_export'\)/);
+    assert.match(settings, /'local_hand2stack_export',[\s\S]*'moodle\/site:config'/);
+    const columns = exporter.match(/public const COLUMNS = \[([\s\S]*?)\];/)[1];
+    assert.match(columns, /'anonattemptid'/);
+    assert.doesNotMatch(columns, /'usageid'|'userid'|'username'|'email'/);
+});
