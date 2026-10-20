@@ -382,6 +382,11 @@ define([
 
         const savedResult = loadSavedResult(answerBox);
         if (savedResult) {
+            // Research events from the restored panel keep the way the result
+            // was made, until the learner picks another input method.
+            if (!answerBox._hand2stackModality && typeof savedResult.modality === 'string') {
+                answerBox._hand2stackModality = savedResult.modality;
+            }
             updateResultPanel(resultPanel, savedResult.rawLatex || '', savedResult.rawAscii || '',
                 savedResult.stackResult || '', answerBox, Array.isArray(savedResult.lines) ? savedResult.lines : [],
                 savedResult.recognizedText || '', savedResult.sourceUrl || '', {restore: true, savedWorking: savedResult.working});

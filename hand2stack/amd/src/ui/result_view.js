@@ -38,7 +38,8 @@ define([
         if (!restore) {
             // Only the Free-text panel shows the source image.
             saveRecognitionResult(answerBox, {rawLatex, rawAscii, stackResult, lines, recognizedText,
-                sourceUrl: isFreeTextInput(answerBox) ? sourceUrl : ''});
+                sourceUrl: isFreeTextInput(answerBox) ? sourceUrl : '',
+                modality: answerBox._hand2stackModality || null});
         }
         setRequestStatus(panel);
         window.clearTimeout(panel._dragConversionTimer);

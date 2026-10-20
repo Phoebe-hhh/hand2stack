@@ -68,6 +68,7 @@ final class hook_callbacks {
             'research' => [
                 'enabled' => $research,
                 'schemaVersion' => research_logger::SCHEMA_VERSION,
+                'outboxScope' => $research ? research_logger::outbox_scope((int)$USER->id) : '',
             ],
             'sesskey' => sesskey(),
             'enablemobile' => (bool)get_config('local_hand2stack', 'enablemobile'),

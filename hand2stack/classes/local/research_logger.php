@@ -43,6 +43,9 @@ final class research_logger {
         'feedback_observed',
         'revision_started',
         'task_finished',
+        'activity_paused',
+        'activity_resumed',
+        'delivery_failed',
     ];
 
     public const MODALITIES = ['keyboard', 'image', 'camera', 'mobile', 'handwrite'];
@@ -100,6 +103,16 @@ final class research_logger {
         self::ensure_secret();
         $secret = (string)get_config('local_hand2stack', 'researchsecret');
         return hash_hmac('sha256', $studyid . ':usage:' . $usageid, $secret);
+    }
+
+    /**
+     * Name of this user's unsent events in their browser for the current
+     * study. Separate from anon_user_id(), which never leaves the server.
+     */
+    public static function outbox_scope(int $userid): string {
+        self::ensure_secret();
+        $secret = (string)get_config('local_hand2stack', 'researchsecret');
+        return substr(hash_hmac('sha256', self::study_id() . ':outbox:' . $userid, $secret), 0, 32);
     }
 
     /**
@@ -201,15 +214,31 @@ final class research_logger {
     /**
      * Validate and store a batch of client events for one user.
      *
+     * The page deletes its local copy of an event only once the event id is
+     * in acknowledgedIds (stored now or already stored) or rejectedIds (will
+     * never be stored); anything else it sends again.
+     *
      * @param array $events Decoded client events.
      * @param int $userid The Moodle user who sent them.
-     * @return array Counts: accepted, duplicates, rejected.
+     * @return array Counts accepted, duplicates and rejected, and the event
+     *     ids acknowledgedIds and rejectedIds.
      */
     public static function record_batch(array $events, int $userid): array {
         global $DB;
 
         $counts = ['accepted' => 0, 'duplicates' => 0, 'rejected' => 0];
+        $acknowledged = [];
+        $rejected = [];
+        $reject = static function($event) use (&$counts, &$rejected) {
+            $counts['rejected']++;
+            $eventid = is_array($event) ? strtolower(trim((string)($event['eventid'] ?? ''))) : '';
+            if (preg_match(self::UUID_PATTERN, $eventid)) {
+                $rejected[] = $eventid;
+            }
+        };
         if (count($events) > self::MAX_BATCH) {
+            // Over the limit is not wrong, only too many at once: leave those
+            // out of rejectedIds so the page sends them again.
             $counts['rejected'] += count($events) - self::MAX_BATCH;
             $events = array_slice($events, 0, self::MAX_BATCH);
         }
@@ -225,7 +254,7 @@ final class research_logger {
         foreach ($events as $event) {
             $record = is_array($event) ? self::normalise_event($event) : null;
             if (!$record) {
-                $counts['rejected']++;
+                $reject($event);
                 continue;
             }
 
@@ -233,7 +262,7 @@ final class research_logger {
                 $usages[$record->usageid] = self::usage_condition($record->usageid, $userid);
             }
             if ($usages[$record->usageid] === false) {
-                $counts['rejected']++;
+                $reject($event);
                 continue;
             }
 
@@ -243,12 +272,13 @@ final class research_logger {
             }
             $question = $questions[$questionkey];
             if (!$question) {
-                $counts['rejected']++;
+                $reject($event);
                 continue;
             }
 
             if ($DB->record_exists(self::TABLE, ['eventid' => $record->eventid])) {
                 $counts['duplicates']++;
+                $acknowledged[] = $record->eventid;
                 continue;
             }
 
@@ -264,17 +294,19 @@ final class research_logger {
             try {
                 $DB->insert_record(self::TABLE, $record);
                 $counts['accepted']++;
+                $acknowledged[] = $record->eventid;
             } catch (\dml_write_exception $error) {
                 // A beacon and a fetch can race with the same event id.
                 if ($DB->record_exists(self::TABLE, ['eventid' => $record->eventid])) {
                     $counts['duplicates']++;
+                    $acknowledged[] = $record->eventid;
                 } else {
                     throw $error;
                 }
             }
         }
 
-        return $counts;
+        return $counts + ['acknowledgedIds' => $acknowledged, 'rejectedIds' => $rejected];
     }
 
     /**

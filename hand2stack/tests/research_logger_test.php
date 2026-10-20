@@ -136,7 +136,8 @@ final class research_logger_test extends \advanced_testcase {
 
         $event = $this->event($usageid, $slot);
         $counts = research_logger::record_batch([$event, $event], (int)$user->id);
-        $this->assertSame(['accepted' => 1, 'duplicates' => 1, 'rejected' => 0], $counts);
+        $this->assertSame(['accepted' => 1, 'duplicates' => 1, 'rejected' => 0,
+            'acknowledgedIds' => [$event['eventid'], $event['eventid']], 'rejectedIds' => []], $counts);
 
         $record = $DB->get_record('local_hand2stack_event', ['eventid' => $event['eventid']], '*', MUST_EXIST);
         $this->assertSame('pilot2026a', $record->studyid);
@@ -166,7 +167,12 @@ final class research_logger_test extends \advanced_testcase {
         $this->assertSame(1, research_logger::record_batch([$this->event($usageid, $slot)], (int)$other->id)['rejected']);
 
         // An unknown slot is rejected.
-        $this->assertSame(1, research_logger::record_batch([$this->event($usageid, 99)], (int)$other->id)['rejected']);
+        $unknown = $this->event($usageid, 99);
+        $counts = research_logger::record_batch([$unknown], (int)$other->id);
+        $this->assertSame(1, $counts['rejected']);
+        // The page is told to stop sending it, and that nothing was stored.
+        $this->assertSame([$unknown['eventid']], $counts['rejectedIds']);
+        $this->assertSame([], $counts['acknowledgedIds']);
 
         $this->assertSame(0, $DB->count_records('local_hand2stack_event'));
     }
@@ -225,8 +231,11 @@ final class research_logger_test extends \advanced_testcase {
         $hand = $this->event($handusage, $slot);
         $keyboard = $this->event($keyboardusage, $slot, ['modality' => 'keyboard']);
         $preview = $this->event($previewusage, $previewslot);
-        $counts = research_logger::record_batch([$hand, $keyboard, $preview, $this->event($offusage, $slot)], (int)$user->id);
-        $this->assertSame(['accepted' => 3, 'duplicates' => 0, 'rejected' => 1], $counts);
+        $off = $this->event($offusage, $slot);
+        $counts = research_logger::record_batch([$hand, $keyboard, $preview, $off], (int)$user->id);
+        $this->assertSame(['accepted' => 3, 'duplicates' => 0, 'rejected' => 1,
+            'acknowledgedIds' => [$hand['eventid'], $keyboard['eventid'], $preview['eventid']],
+            'rejectedIds' => [$off['eventid']]], $counts);
 
         $condition = fn(array $event) => $DB->get_field('local_hand2stack_event', 'studycondition',
             ['eventid' => $event['eventid']], MUST_EXIST);
@@ -396,5 +405,60 @@ final class research_logger_test extends \advanced_testcase {
         $this->assertSame('x=1', research_export::escape_formula('x=1'));
         $this->assertSame(-0.5, research_export::escape_formula(-0.5));
         $this->assertNull(research_export::escape_formula(null));
+    }
+    public function test_integrity_check_reports_gaps_clipping_missing_modality_and_active_time(): void {
+        $this->resetAfterTest();
+        $this->enable_study();
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->make_participant($user);
+        [$quiz, $usageid, $slot] = $this->create_quiz_attempt($user, input_mode::NORMAL);
+
+        $trace = ['traceid' => '33333333-3333-4333-8333-333333333333'];
+        $at = fn(int $seq, string $type, array $more = []) => $this->event($usageid, $slot, $trace + [
+            'eventseq' => $seq, 'type' => $type, 'clienttime' => 1791190800000 + $seq * 60000,
+        ] + $more);
+        research_logger::record_batch([
+            $at(1, 'interaction_started', ['input' => null, 'modality' => null, 'payload' => ['revisit' => false]]),
+            $at(2, 'task_started', ['input' => null, 'modality' => null, 'payload' => []]),
+            // 3 never arrived.
+            $at(4, 'candidate_selected', ['modality' => null, 'payload' => ['kind' => 'line']]),
+            $at(5, 'edit_committed', ['modality' => 'keyboard',
+                'payload' => ['after' => 'x…[truncated]', 'truncated' => true]]),
+            $at(6, 'activity_paused', ['input' => null, 'modality' => null,
+                'payload' => ['reason' => 'hidden', 'activeMs' => 30000, 'totalActiveMs' => 30000]]),
+            $at(7, 'task_finished', ['input' => null, 'modality' => null, 'payload' => ['activeTimeMs' => 50000]]),
+            $at(8, 'interaction_started', ['input' => null, 'modality' => null, 'payload' => ['revisit' => true]]),
+            $at(9, 'activity_paused', ['input' => null, 'modality' => null,
+                'payload' => ['reason' => 'leave', 'activeMs' => 9000, 'totalActiveMs' => 50000]]),
+            // The browser reports why 3 never arrived, twice (a resend).
+            $at(0, 'delivery_failed', ['eventid' => '00000000-0000-4000-8000-999999999991', 'input' => null,
+                'modality' => null, 'payload' => ['originalEventId' => '00000000-0000-4000-8000-999999999993',
+                'originalEventSeq' => 3, 'originalType' => 'recognition_started', 'reason' => 'rejected',
+                'attempts' => 1]]),
+            $at(0, 'delivery_failed', ['eventid' => '00000000-0000-4000-8000-999999999992', 'input' => null,
+                'modality' => null, 'payload' => ['originalEventId' => '00000000-0000-4000-8000-999999999993',
+                'originalEventSeq' => 3, 'originalType' => 'recognition_started', 'reason' => 'rejected',
+                'attempts' => 1]]),
+            $at(10, 'edit_committed', ['payload' => ['burstId' => 'b1', 'trigger' => 'blur']]),
+            $at(11, 'edit_committed', ['payload' => ['burstId' => 'b1', 'trigger' => 'recovered']]),
+        ], (int)$user->id);
+
+        $traces = \local_hand2stack\local\research_integrity::check('pilot2026a', (int)$quiz->cmid);
+        $this->assertCount(1, $traces);
+        $result = $traces[0];
+        $this->assertSame([3], $result['missing']);
+        $this->assertSame([['originalseq' => 3, 'originaltype' => 'recognition_started', 'reason' => 'rejected',
+            'attempts' => 1]], $result['failed']);
+        $this->assertSame(10, $result['events'], 'delivery_failed is not part of the trace');
+        $this->assertSame(1, $result['duplicateedits']);
+        $this->assertSame(0, $result['siblingtraces']);
+        $this->assertCount(1, $result['truncated']);
+        $this->assertCount(1, $result['nomodality']);
+        $this->assertSame(50000, $result['activems']);
+        $this->assertSame(5 * 60000, $result['wallms']);
+        $this->assertSame(1, $result['revisits']);
+        $this->assertTrue(\local_hand2stack\local\research_integrity::has_issues($result));
+        $this->assertArrayNotHasKey('usageid', $result);
     }
 }

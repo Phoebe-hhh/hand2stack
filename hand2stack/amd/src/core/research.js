@@ -17,13 +17,15 @@
 define([
     'local_hand2stack/config',
     'local_hand2stack/core/stack_inputs',
-    'local_hand2stack/core/research_logger'
+    'local_hand2stack/core/research_logger',
+    'local_hand2stack/core/research_outbox'
 ], function(
-    Config, StackInputs, ResearchLogger
+    Config, StackInputs, ResearchLogger, ResearchOutbox
 ) {
     const {config, isIPadWebKit, isMobileOrTablet} = Config;
     const {findProcessInput} = StackInputs;
     const {createResearchLogger} = ResearchLogger;
+    const {createOutbox} = ResearchOutbox;
 
     const logRecognitionFailure = (answerBox, recognition, error) => {
         research.log(answerBox, 'recognition_completed', {
@@ -48,14 +50,30 @@ define([
         return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
     };
 
+    // Made on first use: main.js merges the server's config, with the
+    // outbox scope, only after this module has loaded.
+    const outbox = () => {
+        const scope = config.research && config.research.enabled ? String(config.research.outboxScope || '') : '';
+        if (!scope) return null;
+        let localStorage = null;
+        try {
+            localStorage = window.localStorage;
+        } catch (error) {
+            // Blocked storage: no spill on unload.
+        }
+        return createOutbox(scope, window.indexedDB || null, localStorage);
+    };
+
     const research = createResearchLogger({
         pageId: randomUuid(),
+        outbox,
         uuid: randomUuid,
         now: () => Date.now(),
         getConfig: () => config,
         storage: {
             getItem: key => window.sessionStorage.getItem(key),
-            setItem: (key, value) => window.sessionStorage.setItem(key, value)
+            setItem: (key, value) => window.sessionStorage.setItem(key, value),
+            removeItem: key => window.sessionStorage.removeItem(key)
         },
         setTimeout: (fn, ms) => window.setTimeout(fn, ms),
         clearTimeout: timer => window.clearTimeout(timer),
@@ -74,8 +92,10 @@ define([
             const formData = new FormData();
             formData.append('sesskey', config.sesskey);
             formData.append('events', JSON.stringify(batch));
+            // A queued beacon is not a stored event: the logger keeps it
+            // until a later fetch is answered with its id.
             if (unloading && navigator.sendBeacon && navigator.sendBeacon(config.eventUrl, formData)) {
-                return null;
+                return {beacon: true};
             }
             return fetch(config.eventUrl, {
                 method: 'POST',
@@ -83,8 +103,8 @@ define([
                 credentials: 'same-origin',
                 keepalive: unloading
             }).then(response => {
-                if (response.status >= 500) throw new Error('HTTP ' + response.status);
-                return response.json().catch(() => null);
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.json();
             });
         }
     });

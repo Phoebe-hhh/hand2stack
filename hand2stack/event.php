@@ -14,6 +14,11 @@
  * server, so a page that claims logging is on cannot record anyone who is not
  * a consenting participant in their own attempt.
  *
+ * The response lists the event ids that are stored (acknowledgedIds) and
+ * those that never will be (rejectedIds). The page keeps every other event
+ * of the batch and sends it again; eventid is unique, so a repeat is only
+ * counted as a duplicate.
+ *
  * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -30,7 +35,8 @@ header('Content-Type: application/json; charset=utf-8');
 
 try {
     if (!\local_hand2stack\local\research_logger::is_enabled()) {
-        echo json_encode(['success' => true, 'accepted' => 0, 'disabled' => true]);
+        echo json_encode(['success' => true, 'accepted' => 0, 'disabled' => true,
+            'acknowledgedIds' => [], 'rejectedIds' => []]);
         exit;
     }
 
