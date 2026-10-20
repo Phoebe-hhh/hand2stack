@@ -3,7 +3,7 @@
 Hand2STACK was previously known as STACK Input Helper. Releases from 0.3.0 onward
 use the Moodle component name `local_hand2stack` and install in `local/hand2stack`.
 
-## Unreleased
+## 0.6.0-alpha - 2026-10-20
 
 - Record each question's active time, one question at a time. The research log gets two new events, `activity_paused` and `activity_resumed`. A question alone on its page is timed from the start; on a page with several, the one the learner focuses, points at, types in or uses Hand2STACK on becomes the current one, and switching logs `question_switch` for both. Only the current question pauses when the page is hidden, the window loses focus or the learner leaves, and resumes when they come back; a file or camera picker, or STACK's preview frame, does not count as leaving. `submit_triggered` and `task_finished` carry `activeTimeMs`, the question's time so far across reloads, so time on other questions or other tabs is no longer part of a task's duration. A finished question's clock does not run again; `interaction_started` marks such a visit with `revisit: true`.
 - Keep each question's research trace when sessionStorage is lost. Moodle clears the whole sessionStorage when its JavaScript revision changes (a cache purge or a plugin upgrade), and a new tab starts without it; a question in progress then began a new trace, with its sequence and active time back at zero. A copy of each trace is now kept in the browser's IndexedDB, and the page reads it back (waiting at most a second) before it logs, so the question goes on with the same trace; `interaction_started` says `traceFrom: "indexeddb"`.

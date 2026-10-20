@@ -258,8 +258,8 @@ amd/src/modes/freetext/      review of a Free-text input's working
 Update `version.php` and `CHANGELOG.md`, commit the change to `main`, and push a matching version tag:
 
 ```bash
-git tag v0.5.0-alpha
-git push origin v0.5.0-alpha
+git tag v0.6.0-alpha
+git push origin v0.6.0-alpha
 ```
 
 The GitHub Actions workflow then runs the JavaScript tests, rebuilds `amd/build/` and fails if it differs from the committed files, checks PHP syntax, and checks that the tag matches `$plugin->release` and that `$plugin->version` is greater than the previous tag's. It then creates a GitHub Release containing:
@@ -275,5 +275,5 @@ The workflow refuses to publish if the tag does not match `$plugin->release` in 
 Current version:
 
 ```text
-0.5.0-alpha
+0.6.0-alpha
 ```

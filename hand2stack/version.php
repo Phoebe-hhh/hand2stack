@@ -16,7 +16,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_hand2stack';
-$plugin->version   = 2026101902;
+$plugin->version   = 2026102000;
 $plugin->requires  = 2024042200;
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release = '0.5.0-alpha';
+$plugin->release = '0.6.0-alpha';

@@ -1,7 +1,7 @@
 {
   "name": "moodle-local-hand2stack",
   "private": true,
-  "version": "0.5.0-alpha",
+  "version": "0.6.0-alpha",
   "scripts": {
     "build": "node scripts/build-amd.js",
     "test": "node --test tests/js/*.test.js",
