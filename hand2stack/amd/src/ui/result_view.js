@@ -64,7 +64,9 @@ define([
         if (recognition) panel._hand2stackSource = recognition.source;
         (panel._hand2stackTrackers || []).forEach(tracker => tracker.dispose());
         panel._hand2stackTrackers = [];
-        const logOptions = () => ({modality: panel._hand2stackSource || null});
+        // A restored panel has no recognition of its own: its events keep the
+        // input method the saved result came from, set on the answer box.
+        const logOptions = () => ({modality: panel._hand2stackSource || answerBox._hand2stackModality || null});
         const logRecognition = defaultIndex => {
             if (!recognition) return;
             research.log(answerBox, 'recognition_completed', {

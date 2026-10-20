@@ -130,8 +130,16 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
         box._hand2stackValidation = observeStackValidation(box);
     };
 
+    // Waits (at most a second) for traces kept in the outbox, so a question
+    // whose sessionStorage was cleared goes on with the same trace.
     const startResearch = (boxes, mayStartTask = true) => {
         if (!research.enabled()) return;
+        research.ready().then(() => beginResearch(boxes, mayStartTask)).catch(error => {
+            window.console.warn('[hand2stack] research logging failed:', error);
+        });
+    };
+
+    const beginResearch = (boxes, mayStartTask) => {
         boxes.forEach(bindResearchAnswerBox);
 
         // One representative box per question carries question-level events.

@@ -43,10 +43,17 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
         const MAX_UNANSWERED = 5;
         // Events still unsent after this become dead letters, "expired".
         const OUTBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-        // Dead letters whose delivery_failed reached the server, and drafts
-        // of edits nobody came back to, are removed after these.
+        // A dead letter is removed this long after it died, once its
+        // delivery_failed is stored; one the server was never told about is
+        // kept until DEAD_LETTER_MAX_MS, so learner data is not kept forever.
         const DEAD_LETTER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+        const DEAD_LETTER_MAX_MS = 180 * 24 * 60 * 60 * 1000;
+        // Drafts of edits nobody came back to, and traces not used for this
+        // long, are removed.
         const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+        const TRACE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+        // How long the page waits for the outbox's traces before it logs.
+        const READY_WAIT_MS = 1000;
         const BEACON_BYTES = 60000;
         const FEEDBACK_WINDOW_MS = 5 * 60 * 1000;
         // Learner actions that, after feedback, begin a revision.
@@ -69,7 +76,8 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
         const noOutbox = {
             put: resolved, mark: resolved, remove: resolved, load: () => Promise.resolve([]), clear: resolved,
             spill: () => {}, putDraft: resolved, spillDraft: () => {}, getDraft: () => Promise.resolve(null),
-            removeDraft: resolved, pruneDrafts: () => Promise.resolve(0)
+            removeDraft: resolved, pruneDrafts: () => Promise.resolve(0), putTrace: resolved,
+            loadTraces: () => Promise.resolve([]), pruneTraces: () => Promise.resolve(0)
         };
         // env.outbox may be a function: the page's server config, which names
         // the outbox, arrives after this module loads. Nothing touches the
@@ -81,7 +89,8 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
                 if (!resolvedOutbox) {
                     resolvedOutbox = (typeof env.outbox === 'function' ? env.outbox() : env.outbox) || noOutbox;
                 }
-                return resolvedOutbox[name](...args);
+                // An outbox from before a method existed only lacks that use.
+                return (resolvedOutbox[name] || noOutbox[name])(...args);
             };
         });
         // eventid of every event in `queue` or being sent; the outbox may hold
@@ -125,9 +134,15 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
         const length = value => (value === null || value === undefined ? 0 : String(value).length);
 
         const storageKey = key => 'hand2stack:trace:' + key;
+        // Traces read from the outbox by ready(), for keys sessionStorage lost.
+        const durable = new Map();
+        const validTrace = stored => stored && typeof stored.id === 'string' && Number.isInteger(stored.seq);
 
         // A trace lives in sessionStorage so it survives the page reload
-        // that every quiz Check or Next causes; memory is the fallback.
+        // that every quiz Check or Next causes; memory is the fallback. A
+        // copy in the outbox (IndexedDB) carries it over what clears
+        // sessionStorage: Moodle does when its JavaScript revision changes
+        // (a cache purge or upgrade), and a new tab starts without it.
         const loadTrace = key => {
             let stored = memory.get(key) || null;
             try {
@@ -135,13 +150,16 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             } catch (error) {
                 // Private mode or blocked storage: keep the in-memory trace.
             }
-            if (stored && typeof stored.id === 'string' && Number.isInteger(stored.seq)) {
-                return {state: stored, resumed: true};
+            if (validTrace(stored)) {
+                return {state: stored, resumed: true, source: 'session'};
+            }
+            if (validTrace(durable.get(key))) {
+                return {state: Object.assign({}, durable.get(key)), resumed: true, source: 'indexeddb'};
             }
             return {state: {
                 id: env.uuid(), seq: 0, pendingSubmit: null, feedback: null,
                 taskStarted: false, taskFinished: false
-            }, resumed: false};
+            }, resumed: false, source: null};
         };
 
         // Active time: the current question collects the time the page is
@@ -158,11 +176,13 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
 
         const saveTrace = (key, state) => {
             memory.set(key, state);
+            durable.delete(key);
             try {
                 env.storage.setItem(storageKey(key), JSON.stringify(state));
             } catch (error) {
                 // As above.
             }
+            outbox.putTrace(key, state).catch(warnLater);
         };
 
         const contextFor = (box, options) => {
@@ -449,14 +469,25 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             const now = env.now();
             const oldDead = [];
             let expired = 0;
+            let untold = 0;
+            // A delivery_failed no longer in the outbox was stored.
+            const inOutbox = new Set(rows.filter(row => row && row.event).map(row => row.event.eventid));
             rows.forEach(row => {
                 const event = row && row.event;
                 if (!event || typeof event.eventid !== 'string' || known.has(event.eventid)) return;
                 if (event.payload && event.payload.burstId) burstsInOutbox.add(event.payload.burstId);
                 if (row.status && row.status !== 'pending') {
-                    if (now - Number(row.deadAt) > DEAD_LETTER_TTL_MS) {
+                    const age = now - Number(row.deadAt);
+                    if (event.type === 'delivery_failed') {
+                        // A report that failed itself goes with its original.
+                        const original = event.payload && event.payload.originalEventId;
+                        if (!inOutbox.has(original) || age > DEAD_LETTER_MAX_MS) oldDead.push(event.eventid);
+                    } else if (row.noticeId && !inOutbox.has(row.noticeId) && age > DEAD_LETTER_TTL_MS) {
                         oldDead.push(event.eventid);
-                    } else if (!row.noticeId && event.type !== 'delivery_failed') {
+                    } else if (age > DEAD_LETTER_MAX_MS) {
+                        untold++;
+                        oldDead.push(event.eventid);
+                    } else if (!row.noticeId) {
                         deadLetter(event, row.status, row);
                     }
                     return;
@@ -478,11 +509,40 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             });
             if (oldDead.length) outbox.remove(oldDead).catch(warnLater);
             report('could not be sent within a week and are kept as dead letters in this browser', expired);
+            report('were removed from this browser after 180 days, and the server was never told', untold);
             outbox.pruneDrafts(now - DRAFT_TTL_MS).catch(warnLater);
+            outbox.pruneTraces(now - TRACE_TTL_MS).catch(warnLater);
             // A server that came back gets the queue at once.
             failures = 0;
             if (queue.length) flush(false);
         });
+
+        // Before the page logs: traces kept in the outbox for questions
+        // whose sessionStorage copy is gone. Their sequence goes on after the
+        // highest one still waiting in the outbox, which a lost write of the
+        // trace could otherwise reuse. Never waits more than READY_WAIT_MS.
+        let readyPromise = null;
+        const ready = () => {
+            if (!readyPromise) {
+                const read = Promise.all([outbox.loadTraces(), outbox.load()]).then(([traces, rows]) => {
+                    const highest = new Map();
+                    rows.forEach(row => {
+                        const event = row && row.event;
+                        if (event && event.eventseq > (highest.get(event.traceid) || 0)) {
+                            highest.set(event.traceid, event.eventseq);
+                        }
+                    });
+                    traces.forEach(trace => {
+                        if (!trace || !validTrace(trace.state) || loadTrace(trace.key).resumed) return;
+                        durable.set(trace.key, Object.assign({}, trace.state, {
+                            seq: Math.max(trace.state.seq, highest.get(trace.state.id) || 0)
+                        }));
+                    });
+                }).catch(warnLater);
+                readyPromise = Promise.race([read, new Promise(resolve => env.setTimeout(resolve, READY_WAIT_MS))]);
+            }
+            return readyPromise;
+        };
 
         // `type` may be null to only mark learner activity: that starts the
         // page segment and, after feedback, the revision.
@@ -495,7 +555,7 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             if (!options.passive && (type === null || ACTIVATING_EVENTS.includes(type))) {
                 activate(box, options.activity || type);
             }
-            const {state, resumed} = loadTrace(ctx.key);
+            const {state, resumed, source} = loadTrace(ctx.key);
             const push = (eventType, eventPayload) => {
                 const now = env.now();
                 state.seq += 1;
@@ -531,7 +591,7 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
                 // After task_finished the learner is looking at the question
                 // again, not working on the task.
                 push('interaction_started', Object.assign({
-                    resumed, entry: ctx.modality, revisit: Boolean(state.taskFinished),
+                    resumed, traceFrom: source, entry: ctx.modality, revisit: Boolean(state.taskFinished),
                     activeMsBefore: state.activeMs || 0, pageActive
                 }, env.describeBox(box)));
             }
@@ -810,6 +870,7 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             restore: guard(() => restore().catch(warnLater)),
             stats: () => Object.assign({pending: known.size}, stats),
             whenStored,
+            ready: () => (enabled() ? ready() : Promise.resolve()),
             _queue: queue
         };
     };

@@ -36,6 +36,7 @@ const createTab = (options = {}) => {
     // and the synchronous localStorage spill of each.
     const outboxRows = new Map();
     const drafts = new Map();
+    const traces = new Map();
     const draftSpill = new Map();
     let spilled = [];
     const sent = [];
@@ -75,6 +76,7 @@ const createTab = (options = {}) => {
             outboxRows.clear();
             drafts.clear();
             draftSpill.clear();
+            traces.clear();
             spilled = [];
             return Promise.resolve();
         },
@@ -93,6 +95,17 @@ const createTab = (options = {}) => {
         removeDraft: (key, burstId) => {
             if (draftSpill.has(key) && draftSpill.get(key).burstId === burstId) draftSpill.delete(key);
             if (drafts.has(key) && drafts.get(key).burstId === burstId) drafts.delete(key);
+            return Promise.resolve();
+        },
+        putTrace: (key, state) => {
+            if (!options.traceWritesLost) traces.set(key, {key, state: JSON.parse(JSON.stringify(state)), updatedAt: clock});
+            return Promise.resolve();
+        },
+        loadTraces: () => Promise.resolve(Array.from(traces.values()).map(row => ({key: row.key, state: row.state}))),
+        pruneTraces: before => {
+            traces.forEach((row, key) => {
+                if (row.updatedAt < before) traces.delete(key);
+            });
             return Promise.resolve();
         },
         pruneDrafts: before => {
@@ -127,6 +140,7 @@ const createTab = (options = {}) => {
         outboxRows,
         drafts,
         draftSpill,
+        traces,
         pending: () => rows('pending'),
         dead: () => rows('dead'),
         spilled: () => spilled,
@@ -779,6 +793,7 @@ test('dead letters are removed a month after they were reported', async () => {
     research.flush();
     await settleAll();
     tab.advance(31 * 24 * 60 * 60 * 1000);
+    await settleAll(); // its delivery_failed is stored
     research = tab.load();
     research.restore();
     await settleAll();
@@ -1133,6 +1148,8 @@ test('a panel restored after a Check keeps the input method its result came from
     const attachButton = fs.readFileSync(path.join(__dirname, '../../amd/src/ui/attach_button.js'), 'utf8');
     assert.match(resultView, /modality: answerBox\._hand2stackModality \|\| null/);
     assert.match(attachButton, /answerBox\._hand2stackModality = savedResult\.modality/);
+    // The panel's own events fall back to it rather than logging null.
+    assert.match(resultView, /modality: panel\._hand2stackSource \|\| answerBox\._hand2stackModality \|\| null/);
 });
 
 test('the outbox is made when first used, after the page config enabled logging', async () => {
@@ -1188,4 +1205,134 @@ test('an event made after the page started leaving is spilled at once', async ()
     await settleAll();
     const stored = tab.sent.filter(event => tab.server.stored.has(event.eventid));
     assert.ok(stored.some(event => event.type === 'candidate_selected'));
+});
+
+// Traces outlive sessionStorage, which Moodle clears when its JavaScript
+// revision changes (a cache purge or an upgrade).
+
+test('a question goes on with the same trace after Moodle cleared sessionStorage', async () => {
+    const tab = createTab();
+    let research = tab.load();
+    const box = answerBox('');
+    await research.ready();
+    research.log(box, 'task_started', {}, questionLevel);
+    research.activate(box, 'start');
+    tab.advance(20000);
+    research.log(box, 'submit_triggered', {submitterKind: 'next', answers: {}}, questionLevel);
+    research.pause('leave');
+    research.flush();
+    await settleAll();
+    const first = tab.sent.slice();
+
+    tab.closeSession(); // the cache purge
+    research = tab.load();
+    await research.ready();
+    research.log(box, 'task_started', {}, questionLevel);
+    research.activate(box, 'start');
+    tab.advance(5000);
+    research.log(box, 'task_finished', {reason: 'graded_complete'}, questionLevel);
+    research.flush();
+    await settleAll();
+
+    const later = tab.sent.slice(first.length);
+    assert.equal(new Set(tab.sent.map(event => event.traceid)).size, 1);
+    assert.deepEqual(tab.sent.map(event => event.eventseq), tab.sent.map((event, index) => index + 1));
+    assert.equal(later[0].type, 'interaction_started');
+    assert.deepEqual([later[0].payload.resumed, later[0].payload.traceFrom], [true, 'indexeddb']);
+    // task_started is not repeated, and the clock adds up.
+    assert.equal(tab.sent.filter(event => event.type === 'task_started').length, 1);
+    assert.equal(later.find(event => event.type === 'task_finished').payload.activeTimeMs, 25000);
+});
+
+test('a trace whose last copy was lost goes on after the events still waiting', async () => {
+    const tab = createTab();
+    tab.server.online = false;
+    let research = tab.load();
+    const box = answerBox('');
+    await research.ready();
+    research.log(box, 'task_started', {}, questionLevel);
+    research.log(box, 'recognition_started', {});
+    research.flush();
+    await settleAll();
+    const highest = Math.max(...tab.pending().map(row => row.event.eventseq));
+    // The page died before its newest trace copy was written.
+    tab.traces.forEach(row => {
+        row.state.seq = 2;
+    });
+
+    tab.close();
+    tab.closeSession();
+    tab.server.online = true;
+    research = tab.load();
+    await research.ready();
+    research.log(box, 'candidate_selected', {kind: 'line'});
+    research.restore();
+    await settleAll();
+    const events = new Map(tab.sent.map(event => [event.eventid, event]));
+    const seqs = Array.from(events.values()).map(event => event.eventseq);
+    assert.equal(new Set(seqs).size, seqs.length, 'no sequence number used twice');
+    assert.ok(tab.sent.find(event => event.type === 'candidate_selected').eventseq > highest);
+});
+
+test('without sessionStorage or an outbox copy a question starts a new trace', async () => {
+    const tab = createTab();
+    let research = tab.load();
+    await research.ready();
+    research.log(answerBox(''), 'task_started', {}, questionLevel);
+    research.flush();
+    await settleAll();
+    tab.closeSession();
+    tab.traces.clear();
+    research = tab.load();
+    await research.ready();
+    research.log(answerBox(''), 'task_started', {}, questionLevel);
+    research.flush();
+    await settleAll();
+    assert.equal(new Set(tab.sent.map(event => event.traceid)).size, 2);
+    assert.equal(tab.sent[tab.sent.length - 2].payload.traceFrom, null);
+});
+
+test('a dead letter whose report never reached the server is kept, then dropped after 180 days', async () => {
+    const tab = createTab();
+    tab.server.reject.add('recognition_started');
+    tab.server.reject.add('delivery_failed');
+    let research = tab.load();
+    research.log(answerBox(''), 'recognition_started', {});
+    research.flush();
+    await settleAll();
+    tab.advance(60 * 60 * 1000);
+    await settleAll();
+    assert.equal(tab.dead().length, 2);
+
+    tab.advance(31 * 24 * 60 * 60 * 1000);
+    research = tab.load();
+    research.restore();
+    await settleAll();
+    assert.deepEqual(tab.dead().map(row => row.event.type).sort(), ['delivery_failed', 'recognition_started'],
+        'the server was never told: kept');
+
+    tab.advance(150 * 24 * 60 * 60 * 1000);
+    research = tab.load();
+    research.restore();
+    await settleAll();
+    research.restore();
+    await settleAll();
+    assert.equal(tab.outboxRows.size, 0);
+    assert.ok(tab.warnings.includes('1 research event(s) were removed from this browser after 180 days, and the server was never told'));
+});
+
+test('a dead letter whose report is still waiting to be sent is kept', async () => {
+    const tab = createTab();
+    tab.server.reject.add('recognition_started');
+    let research = tab.load();
+    research.log(answerBox(''), 'recognition_started', {});
+    research.flush();
+    // The report is made but the connection goes before it is sent.
+    tab.server.online = false;
+    await settleAll();
+    tab.advance(31 * 24 * 60 * 60 * 1000);
+    research = tab.load();
+    research.restore();
+    await settleAll();
+    assert.ok(tab.dead().some(row => row.event.type === 'recognition_started'));
 });

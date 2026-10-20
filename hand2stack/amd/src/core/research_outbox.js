@@ -11,15 +11,17 @@
 
 /**
  * Research events in this browser that the server has not confirmed yet,
- * those it never will (the dead-letter), and edits still being typed.
+ * those it never will (the dead-letter), edits still being typed, and each
+ * question's trace.
  *
  * @module local_hand2stack/core/research_outbox
  */
 define([], function() {
     const DB_NAME = 'hand2stack-research';
-    const DB_VERSION = 2;
+    const DB_VERSION = 3;
     const EVENTS = 'outbox';
     const DRAFTS = 'drafts';
+    const TRACES = 'traces';
     const SPILL_PREFIX = 'hand2stack:outbox-spill:';
     const DRAFT_SPILL_PREFIX = 'hand2stack:draft-spill:';
 
@@ -59,9 +61,13 @@ define([], function() {
                         if (!db.objectStoreNames.contains(EVENTS)) {
                             db.createObjectStore(EVENTS, {keyPath: 'eventid'}).createIndex('scope', 'scope');
                         }
-                        if (!db.objectStoreNames.contains(DRAFTS)) {
-                            db.createObjectStore(DRAFTS, {keyPath: 'key'}).createIndex('scope', 'scope');
-                        }
+                        // Drafts and traces are keyed by scope + key, so learners
+                        // sharing a browser never replace each other's.
+                        [DRAFTS, TRACES].forEach(name => {
+                            if (!db.objectStoreNames.contains(name)) {
+                                db.createObjectStore(name, {keyPath: 'key'}).createIndex('scope', 'scope');
+                            }
+                        });
                     };
                     req.onsuccess = () => resolve(req.result);
                     req.onerror = () => reject(req.error);
@@ -156,6 +162,7 @@ define([], function() {
         };
 
         // Drafts: one per edit target, the newer of IndexedDB and the spill.
+        const scoped = key => scope + '|' + key;
         const draftSpillKey = key => DRAFT_SPILL_PREFIX + scope + ':' + key;
         const newer = (a, b) => {
             if (!a) return b || null;
@@ -163,14 +170,16 @@ define([], function() {
             return Number(b.lastInputAt) > Number(a.lastInputAt) ? b : a;
         };
 
-        const putDraft = (key, draft) => write(DRAFTS, store => store.put(Object.assign({}, draft, {key, scope})));
+        const putDraft = (key, draft) => write(DRAFTS, store => store.put(
+            Object.assign({}, draft, {key: scoped(key), draftKey: key, scope})));
 
-        const spillDraft = (key, draft) => local.write(draftSpillKey(key), Object.assign({}, draft, {key, scope}));
+        const spillDraft = (key, draft) => local.write(draftSpillKey(key),
+            Object.assign({}, draft, {key: scoped(key), draftKey: key, scope}));
 
         const getDraft = key => {
             const spilled = local.read(draftSpillKey(key));
             return open()
-                .then(db => request(db.transaction(DRAFTS).objectStore(DRAFTS).get(key)))
+                .then(db => request(db.transaction(DRAFTS).objectStore(DRAFTS).get(scoped(key))))
                 .then(row => newer(row && row.scope === scope ? row : null, spilled))
                 .catch(() => spilled);
         };
@@ -181,20 +190,29 @@ define([], function() {
             const spilled = local.read(draftSpillKey(key));
             if (spilled && spilled.burstId === burstId) local.write(draftSpillKey(key), null);
             return write(DRAFTS, store => {
-                store.get(key).onsuccess = result => {
+                store.get(scoped(key)).onsuccess = result => {
                     const row = result.target.result;
-                    if (row && row.burstId === burstId) store.delete(key);
+                    if (row && row.burstId === burstId) store.delete(scoped(key));
                 };
             });
         };
 
-        // Drafts nobody came back to: another attempt, or long ago.
-        const pruneDrafts = before => readAll(DRAFTS).then(rows => {
-            const old = rows.filter(row => !(Number(row.lastInputAt) >= before)).map(row => row.key);
+        // Drafts nobody came back to (another attempt, or long ago), and
+        // traces of attempts long over.
+        const prune = (name, field) => before => readAll(name).then(rows => {
+            const old = rows.filter(row => !(Number(row[field]) >= before)).map(row => row.key);
             return old.length
-                ? write(DRAFTS, store => old.forEach(key => store.delete(key))).then(() => old.length)
+                ? write(name, store => old.forEach(key => store.delete(key))).then(() => old.length)
                 : 0;
         });
+        const pruneDrafts = prune(DRAFTS, 'lastInputAt');
+
+        // Traces: a copy of each question's trace, which Moodle cannot clear
+        // as it clears sessionStorage when its JavaScript revision changes.
+        const putTrace = (key, state) => write(TRACES, store => store.put(
+            {key: scoped(key), traceKey: key, scope, state, updatedAt: Date.now()}));
+        const loadTraces = () => readAll(TRACES).then(rows => rows.map(row => ({key: row.traceKey, state: row.state})));
+        const pruneTraces = prune(TRACES, 'updatedAt');
 
         const clear = () => {
             local.write(spillKey, null);
@@ -206,8 +224,8 @@ define([], function() {
                 // Blocked storage: nothing was spilled either.
             }
             return open().then(db => {
-                const tx = db.transaction([EVENTS, DRAFTS], 'readwrite');
-                [EVENTS, DRAFTS].forEach(name => {
+                const tx = db.transaction([EVENTS, DRAFTS, TRACES], 'readwrite');
+                [EVENTS, DRAFTS, TRACES].forEach(name => {
                     const store = tx.objectStore(name);
                     store.index('scope').getAllKeys(scope).onsuccess = event => {
                         event.target.result.forEach(id => store.delete(id));
@@ -217,7 +235,10 @@ define([], function() {
             });
         };
 
-        return {put, mark, remove, load, spill, clear, putDraft, spillDraft, getDraft, removeDraft, pruneDrafts};
+        return {
+            put, mark, remove, load, spill, clear, putDraft, spillDraft, getDraft, removeDraft, pruneDrafts,
+            putTrace, loadTraces, pruneTraces
+        };
     };
 
     return {createOutbox};
