@@ -15,6 +15,77 @@
  * @module local_hand2stack/ui/change_highlighter
  */
 define([], function() {
+    // Which characters of current are not in original, by a Myers diff. One
+    // span from the first to the last difference would also mark the
+    // untouched text between two separate edits.
+    const editedMask = (originalValue, currentValue) => {
+        const a = String(originalValue || '');
+        const b = String(currentValue || '');
+        const mask = Array(b.length).fill(false);
+        let prefix = 0;
+        while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix++;
+        let aEnd = a.length;
+        let bEnd = b.length;
+        while (aEnd > prefix && bEnd > prefix && a[aEnd - 1] === b[bEnd - 1]) {
+            aEnd--;
+            bEnd--;
+        }
+        const n = aEnd - prefix;
+        const m = bEnd - prefix;
+        const max = n + m;
+        if (!n || !m) {
+            for (let i = prefix; i < bEnd; i++) mask[i] = true;
+            return mask;
+        }
+        const offset = max + 1;
+        const v = new Int32Array(2 * max + 3);
+        const trace = [];
+        // Each step keeps only the diagonals it can reach, and a rewrite too
+        // large to trace is marked as one span.
+        const limit = Math.min(max, 2000);
+        let done = false;
+        for (let d = 0; d <= limit && !done; d++) {
+            trace.push(v.slice(offset - d - 1, offset + d + 2));
+            for (let k = -d; k <= d; k += 2) {
+                let x = (k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1]))
+                    ? v[offset + k + 1] : v[offset + k - 1] + 1;
+                let y = x - k;
+                while (x < n && y < m && a[prefix + x] === b[prefix + y]) {
+                    x++;
+                    y++;
+                }
+                v[offset + k] = x;
+                if (x >= n && y >= m) {
+                    done = true;
+                    break;
+                }
+            }
+        }
+        if (!done) {
+            for (let i = prefix; i < bEnd; i++) mask[i] = true;
+            return mask;
+        }
+        let x = n;
+        let y = m;
+        for (let d = trace.length - 1; d > 0; d--) {
+            const previous = trace[d];
+            const k = x - y;
+            const at = diagonal => previous[diagonal + d + 1];
+            const down = k === -d || (k !== d && at(k - 1) < at(k + 1));
+            const previousK = down ? k + 1 : k - 1;
+            const previousX = at(previousK);
+            const previousY = previousX - previousK;
+            while (x > previousX && y > previousY) {
+                x--;
+                y--;
+            }
+            if (down) mask[prefix + previousY] = true;
+            x = previousX;
+            y = previousY;
+        }
+        return mask;
+    };
+
     const createChangeHighlighter = textarea => {
         const wrapper = document.createElement('div');
         const backdrop = document.createElement('div');
@@ -69,21 +140,8 @@ define([], function() {
             window.requestAnimationFrame(syncMetrics);
         };
         const compare = (originalValue, currentValue) => {
-            const original = String(originalValue || '');
-            const current = String(currentValue || '');
-            let prefix = 0;
-            while (prefix < original.length && prefix < current.length
-                    && original[prefix] === current[prefix]) prefix++;
-            let originalSuffix = original.length;
-            let currentSuffix = current.length;
-            while (originalSuffix > prefix && currentSuffix > prefix
-                    && original[originalSuffix - 1] === current[currentSuffix - 1]) {
-                originalSuffix--;
-                currentSuffix--;
-            }
-            previousValue = current;
-            edited = Array(current.length).fill(false);
-            for (let i = prefix; i < currentSuffix; i++) edited[i] = true;
+            previousValue = String(currentValue || '');
+            edited = editedMask(originalValue, previousValue);
             render();
             window.requestAnimationFrame(syncMetrics);
         };
@@ -112,5 +170,5 @@ define([], function() {
         return {wrapper, backdrop, reset, compare, syncMetrics};
     };
 
-    return {createChangeHighlighter};
+    return {createChangeHighlighter, editedMask};
 });

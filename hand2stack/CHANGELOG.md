@@ -5,6 +5,7 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+- After a Check or a reload, the blue text in an edited Free-text box (and a review row's ASCII box) now shows only the characters the learner changed. Two separate edits used to turn everything between them blue, as the restored box was compared with the recognized text as one changed span; it is now compared character by character.
 - Keep the handwriting on each answer's canvas until the quiz is finished. After a Check, Next or Save the page reloaded with only the recognized result, so changing one part meant writing the whole answer again; the strokes now come back on the canvas, which opens again, ready to erase or add to. Like the saved result, they stay in the browser tab's `sessionStorage` and belong to that attempt only; **Clear** forgets them.
 - On iPad, the Original work image of a Free-text answer came back blank after a Check when it was the first recognition on the page. The saved copy of handwriting is now taken straight from the canvas, and an uploaded photo is decoded before it is copied.
 - Complete the research trace around a question: record one `task_started` event with every initial answer field, a `submit_confirmed` event when Moodle returns the submitted page, STACK's rendered PRT feedback items, and one `task_finished` event after a completed grade or final quiz submission. Confirmation, feedback and completion carry the original `submit_triggered` event ID, so feedback-led revisions can be assigned to the correct submission.

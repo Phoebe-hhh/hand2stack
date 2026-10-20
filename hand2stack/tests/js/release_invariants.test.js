@@ -256,7 +256,7 @@ test('algebraic edits use the same blue edit cue and suggested wording', () => {
     assert.match(source, /const fieldHighlighter = createChangeHighlighter\(field\)/);
     assert.match(source, /fieldHighlighter\.compare\(/);
     assert.match(source, /setProperty\('background-color', 'transparent', 'important'\)/);
-    assert.match(source, /for \(let i = prefix; i < currentSuffix; i\+\+\) edited\[i\] = true/);
+    assert.match(source, /edited = editedMask\(originalValue, previousValue\)/);
     assert.match(hook, /'recommendedanswer' => get_string\('recommendedanswer'/);
 });
 
