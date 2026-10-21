@@ -4,15 +4,15 @@
 
 Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-> **Current pilot release:** [v0.6.0-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.6.0-alpha)
+> **Current pilot release:** [v0.6.1-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.6.1-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download hand2stack-v0.6.0-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.6.0-alpha/hand2stack-v0.6.0-alpha.zip)**
+**[Download hand2stack-v0.6.1-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.6.1-alpha/hand2stack-v0.6.1-alpha.zip)**
 
-Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.6.0-alpha.zip` and contains the plugin root folder `hand2stack/`.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.6.1-alpha.zip` and contains the plugin root folder `hand2stack/`.
 
 ## Features
 
@@ -32,7 +32,7 @@ Do not upload GitHub's automatically generated **Source code** archives to Moodl
 - Prevent stale recognition requests from replacing newer results and limit recognition requests per user.
 - Keep Mathpix credentials on the Moodle server rather than in browser JavaScript.
 - Automatically remove expired mobile-upload sessions with a Moodle scheduled task.
-- Optional research event logging (off by default) that records pseudonymised recognition, editing, validation, insertion, and submission events for consenting participants only.
+- Optional research event logging (off by default) that records recognition, editing, validation, insertion, and submission events for consenting participants only, pseudonymised for a study or identified for everyday use.
 
 ## Requirements
 
@@ -92,7 +92,7 @@ The plugin does not submit the quiz answer automatically.
 
 Uploaded images and handwriting coordinates are sent to Mathpix for recognition. Uploaded image files are not permanently stored by this plugin. Temporary mobile-upload sessions expire and are removed by a scheduled task. Administrators should confirm that external recognition complies with institutional policies.
 
-Research event logging is disabled by default. When an administrator enables it and sets a study ID, it records interaction events only for users who hold the `local/hand2stack:researchparticipant` capability in the quiz context; no role has this capability by default and site administrators are not included automatically. Events are stored with a pseudonymous participant ID instead of the Moodle user ID, never include images or handwriting coordinates, and are covered by Moodle's privacy export and deletion requests. Enable it only under an approved study protocol.
+Research event logging is disabled by default. When an administrator enables it and sets a study ID, it records interaction events only for users who hold the `local/hand2stack:researchparticipant` capability in the quiz context; no role has this capability by default and site administrators are not included automatically. Events are stored with a pseudonymous participant ID; only a quiz whose log identity is set to Identified (everyday use) also stores the Moodle user ID. They never include images or handwriting coordinates, and are covered by Moodle's privacy export and deletion requests. Enable it only under an approved study protocol.
 
 ## Repository Layout
 
@@ -115,4 +115,4 @@ See the [plugin README](hand2stack/README.md) for development details, configura
 
 ## Status
 
-Version `0.6.0-alpha` is intended for controlled pilot testing. It prepares the research log for a study: each quiz has an input mode for a keyboard condition, every event carries the study condition, teachers can download a quiz's log, and the browser keeps each event until the server has stored it, so a lost connection, a reload or a closed tab no longer loses data. Each question's active time is recorded one question at a time, and `cli/check_research_log.php` reports gaps, failed deliveries and split traces before analysis. Handwriting now stays on the canvas until the quiz is finished. Run the Moodle upgrade after installing it, and do not purge caches or upgrade while a study is running. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, research event logging and its privacy provider, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+Version `0.6.1-alpha` is intended for controlled pilot testing. It prepares the research log for a study: each quiz has an input mode for a keyboard condition, every event carries the study condition, teachers can download a quiz's log, and the browser keeps each event until the server has stored it, so a lost connection, a reload or a closed tab no longer loses data. Each question's active time is recorded one question at a time, and `cli/check_research_log.php` reports gaps, failed deliveries and split traces before analysis. New in 0.6.1: each quiz can log identified for everyday use, finishing a quiz now ends every question's trace (by the server for questions the browser could not see), and the step where STACK fills the final answer from the working is logged. Handwriting now stays on the canvas until the quiz is finished. Run the Moodle upgrade after installing it, and do not purge caches or upgrade while a study is running. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, research event logging and its privacy provider, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.

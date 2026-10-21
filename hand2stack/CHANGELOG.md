@@ -3,7 +3,7 @@
 Hand2STACK was previously known as STACK Input Helper. Releases from 0.3.0 onward
 use the Moodle component name `local_hand2stack` and install in `local/hand2stack`.
 
-## Unreleased
+## 0.6.1-alpha - 2026-10-22
 
 - Research traces now end when a quiz attempt is finished. Moodle's question navigation and **Finish attempt …** link submit the quiz by clicking Next with its name cleared, so these submits were logged as `submitterKind: other`, and the last page's Next as `next`: finishing a quiz never logged `task_finished`, which was only recorded for a question graded correct. They are now `finish` when they go to the summary page and the new `navigate` otherwise. Questions on other pages, a closed tab or an attempt submitted when time ran out are covered by the server: five minutes after an attempt is submitted or abandoned, it adds a `task_finished` with `"source": "server"`, `reason` `server_attempt_submitted` or `server_attempt_abandoned` and Moodle's final question state to the latest trace of each question that has events but none; a browser's `task_finished` arriving later is acknowledged and not stored twice. `task_finished` also carries the `submissionEventId` of its submit, which was always null. Run the Moodle upgrade after updating.
 - Log a value STACK writes into an answer field itself, such as an `[[extractor]]` filling the final answer from the working's last `Answer = …` line, as `answer_inserted` with `via: stack_js`. These writes were taken for Hand2STACK's own and not logged, so the step from working to final answer was missing.

@@ -58,7 +58,7 @@ Migrating from 0.2.x is a component migration rather than an ordinary upgrade. D
 - Applies a configurable per-user recognition request limit.
 - Supports QR-code mobile upload using a Moodle-managed temporary session and Moodle's local QR generator.
 - Stores Mathpix App ID and App Key in Moodle admin settings, not in browser JavaScript.
-- Optionally records pseudonymised research interaction events for consenting participants (see [Research Event Logging](#research-event-logging)).
+- Optionally records research interaction events for consenting participants, pseudonymised for a study or identified for everyday use (see [Research Event Logging](#research-event-logging)).
 
 ## Recognition Review Workflow
 
@@ -163,7 +163,16 @@ Each quiz's settings page has a **Hand2STACK** section with an **Input mode**:
 
 "Record only" is the keyboard condition of a study: the quiz looks like plain STACK, while typing, validation, submission and feedback are still recorded for participants. A Free-text question's hidden process input is still kept in sync. "Off" behaves as if the plugin were not installed. The mode cannot be changed once students have attempted the quiz (teacher previews do not count). Question previews outside a quiz always use Normal and record an empty `studycondition`.
 
-To counterbalance item sets and conditions, make one quiz per set and condition (for example A-keyboard, A-Hand2STACK, B-keyboard, B-Hand2STACK, all using the same questions) and show each to its groups with Moodle's access restrictions. A copied quiz starts as Normal, so set its mode after copying.
+Below the input mode, **Log identity** says whether the quiz's events show who made them:
+
+| Log identity | Stored with each event | In the downloaded log |
+|---|---|---|
+| Pseudonymised (study), the default | the study pseudonym only | `anonuserid` |
+| Identified (everyday use) | the pseudonym and the Moodle user id | also `userid`, `username`, `idnumber`, `fullname` |
+
+Use Pseudonymised for an experiment whose protocol does not allow names or user ids, and Identified for everyday use of the log. The same participant capability is needed either way, question previews are never identified, and the setting is locked once students have attempted the quiz, like the input mode.
+
+To counterbalance item sets and conditions, make one quiz per set and condition (for example A-keyboard, A-Hand2STACK, B-keyboard, B-Hand2STACK, all using the same questions) and show each to its groups with Moodle's access restrictions. A copied quiz starts as Normal and Pseudonymised, so set both after copying.
 
 The server writes the condition onto each event when it arrives, from the quiz the attempt belongs to, so the browser cannot choose it and a mode changed later does not relabel events already recorded.
 
@@ -171,11 +180,11 @@ The server writes the condition onto each event when it arrives, from the quiz t
 
 Teachers download a quiz's log from the quiz's **More** menu → **Hand2STACK log**. Site administrators can download a whole study, or one course of it, from **Site administration → Plugins → Local plugins → Hand2STACK research log**. Choose the study ID and a file format (CSV, Excel, JSON, ODS…).
 
-The file has one row per event. Next to the event fields it has the course, quiz, `studycondition`, question name, and the question's final state, fraction and mark from Moodle's attempt data, so it can be analysed on its own. Learners appear only as `anonuserid`; the usage id, which leads back to a learner through the quiz attempt, is replaced by an HMAC pseudonym `anonattemptid`. Names and Moodle user ids are never included.
+The file has one row per event. Next to the event fields it has the course, quiz, `studycondition`, question name, and the question's final state, fraction and mark from Moodle's attempt data, so it can be analysed on its own. Learners appear as `anonuserid`; the usage id, which leads back to a learner through the quiz attempt, is replaced by an HMAC pseudonym `anonattemptid`. Only events from an Identified quiz also have the user id, username, ID number and full name; for pseudonymised events those columns are empty.
 
 Downloading needs `local/hand2stack:exportlogs` in the quiz. Editing teachers and managers have it by default, so a teacher sees only the quizzes of their own courses; non-editing teachers can be given it.
 
-Events are stored in the `local_hand2stack_event` table. The server checks every event again, accepts it only for the learner's own attempt, and fills in the question, question version, and plugin version itself. Learners are identified by an HMAC of the study ID and user ID, keyed by a site secret that is generated on installation and never sent to the browser. The secret is stored as the plugin setting `researchsecret` in Moodle's database. Keep it in your database backups: if it is lost or regenerated, earlier events can no longer be matched to their learners, so privacy exports and deletion requests no longer find them. Grades and official submissions remain in Moodle's own question attempt tables.
+Events are stored in the `local_hand2stack_event` table. The server checks every event again, accepts it only for the learner's own attempt, and fills in the question, question version, and plugin version itself. When a quiz attempt is submitted or abandoned, a task five minutes later ends the trace of each question that has events but no `task_finished` (a question on another page, a closed tab, an attempt submitted when time ran out) with a `task_finished` marked `"source": "server"`; it needs Moodle's cron. Learners are identified by an HMAC of the study ID and user ID, keyed by a site secret that is generated on installation and never sent to the browser. The secret is stored as the plugin setting `researchsecret` in Moodle's database. Keep it in your database backups: if it is lost or regenerated, earlier events can no longer be matched to their learners, so privacy exports and deletion requests no longer find them. Grades and official submissions remain in Moodle's own question attempt tables.
 
 ## Mobile Upload URL
 
@@ -213,7 +222,7 @@ For the ILAS Nagoya University STACK testing environment:
 - To show the review panel again after Check, Next, or Save, the browser keeps the last recognition of each answer, and a downscaled JPEG of a Free-text answer's source image, in the tab's `sessionStorage`. It is never sent to the server and is cleared when the tab is closed. On a shared computer, learners should close the browser tab when they finish.
 - Browser-provided filenames and MIME types are not trusted. Moodle verifies the actual file type, dimensions, and decodability before sending an image to Mathpix.
 
-- Research event logging is off by default and limited to consenting participants. Its events use pseudonymous IDs, are included in Moodle privacy exports, and are removed by privacy deletion requests.
+- Research event logging is off by default and limited to consenting participants. Its events use pseudonymous IDs, plus the Moodle user id only for quizzes set to Identified, are included in Moodle privacy exports, and are removed by privacy deletion requests.
 
 Site administrators should confirm that Mathpix use complies with institutional privacy and data handling policies.
 
@@ -258,8 +267,8 @@ amd/src/modes/freetext/      review of a Free-text input's working
 Update `version.php` and `CHANGELOG.md`, commit the change to `main`, and push a matching version tag:
 
 ```bash
-git tag v0.6.0-alpha
-git push origin v0.6.0-alpha
+git tag v0.6.1-alpha
+git push origin v0.6.1-alpha
 ```
 
 The GitHub Actions workflow then runs the JavaScript tests, rebuilds `amd/build/` and fails if it differs from the committed files, checks PHP syntax, and checks that the tag matches `$plugin->release` and that `$plugin->version` is greater than the previous tag's. It then creates a GitHub Release containing:
@@ -275,5 +284,5 @@ The workflow refuses to publish if the tag does not match `$plugin->release` in 
 Current version:
 
 ```text
-0.6.0-alpha
+0.6.1-alpha
 ```
