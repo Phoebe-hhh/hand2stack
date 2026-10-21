@@ -85,7 +85,11 @@ final class research_integrity {
                 continue;
             }
             $trace['events']++;
-            $trace['seqs'][] = (int)$record->eventseq;
+            // The server's task_finished (research_finisher) follows the
+            // browser's last event; a later page may reuse its number.
+            if (($payload['source'] ?? null) !== 'server') {
+                $trace['seqs'][] = (int)$record->eventseq;
+            }
 
             if (!empty($payload['truncated']) || !empty($payload['truncatedAnswers'])
                     || ($record->payload !== null && strpos($record->payload, '…[truncated]') !== false)) {

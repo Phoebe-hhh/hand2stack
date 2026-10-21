@@ -63,6 +63,19 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
         return {kind: 'other', key: null};
     };
 
+    // Moodle's quiz navigation (the question buttons and "Finish attempt ...")
+    // clears the name of the Next button and clicks it, with the page to go to
+    // in #followingpage, where -1 is the summary page. On the last page Next
+    // itself is "Finish attempt ...", with nextpage -1. Going to the summary
+    // page is the learner's finish action.
+    const classifyQuizSubmit = (name, isNextButton, followingPage, nextPage) => {
+        if (isNextButton && name === '') {
+            return followingPage === '-1' ? {kind: 'finish', key: null} : {kind: 'navigate', key: null};
+        }
+        if (isNextButton && name === 'next' && nextPage === '-1') return {kind: 'finish', key: null};
+        return classifySubmitter(name);
+    };
+
     const researchBoxes = [];
 
     // STACK's own validation is rendered into "<input name>_val", both by its
@@ -122,9 +135,28 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
             logOptions: () => ({modality: 'keyboard'})
         });
         // Hand2STACK's own writes are untrusted events and move the baseline.
-        box.addEventListener('input', event => (event.isTrusted ? tracker.input() : tracker.rebase()));
+        // They fire input before change. STACK-JS, which fills an input from
+        // an [[extractor]] in the working, fires change first: a change with
+        // no input before it is a write by STACK, logged as answer_inserted.
+        let seen = box.value;
+        box.addEventListener('input', event => {
+            if (event.isTrusted) {
+                tracker.input();
+            } else {
+                tracker.rebase();
+            }
+            seen = box.value;
+        });
         box.addEventListener('change', event => {
+            if (!event.isTrusted && box.value !== seen) {
+                research.log(box, 'answer_inserted', {
+                    via: 'stack_js',
+                    value: research.clip(box.value),
+                    previousValue: research.clip(seen)
+                }, {modality: null, passive: true});
+            }
             if (!event.isTrusted) tracker.rebase();
+            seen = box.value;
         });
         box.addEventListener('blur', () => tracker.commit('blur'));
         box._hand2stackValidation = observeStackValidation(box);
@@ -208,7 +240,11 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
         const forms = new Set(researchBoxes.map(box => box.form).filter(Boolean));
         forms.forEach(form => form.addEventListener('submit', event => {
             const submitter = event.submitter ? String(event.submitter.name || '') : '';
-            const classified = classifySubmitter(submitter);
+            const field = name => (form.querySelector('input[name="' + name + '"]') || {}).value;
+            const classified = classifyQuizSubmit(submitter,
+                Boolean(event.submitter && event.submitter.id === 'mod_quiz-next-nav'),
+                String((document.getElementById('followingpage') || {}).value || ''),
+                String(field('nextpage') || ''));
             questions.forEach((box, key) => {
                 if (box.form !== form || (classified.key && classified.key !== key)) return;
                 const answers = questionAnswers(box);

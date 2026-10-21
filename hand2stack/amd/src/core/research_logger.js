@@ -672,7 +672,7 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
 
         const log = guard((box, type, payload = {}, options = {}) => {
             if (EDIT_BOUNDARIES[type]) commitEdits(EDIT_BOUNDARIES[type]);
-            record(box, type, payload, options);
+            return record(box, type, payload, options);
         });
 
         // Pause or resume one question's clock; a finished one has none.

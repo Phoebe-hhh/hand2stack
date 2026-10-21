@@ -183,5 +183,10 @@ function xmldb_local_hand2stack_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026102100, 'local', 'hand2stack');
     }
 
+    if ($oldversion < 2026102101) {
+        // Quiz attempt observers (db/events.php) that complete research traces.
+        upgrade_plugin_savepoint(true, 2026102101, 'local', 'hand2stack');
+    }
+
     return true;
 }

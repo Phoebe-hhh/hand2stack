@@ -435,6 +435,15 @@ test('a later Next clears a Check that is still waiting for feedback', () => {
     assert.equal(tab.load().pendingSubmit(box), null);
 });
 
+test('log returns the event it stored, so a later event can name it', () => {
+    const research = createTab().load();
+    const box = answerBox('');
+    const submitted = research.log(box, 'submit_triggered', {submitterKind: 'finish', answers: {}},
+        {input: null, modality: null});
+    assert.ok(submitted.eventid);
+    assert.equal(submitted.type, 'submit_triggered');
+});
+
 test('a question Check button is scoped to its own question', () => {
     const classifySubmitter = (0, eval)(`(function() {
         ${extractFunctionSource('classifySubmitter')}
@@ -445,6 +454,33 @@ test('a question Check button is scoped to its own question', () => {
     assert.deepEqual(classifySubmitter('finish'), {kind: 'finish', key: null});
     assert.deepEqual(classifySubmitter('save'), {kind: 'save', key: null});
     assert.deepEqual(classifySubmitter(''), {kind: 'other', key: null});
+});
+
+test('Moodle\'s quiz navigation and Finish attempt are told apart from the Next button', () => {
+    const classifyQuizSubmit = (0, eval)(`(function() {
+        ${extractFunctionSource('classifySubmitter')}
+        ${extractFunctionSource('classifyQuizSubmit')}
+        return classifyQuizSubmit;
+    })()`);
+    // The navigation panel and the "Finish attempt ..." link click Next with its name cleared.
+    assert.deepEqual(classifyQuizSubmit('', true, '-1', '1'), {kind: 'finish', key: null});
+    assert.deepEqual(classifyQuizSubmit('', true, '2', '1'), {kind: 'navigate', key: null});
+    // On the last page Next is "Finish attempt ..." and goes to the summary page.
+    assert.deepEqual(classifyQuizSubmit('next', true, '1', '-1'), {kind: 'finish', key: null});
+    assert.deepEqual(classifyQuizSubmit('next', true, '0', '1'), {kind: 'next', key: null});
+    assert.deepEqual(classifyQuizSubmit('q50:2_-submit', false, '0', '1'), {kind: 'check', key: '50:2'});
+    assert.deepEqual(classifyQuizSubmit('', false, '', ''), {kind: 'other', key: null});
+});
+
+test('a value STACK writes into an input is logged, and Hand2STACK\'s own writes are not', () => {
+    const observer = fs.readFileSync(path.join(__dirname, '../../amd/src/core/research_observer.js'), 'utf8');
+    // STACK-JS fires change before input; a change with no input before it is STACK's.
+    assert.match(observer, /if \(!event\.isTrusted && box\.value !== seen\) \{\s*research\.log\(box, 'answer_inserted', \{\s*via: 'stack_js'/);
+    const inputs = fs.readFileSync(path.join(__dirname, '../../amd/src/core/stack_inputs.js'), 'utf8');
+    for (const helper of ['setAnswerValue', 'setBackgroundValue']) {
+        const body = inputs.slice(inputs.indexOf(`const ${helper} = `), inputs.indexOf('};', inputs.indexOf(`const ${helper} = `)));
+        assert.ok(body.indexOf("new Event('input'") < body.indexOf("new Event('change'"), `${helper} fires input first`);
+    }
 });
 
 test('STACK validation is logged once per validated value, not per MathJax repaint', () => {

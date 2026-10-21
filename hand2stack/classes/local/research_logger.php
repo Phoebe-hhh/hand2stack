@@ -294,7 +294,12 @@ final class research_logger {
                 continue;
             }
 
-            if ($DB->record_exists(self::TABLE, ['eventid' => $record->eventid])) {
+            // A trace ends once. The server may have ended it already, for a
+            // task_finished that reached it after the attempt was completed
+            // (research_finisher).
+            if ($DB->record_exists(self::TABLE, ['eventid' => $record->eventid])
+                    || ($record->eventtype === 'task_finished'
+                        && $DB->record_exists(self::TABLE, ['traceid' => $record->traceid, 'eventtype' => 'task_finished']))) {
                 $counts['duplicates']++;
                 $acknowledged[] = $record->eventid;
                 continue;

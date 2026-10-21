@@ -18,6 +18,8 @@ namespace local_hand2stack;
 use local_hand2stack\local\input_mode;
 use local_hand2stack\local\research_export;
 use local_hand2stack\local\research_logger;
+use local_hand2stack\local\research_finisher;
+use local_hand2stack\local\research_integrity;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -381,6 +383,76 @@ final class research_logger_test extends \advanced_testcase {
         input_mode::set_identified_for_cm((int)$quiz->cmid, false);
         $this->assertFalse(input_mode::identified_for_cm((int)$quiz->cmid));
         $this->assertSame(input_mode::NORMAL, input_mode::for_cm((int)$quiz->cmid));
+    }
+
+    public function test_the_server_ends_the_traces_a_finished_attempt_left_open(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->enable_study();
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->make_participant($user);
+        // Two questions on two pages.
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category();
+        foreach ([1, 2] as $page) {
+            $question = $questiongenerator->create_question('shortanswer', null, ['category' => $category->id]);
+            quiz_add_quiz_question($question->id, $quiz, $page);
+        }
+        \mod_quiz\quiz_settings::create($quiz->id)->get_grade_calculator()->recompute_quiz_sumgrades();
+        $this->setUser($user);
+        $attempt = quiz_prepare_and_start_new_attempt(\mod_quiz\quiz_settings::create($quiz->id, $user->id), 1, null);
+        $this->setUser(null);
+        $usageid = (int)$attempt->uniqueid;
+
+        $trace = fn(int $n) => sprintf('%08d-1111-4111-8111-111111111111', $n);
+        // Slot 1 was finished by the browser; slot 2 was left on an earlier page.
+        research_logger::record_batch([
+            $this->event($usageid, 1, ['traceid' => $trace(1), 'type' => 'task_started', 'eventseq' => 1]),
+            $this->event($usageid, 1, ['traceid' => $trace(1), 'type' => 'task_finished', 'eventseq' => 2]),
+            $this->event($usageid, 2, ['traceid' => $trace(2), 'type' => 'task_started', 'eventseq' => 1]),
+            $this->event($usageid, 2, ['traceid' => $trace(2), 'type' => 'submit_triggered', 'eventseq' => 2]),
+        ], (int)$user->id);
+
+        // Submitting queues the task, a few minutes later.
+        $this->setUser($user);
+        $attemptobj = \mod_quiz\quiz_attempt::create_from_usage_id($usageid);
+        $attemptobj->process_finish(time(), false);
+        $this->setUser(null);
+        $tasks = \core\task\manager::get_adhoc_tasks('\\local_hand2stack\\task\\complete_research_traces');
+        $this->assertCount(1, $tasks);
+        $task = reset($tasks);
+        $this->assertGreaterThan(time() + research_finisher::DELAY_SECONDS - 60, $task->get_next_run_time());
+
+        $this->assertSame(1, research_finisher::complete_attempt((int)$attempt->id, research_finisher::REASON_SUBMITTED));
+        // Running again adds nothing.
+        $this->assertSame(0, research_finisher::complete_attempt((int)$attempt->id, research_finisher::REASON_SUBMITTED));
+
+        $this->assertSame(1, $DB->count_records('local_hand2stack_event', ['traceid' => $trace(1), 'eventtype' => 'task_finished']));
+        $added = $DB->get_record('local_hand2stack_event', ['traceid' => $trace(2), 'eventtype' => 'task_finished'],
+            '*', MUST_EXIST);
+        $this->assertSame(3, (int)$added->eventseq);
+        $this->assertSame('hand2stack', $added->studycondition);
+        $this->assertSame(research_logger::anon_user_id((int)$user->id, 'pilot2026a'), $added->anonuserid);
+        $payload = json_decode($added->payload, true);
+        $this->assertSame(research_finisher::REASON_SUBMITTED, $payload['reason']);
+        $this->assertSame('server', $payload['source']);
+        $this->assertSame('gaveup', $payload['moodleState']);
+
+        // The browser's own task_finished arriving late is acknowledged, not stored twice.
+        $late = $this->event($usageid, 2, ['traceid' => $trace(2), 'type' => 'task_finished', 'eventseq' => 3]);
+        $counts = research_logger::record_batch([$late], (int)$user->id);
+        $this->assertSame(1, $counts['duplicates']);
+        $this->assertSame([$late['eventid']], $counts['acknowledgedIds']);
+        $this->assertSame(1, $DB->count_records('local_hand2stack_event', ['traceid' => $trace(2), 'eventtype' => 'task_finished']));
+
+        // The integrity check sees a finished trace, without a duplicate number.
+        $summaries = research_integrity::check('pilot2026a', (int)$quiz->cmid);
+        $summary = array_values(array_filter($summaries, fn($t) => $t['traceid'] === $trace(2)))[0];
+        $this->assertNotNull($summary['finished']);
+        $this->assertSame(0, $summary['duplicateseqs']);
     }
 
     public function test_only_teachers_and_managers_may_download_a_quiz_log(): void {
