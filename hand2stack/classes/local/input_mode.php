@@ -13,6 +13,10 @@
  * keyboard condition uses "logonly": the quiz looks like plain STACK but
  * research events are still recorded. A quiz with no saved mode is normal.
  *
+ * Beside the mode, a quiz says whether its research events are identified:
+ * off for a study, where learners appear only as the pseudonym, and on for
+ * everyday use, where each event also keeps the Moodle user id.
+ *
  * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -60,22 +64,44 @@ final class input_mode {
     }
 
     public static function set_for_cm(int $cmid, string $mode): void {
-        global $DB;
-
         if (!in_array($mode, self::MODES, true)) {
             throw new \coding_exception('Unknown Hand2STACK input mode: ' . $mode);
         }
+        self::save($cmid, ['inputmode' => $mode]);
+    }
+
+    /** Whether the quiz's research events keep the user id; off when nothing is saved. */
+    public static function identified_for_cm(int $cmid): bool {
+        global $DB;
+
+        return $cmid > 0 && (bool)$DB->get_field(self::TABLE, 'identified', ['cmid' => $cmid]);
+    }
+
+    /** identified_for_cm() of the quiz a context belongs to; off outside a quiz. */
+    public static function identified_for_context(?\context $context): bool {
+        return $context && $context->contextlevel == CONTEXT_MODULE
+            && self::identified_for_cm((int)$context->instanceid);
+    }
+
+    public static function set_identified_for_cm(int $cmid, bool $identified): void {
+        self::save($cmid, ['identified' => (int)$identified]);
+    }
+
+    /** Update the quiz's row, adding one only for something other than the defaults. */
+    private static function save(int $cmid, array $fields): void {
+        global $DB;
+
         $existing = $DB->get_record(self::TABLE, ['cmid' => $cmid]);
         if ($existing) {
-            if ($existing->inputmode !== $mode) {
-                $DB->update_record(self::TABLE, (object)[
-                    'id' => $existing->id, 'inputmode' => $mode, 'timemodified' => time(),
-                ]);
+            $changed = array_diff_assoc(array_map('strval', $fields),
+                array_map('strval', array_intersect_key((array)$existing, $fields)));
+            if ($changed) {
+                $DB->update_record(self::TABLE, (object)(['id' => $existing->id, 'timemodified' => time()] + $fields));
             }
-        } else if ($mode !== self::NORMAL) {
-            $DB->insert_record(self::TABLE, (object)[
-                'cmid' => $cmid, 'inputmode' => $mode, 'timemodified' => time(),
-            ]);
+        } else if (($fields['inputmode'] ?? self::NORMAL) !== self::NORMAL || !empty($fields['identified'])) {
+            $DB->insert_record(self::TABLE, (object)($fields + [
+                'cmid' => $cmid, 'inputmode' => self::NORMAL, 'identified' => 0, 'timemodified' => time(),
+            ]));
         }
     }
 
@@ -91,9 +117,9 @@ final class input_mode {
     }
 
     /**
-     * Whether learners have attempted the quiz. The mode is then locked so one
-     * quiz never holds attempts made under two conditions. Teacher previews
-     * do not count.
+     * Whether learners have attempted the quiz. The mode and identified
+     * logging are then locked so one quiz never holds attempts made under two
+     * conditions, or learners logged both ways. Teacher previews do not count.
      */
     public static function is_locked(int $quizid): bool {
         global $CFG;

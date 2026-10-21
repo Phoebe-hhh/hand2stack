@@ -158,5 +158,30 @@ function xmldb_local_hand2stack_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026101902, 'local', 'hand2stack');
     }
 
+    if ($oldversion < 2026102100) {
+        // Identified logging for everyday use: the user id beside the pseudonym.
+        $table = new xmldb_table('local_hand2stack_event');
+        $field = new xmldb_field('userid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'anonuserid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field('identified', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'userid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $index = new xmldb_index('userid_ix', XMLDB_INDEX_NOTUNIQUE, ['userid']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        $table = new xmldb_table('local_hand2stack_cm');
+        $field = new xmldb_field('identified', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'inputmode');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_plugin_savepoint(true, 2026102100, 'local', 'hand2stack');
+    }
+
     return true;
 }

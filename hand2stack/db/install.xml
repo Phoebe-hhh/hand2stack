@@ -27,12 +27,14 @@
         <INDEX NAME="expiresat_ix" UNIQUE="false" FIELDS="expiresat"/>
       </INDEXES>
     </TABLE>
-    <TABLE NAME="local_hand2stack_event" COMMENT="Pseudonymised research interaction events for Hand2STACK">
+    <TABLE NAME="local_hand2stack_event" COMMENT="Research interaction events for Hand2STACK, pseudonymised unless the quiz logs identified">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="eventid" TYPE="char" LENGTH="36" NOTNULL="true" SEQUENCE="false" COMMENT="Client-generated UUID used for idempotent retries"/>
         <FIELD NAME="studyid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="anonuserid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="HMAC-SHA256 of studyid and Moodle user id"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Moodle user id, only when identified is 1"/>
+        <FIELD NAME="identified" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when the quiz logged identified (everyday use), 0 for pseudonymised (study)"/>
         <FIELD NAME="traceid" TYPE="char" LENGTH="36" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="pageid" TYPE="char" LENGTH="36" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="eventseq" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
@@ -59,6 +61,7 @@
         <INDEX NAME="eventid_uix" UNIQUE="true" FIELDS="eventid"/>
         <INDEX NAME="trace_seq_ix" UNIQUE="false" FIELDS="traceid, eventseq"/>
         <INDEX NAME="study_user_ix" UNIQUE="false" FIELDS="studyid, anonuserid"/>
+        <INDEX NAME="userid_ix" UNIQUE="false" FIELDS="userid"/>
         <INDEX NAME="usage_slot_ix" UNIQUE="false" FIELDS="usageid, slot"/>
         <INDEX NAME="eventtype_ix" UNIQUE="false" FIELDS="eventtype"/>
         <INDEX NAME="servertime_ix" UNIQUE="false" FIELDS="servertime"/>
@@ -69,6 +72,7 @@
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="inputmode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="normal" SEQUENCE="false" COMMENT="normal, logonly or off"/>
+        <FIELD NAME="identified" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 to record the user id with research events (everyday use)"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

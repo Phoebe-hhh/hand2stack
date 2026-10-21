@@ -45,6 +45,8 @@ class provider implements
 
         $collection->add_database_table('local_hand2stack_event', [
             'anonuserid' => 'privacy:metadata:event:anonuserid',
+            'userid' => 'privacy:metadata:event:userid',
+            'identified' => 'privacy:metadata:event:identified',
             'usageid' => 'privacy:metadata:event:usageid',
             'eventtype' => 'privacy:metadata:event:eventtype',
             'clienttime' => 'privacy:metadata:event:clienttime',
@@ -94,8 +96,8 @@ class provider implements
             );
         }
 
-        $select = research_logger::user_event_select($userid);
-        $events = $select ? $DB->get_records_select('local_hand2stack_event', $select[0], $select[1], 'traceid, eventseq') : [];
+        [$select, $params] = research_logger::user_event_select($userid);
+        $events = $DB->get_records_select('local_hand2stack_event', $select, $params, 'traceid, eventseq');
         if ($events) {
             \core_privacy\local\request\writer::with_context($context)->export_data(
                 [get_string('pluginname', 'local_hand2stack'), get_string('privacy:metadata:event', 'local_hand2stack')],
@@ -124,10 +126,8 @@ class provider implements
             if ($context->contextlevel === CONTEXT_SYSTEM) {
                 $userid = $contextlist->get_user()->id;
                 $DB->delete_records('local_hand2stack_sess', ['userid' => $userid]);
-                $select = research_logger::user_event_select($userid);
-                if ($select) {
-                    $DB->delete_records_select('local_hand2stack_event', $select[0], $select[1]);
-                }
+                [$select, $params] = research_logger::user_event_select($userid);
+                $DB->delete_records_select('local_hand2stack_event', $select, $params);
                 return;
             }
         }
@@ -138,7 +138,8 @@ class provider implements
             return;
         }
         $userlist->add_from_sql('userid', 'SELECT userid FROM {local_hand2stack_sess}', []);
-        // Events hold no user id, but each belongs to a usage the user owns.
+        $userlist->add_from_sql('userid', 'SELECT userid FROM {local_hand2stack_event} WHERE userid IS NOT NULL', []);
+        // Pseudonymised events hold no user id, but each belongs to a usage the user owns.
         $userlist->add_from_sql('userid',
             'SELECT qza.userid
                FROM {local_hand2stack_event} e
@@ -159,18 +160,16 @@ class provider implements
         }
         foreach ($userlist->get_userids() as $userid) {
             $DB->delete_records('local_hand2stack_sess', ['userid' => $userid]);
-            $select = research_logger::user_event_select((int)$userid);
-            if ($select) {
-                $DB->delete_records_select('local_hand2stack_event', $select[0], $select[1]);
-            }
+            [$select, $params] = research_logger::user_event_select((int)$userid);
+            $DB->delete_records_select('local_hand2stack_event', $select, $params);
         }
     }
 
-    /** Research events carry a pseudonym, never the user id, so look them up by it. */
+    /** Identified events carry the user id; the others only the pseudonym, so look them up by both. */
     private static function user_has_events(int $userid): bool {
         global $DB;
 
-        $select = research_logger::user_event_select($userid);
-        return $select && $DB->record_exists_select('local_hand2stack_event', $select[0], $select[1]);
+        [$select, $params] = research_logger::user_event_select($userid);
+        return $DB->record_exists_select('local_hand2stack_event', $select, $params);
     }
 }

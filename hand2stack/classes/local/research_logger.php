@@ -9,9 +9,10 @@
 /**
  * classes local research logger.php for Hand2STACK.
  *
- * Stores pseudonymised interaction events for research studies. The table
- * never holds a Moodle user id: learners are identified by an HMAC of the
- * study id and user id, keyed by a site secret that never leaves the server.
+ * Stores interaction events for research studies and everyday use. Every
+ * event carries an HMAC of the study id and user id, keyed by a site secret
+ * that never leaves the server. Only a quiz set to identified logging
+ * (everyday use) also stores the Moodle user id; a study's quiz never does.
  * See docs/research/event-logging-spec-v1.md for the event dictionary.
  *
  * @package    local_hand2stack
@@ -131,13 +132,14 @@ final class research_logger {
     }
 
     /**
-     * SQL fragment selecting this user's events, or null when there are none.
+     * SQL fragment selecting this user's events: identified ones by user id,
+     * the others by pseudonym.
      *
-     * @return array|null [$select, $params]
+     * @return array [$select, $params]
      */
-    public static function user_event_select(int $userid): ?array {
-        $clauses = [];
-        $params = [];
+    public static function user_event_select(int $userid): array {
+        $clauses = ['userid = :userid'];
+        $params = ['userid' => $userid];
         $index = 0;
         foreach (self::anon_ids_for_user($userid) as $studyid => $anonid) {
             $clauses[] = "(studyid = :study{$index} AND anonuserid = :anon{$index})";
@@ -145,7 +147,7 @@ final class research_logger {
             $params["anon{$index}"] = $anonid;
             $index++;
         }
-        return $clauses ? [implode(' OR ', $clauses), $params] : null;
+        return [implode(' OR ', $clauses), $params];
     }
 
     public static function plugin_version(): string {
@@ -190,14 +192,30 @@ final class research_logger {
      * @return string|null|false
      */
     public static function usage_condition(int $usageid, int $userid) {
+        $settings = self::usage_settings($usageid, $userid);
+        return $settings ? $settings->condition : false;
+    }
+
+    /**
+     * usage_condition() and whether the quiz logs identified, as an object
+     * with condition and identified, or false when nothing may be recorded.
+     * A question preview is never identified.
+     *
+     * @return \stdClass|false
+     */
+    public static function usage_settings(int $usageid, int $userid) {
         $context = self::own_usage_context($usageid, $userid);
         if (!$context || !self::is_participant($context, $userid)) {
             return false;
         }
         if ($context->contextlevel != CONTEXT_MODULE) {
-            return null;
+            return (object)['condition' => null, 'identified' => false];
         }
-        return input_mode::condition(input_mode::for_context($context)) ?? false;
+        $condition = input_mode::condition(input_mode::for_context($context));
+        if ($condition === null) {
+            return false;
+        }
+        return (object)['condition' => $condition, 'identified' => input_mode::identified_for_context($context)];
     }
 
     /** Question identity for a slot, resolved on the server rather than trusted from the page. */
@@ -259,7 +277,7 @@ final class research_logger {
             }
 
             if (!array_key_exists($record->usageid, $usages)) {
-                $usages[$record->usageid] = self::usage_condition($record->usageid, $userid);
+                $usages[$record->usageid] = self::usage_settings($record->usageid, $userid);
             }
             if ($usages[$record->usageid] === false) {
                 $reject($event);
@@ -287,7 +305,9 @@ final class research_logger {
             $record->questionid = (int)$question->questionid;
             $record->qbankentryid = $question->questionbankentryid !== null ? (int)$question->questionbankentryid : null;
             $record->questionversion = $question->version !== null ? (int)$question->version : null;
-            $record->studycondition = $usages[$record->usageid];
+            $record->userid = $usages[$record->usageid]->identified ? $userid : null;
+            $record->identified = (int)$usages[$record->usageid]->identified;
+            $record->studycondition = $usages[$record->usageid]->condition;
             $record->pluginversion = $pluginversion;
             $record->servertime = $servertime;
 

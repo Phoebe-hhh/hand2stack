@@ -11,8 +11,10 @@
  *
  * Builds the downloadable research log: one row per event, with the quiz,
  * question and final mark alongside so the file can be analysed on its own.
- * No Moodle user id, name or usage id leaves the server: learners are the
- * stored HMAC pseudonym and attempts get one of their own.
+ * Learners are the stored HMAC pseudonym and attempts get one of their own;
+ * no usage id leaves the server. Only events from a quiz set to identified
+ * logging (everyday use) also carry the user id, username, ID number and
+ * full name; on a study's pseudonymised events those columns stay empty.
  *
  * @package    local_hand2stack
  * @copyright  2026 Phoebe Huang
@@ -25,7 +27,8 @@ defined('MOODLE_INTERNAL') || die();
 final class research_export {
     /** Exported columns, in order. */
     public const COLUMNS = [
-        'studyid', 'anonuserid', 'anonattemptid', 'attempt',
+        'studyid', 'anonuserid', 'identified', 'userid', 'username', 'idnumber', 'fullname',
+        'anonattemptid', 'attempt',
         'courseid', 'course', 'cmid', 'quiz', 'studycondition',
         'slot', 'questionid', 'qbankentryid', 'questionversion', 'question',
         'finalstate', 'finalfraction', 'maxmark', 'finalmark',
@@ -68,7 +71,9 @@ final class research_export {
         global $DB;
 
         [$join, $where, $params] = self::scope($cmid, $courseid);
-        $sql = "SELECT e.id, e.studyid, e.anonuserid, e.usageid, e.slot, e.traceid, e.pageid, e.eventseq,
+        $namefields = \core_user\fields::for_name()->get_sql('u', false, 'u_', '', true)->selects;
+        $sql = "SELECT e.id, e.studyid, e.anonuserid, e.identified, e.userid, u.username, u.idnumber $namefields,
+                       e.usageid, e.slot, e.traceid, e.pageid, e.eventseq,
                        e.eventtype, e.inputname, e.modality, e.studycondition, e.questionid, e.qbankentryid,
                        e.questionversion, e.pluginversion, e.schemaversion, e.clienttime, e.elapsedms,
                        e.servertime, e.eventid, e.payload,
@@ -76,6 +81,7 @@ final class research_export {
                        q.name AS question, qat.maxmark, qas.state AS finalstate, qas.fraction AS finalfraction
                   FROM {local_hand2stack_event} e
                        $join
+             LEFT JOIN {user} u ON u.id = e.userid AND e.identified = 1
              LEFT JOIN {question} q ON q.id = e.questionid
              LEFT JOIN {question_attempts} qat ON qat.questionusageid = e.usageid AND qat.slot = e.slot
              LEFT JOIN {question_attempt_steps} qas ON qas.questionattemptid = qat.id
@@ -98,9 +104,15 @@ final class research_export {
     public static function row(\stdClass $record, bool $spreadsheet = false): array {
         $fraction = $record->finalfraction !== null ? (float)$record->finalfraction : null;
         $maxmark = $record->maxmark !== null ? (float)$record->maxmark : null;
+        $identified = (int)$record->identified === 1 && $record->username !== null;
         $values = [
             'studyid' => $record->studyid,
             'anonuserid' => $record->anonuserid,
+            'identified' => (int)$record->identified,
+            'userid' => $identified ? (int)$record->userid : null,
+            'username' => $identified ? $record->username : null,
+            'idnumber' => $identified ? $record->idnumber : null,
+            'fullname' => $identified ? fullname(self::user_names($record)) : null,
             'anonattemptid' => research_logger::anon_attempt_id((int)$record->usageid, $record->studyid),
             'attempt' => $record->attempt,
             'courseid' => $record->courseid,
@@ -134,6 +146,15 @@ final class research_export {
             'payload' => $record->payload,
         ];
         return $spreadsheet ? array_map([self::class, 'escape_formula'], array_values($values)) : array_values($values);
+    }
+
+    /** The name fields of the event's user, selected with the u_ prefix. */
+    private static function user_names(\stdClass $record): \stdClass {
+        $user = new \stdClass();
+        foreach (\core_user\fields::get_name_fields() as $field) {
+            $user->$field = $record->{'u_' . $field} ?? '';
+        }
+        return $user;
     }
 
     /**

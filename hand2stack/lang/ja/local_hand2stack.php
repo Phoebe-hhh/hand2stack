@@ -148,6 +148,8 @@ $string['researchstudyid'] = '研究ID';
 $string['researchstudyid_desc'] = 'すべてのイベントに記録される識別子です（例: pilot2026a）。空欄の間はログを記録しません。仮名IDは研究IDごとに異なります。';
 $string['privacy:metadata:event'] = '研究参加に同意したユーザについて記録される操作イベントです。';
 $string['privacy:metadata:event:anonuserid'] = 'ユーザIDと研究IDからサイト秘密鍵で導出した仮名の参加者IDです。';
+$string['privacy:metadata:event:userid'] = 'イベントを行ったユーザです。小テストが実名で記録する設定（日常利用）の場合のみ保存されます。';
+$string['privacy:metadata:event:identified'] = 'イベントが実名（日常利用）と仮名（研究）のどちらで記録されたかです。';
 $string['privacy:metadata:event:usageid'] = 'イベントが属する問題の受験データです。';
 $string['privacy:metadata:event:eventtype'] = '認識・編集・検証・提出などの操作の種類です。';
 $string['privacy:metadata:event:clienttime'] = 'ブラウザで操作が行われた時刻です。';
@@ -174,9 +176,18 @@ $string['inputmode_help'] = 'この小テストでの Hand2STACK の表示方法
 $string['inputmode_normal'] = '通常（ボタンを表示）';
 $string['inputmode_logonly'] = '記録のみ、ボタンなし（キーボード条件）';
 $string['inputmode_off'] = 'オフ（ボタンなし、記録なし）';
-$string['inputmodelocked'] = 'この小テストはすでに受験されているため、入力方式は変更できません。';
+$string['inputmodelocked'] = 'この小テストはすでに受験されているため、入力方式とログの記録方法は変更できません。';
+$string['logidentity'] = 'ログの記録方法';
+$string['logidentity_help'] = 'この小テストの研究イベントに、誰の操作かを記録するかどうかです。
+
+* 仮名（研究）: 学習者は研究用の仮名でのみ表されます。氏名やユーザ ID を扱わない実験に使います。
+* 実名（日常利用）: 各イベントに Moodle のユーザ ID も保存され、ダウンロードしたログにはユーザ ID、ユーザ名、ID ナンバー、氏名が含まれます。
+
+どちらの場合も、記録されるのは研究参加者の権限を持つユーザのみです。学生が受験を始めた後は変更できません。';
+$string['logidentity_pseudonymous'] = '仮名（研究）';
+$string['logidentity_identified'] = '実名（日常利用）';
 $string['exportlogs'] = 'Hand2STACK ログ';
-$string['exportlogs_desc'] = 'ここで記録された研究イベントを 1 行 1 イベントでダウンロードします。学習者は研究用の仮名（anonuserid）、受験は anonattemptid でのみ表され、氏名・Moodle のユーザ ID・usage ID は含まれません。各行には小テスト、研究条件（keyboard または hand2stack）、問題の最終状態と得点も含まれます。';
+$string['exportlogs_desc'] = 'ここで記録された研究イベントを 1 行 1 イベントでダウンロードします。学習者は研究用の仮名（anonuserid）、受験は anonattemptid で表され、usage ID は含まれません。ログの記録方法が「実名（日常利用）」の小テストのイベントには、ユーザ ID、ユーザ名、ID ナンバー、氏名も含まれます。仮名のイベントではこれらの列は空です。各行には小テスト、研究条件（keyboard または hand2stack）、問題の最終状態と得点も含まれます。';
 $string['exportlogsadmin'] = 'Hand2STACK 研究ログ';
 $string['exportnoevents'] = 'ここではまだ研究イベントが記録されていません。';
 $string['exportallcourses'] = 'すべてのコースと問題プレビュー';

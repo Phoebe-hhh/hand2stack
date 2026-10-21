@@ -155,6 +155,8 @@ $string['researchstudyid'] = 'Study ID';
 $string['researchstudyid_desc'] = 'Identifier stored with every event, for example pilot2026a. Logging stays off while this is empty. Pseudonymous participant IDs are different for each study ID.';
 $string['privacy:metadata:event'] = 'Research interaction events recorded for consenting study participants.';
 $string['privacy:metadata:event:anonuserid'] = 'A pseudonymous participant ID derived from the user ID and the study ID with a site secret.';
+$string['privacy:metadata:event:userid'] = 'The user who made the event, stored only when the quiz logs identified (everyday use).';
+$string['privacy:metadata:event:identified'] = 'Whether the event was logged identified (everyday use) or pseudonymised (study).';
 $string['privacy:metadata:event:usageid'] = 'The question attempt the event belongs to.';
 $string['privacy:metadata:event:eventtype'] = 'The kind of interaction, such as recognition, edit, validation or submission.';
 $string['privacy:metadata:event:clienttime'] = 'The time the interaction happened in the browser.';
@@ -181,9 +183,18 @@ Each recorded event keeps the condition it was made under (keyboard or Hand2STAC
 $string['inputmode_normal'] = 'Normal (show buttons)';
 $string['inputmode_logonly'] = 'Record only, no buttons (keyboard condition)';
 $string['inputmode_off'] = 'Off (no buttons, nothing recorded)';
-$string['inputmodelocked'] = 'Students have already attempted this quiz, so the input mode can no longer be changed.';
+$string['inputmodelocked'] = 'Students have already attempted this quiz, so the input mode and log identity can no longer be changed.';
+$string['logidentity'] = 'Log identity';
+$string['logidentity_help'] = 'Whether the research events of this quiz show who made them.
+
+* Pseudonymised (study): learners appear only as the study pseudonym. Use this for an experiment whose protocol does not allow names or user ids.
+* Identified (everyday use): each event also keeps the Moodle user id, and the downloaded log shows the user id, username, ID number and full name.
+
+Events are recorded only for users with the research participant capability, either way. The setting cannot be changed once students have attempted the quiz.';
+$string['logidentity_pseudonymous'] = 'Pseudonymised (study)';
+$string['logidentity_identified'] = 'Identified (everyday use)';
 $string['exportlogs'] = 'Hand2STACK log';
-$string['exportlogs_desc'] = 'Download the research events recorded here, one row per event. Learners appear only as the study pseudonym (anonuserid) and attempts as anonattemptid; no names, Moodle user ids or usage ids are included. Each row also has the quiz, the study condition (keyboard or hand2stack) and the question\'s final state and mark.';
+$string['exportlogs_desc'] = 'Download the research events recorded here, one row per event. Learners appear as the study pseudonym (anonuserid) and attempts as anonattemptid; usage ids are never included. Events from a quiz whose log identity is Identified (everyday use) also have the user id, username, ID number and full name; for pseudonymised events those columns are empty. Each row also has the quiz, the study condition (keyboard or hand2stack) and the question\'s final state and mark.';
 $string['exportlogsadmin'] = 'Hand2STACK research log';
 $string['exportnoevents'] = 'No research events have been recorded here yet.';
 $string['exportallcourses'] = 'All courses and question previews';

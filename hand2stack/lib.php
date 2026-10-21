@@ -18,7 +18,7 @@ defined('MOODLE_INTERNAL') || die();
 use local_hand2stack\local\input_mode;
 
 /**
- * Add the Hand2STACK input mode to a quiz's settings page.
+ * Add the Hand2STACK input mode and log identity to a quiz's settings page.
  *
  * @param moodleform_mod $formwrapper
  * @param MoodleQuickForm $mform
@@ -38,15 +38,24 @@ function local_hand2stack_coursemodule_standard_elements($formwrapper, $mform): 
     $mform->addHelpButton('local_hand2stack_inputmode', 'inputmode', 'local_hand2stack');
     $mform->setDefault('local_hand2stack_inputmode', input_mode::for_cm((int)($current->coursemodule ?? 0)));
 
+    $mform->addElement('select', 'local_hand2stack_identified', get_string('logidentity', 'local_hand2stack'), [
+        0 => get_string('logidentity_pseudonymous', 'local_hand2stack'),
+        1 => get_string('logidentity_identified', 'local_hand2stack'),
+    ]);
+    $mform->addHelpButton('local_hand2stack_identified', 'logidentity', 'local_hand2stack');
+    $mform->setDefault('local_hand2stack_identified',
+        (int)input_mode::identified_for_cm((int)($current->coursemodule ?? 0)));
+    $mform->hideIf('local_hand2stack_identified', 'local_hand2stack_inputmode', 'eq', input_mode::OFF);
+
     if (input_mode::is_locked((int)($current->instance ?? 0))) {
-        $mform->hardFreeze('local_hand2stack_inputmode');
+        $mform->hardFreeze(['local_hand2stack_inputmode', 'local_hand2stack_identified']);
         $mform->addElement('static', 'local_hand2stack_inputmode_locked', '',
             get_string('inputmodelocked', 'local_hand2stack'));
     }
 }
 
 /**
- * Save the input mode chosen on a quiz's settings page.
+ * Save the input mode and log identity chosen on a quiz's settings page.
  *
  * @param stdClass $data
  * @param stdClass $course
@@ -60,6 +69,9 @@ function local_hand2stack_coursemodule_edit_post_actions($data, $course) {
     // A frozen select is still posted; the lock is enforced here as well.
     if (in_array($mode, input_mode::MODES, true) && !input_mode::is_locked((int)$data->instance)) {
         input_mode::set_for_cm((int)$data->coursemodule, $mode);
+        if (isset($data->local_hand2stack_identified)) {
+            input_mode::set_identified_for_cm((int)$data->coursemodule, (bool)$data->local_hand2stack_identified);
+        }
     }
     return $data;
 }

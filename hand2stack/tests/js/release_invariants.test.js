@@ -497,7 +497,7 @@ test('a mobile URL on the IPv6 loopback address warns like localhost', () => {
     assert.match(sessionCreate, /\$mobilehost === '\[::1\]'/);
 });
 
-test('the research log download checks access and never exports a usage or user id', () => {
+test('the research log download checks access, never exports a usage id, and names users only when identified', () => {
     const page = fs.readFileSync(path.join(pluginRoot, 'export.php'), 'utf8');
     const exporter = fs.readFileSync(path.join(pluginRoot, 'classes/local/research_export.php'), 'utf8');
     const settings = fs.readFileSync(path.join(pluginRoot, 'settings.php'), 'utf8');
@@ -507,5 +507,7 @@ test('the research log download checks access and never exports a usage or user 
     assert.match(settings, /'local_hand2stack_export',[\s\S]*'moodle\/site:config'/);
     const columns = exporter.match(/public const COLUMNS = \[([\s\S]*?)\];/)[1];
     assert.match(columns, /'anonattemptid'/);
-    assert.doesNotMatch(columns, /'usageid'|'userid'|'username'|'email'/);
+    assert.doesNotMatch(columns, /'usageid'|'email'/);
+    // Identity columns are filled only for a quiz that logs identified.
+    assert.match(exporter, /LEFT JOIN \{user\} u ON u\.id = e\.userid AND e\.identified = 1/);
 });

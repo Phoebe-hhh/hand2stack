@@ -147,7 +147,9 @@ final class research_logger_test extends \advanced_testcase {
         $this->assertNotEmpty($record->pluginversion);
         $this->assertSame(['target' => 'line', 'before' => 'x^2+5x+8=0', 'after' => 'x^2+5x+6=0'],
             json_decode($record->payload, true));
-        $this->assertObjectNotHasProperty('userid', $record);
+        // A question preview is never identified.
+        $this->assertNull($record->userid);
+        $this->assertSame(0, (int)$record->identified);
     }
 
     public function test_non_participants_and_other_users_usages_are_not_recorded(): void {
@@ -317,10 +319,68 @@ final class research_logger_test extends \advanced_testcase {
         $this->assertEqualsWithDelta((float)$row['maxmark'], $row['finalmark'], 1e-7);
         $this->assertMatchesRegularExpression('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/', $row['clienttimeiso']);
         // Nothing in the file leads back to the learner.
-        foreach (['usageid', 'userid', 'username', 'firstname', 'lastname', 'email'] as $column) {
+        foreach (['usageid', 'firstname', 'lastname', 'email'] as $column) {
             $this->assertNotContains($column, research_export::COLUMNS);
         }
+        $this->assertSame(0, $row['identified']);
+        foreach (['userid', 'username', 'idnumber', 'fullname'] as $column) {
+            $this->assertNull($row[$column]);
+        }
         $this->assertNotContains((string)$usageid, [(string)$row['anonattemptid']]);
+    }
+
+    public function test_an_identified_quiz_keeps_the_user_id_and_exports_who_it_was(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->enable_study();
+
+        $user = $this->getDataGenerator()->create_user(
+            ['username' => 'taro', 'idnumber' => 'S1234', 'firstname' => 'Taro', 'lastname' => 'Yamada']);
+        $this->make_participant($user);
+        [$quiz, $usageid, $slot] = $this->create_quiz_attempt($user, input_mode::NORMAL);
+        input_mode::set_identified_for_cm((int)$quiz->cmid, true);
+        [$studyquiz, $studyusage] = $this->create_quiz_attempt($user, input_mode::NORMAL);
+        $this->assertTrue(input_mode::identified_for_cm((int)$quiz->cmid));
+        $this->assertFalse(input_mode::identified_for_cm((int)$studyquiz->cmid));
+
+        $identified = $this->event($usageid, $slot);
+        $pseudonymous = $this->event($studyusage, $slot);
+        research_logger::record_batch([$identified, $pseudonymous], (int)$user->id);
+
+        $stored = $DB->get_record('local_hand2stack_event', ['eventid' => $identified['eventid']], '*', MUST_EXIST);
+        $this->assertSame((int)$user->id, (int)$stored->userid);
+        $this->assertSame(1, (int)$stored->identified);
+        $this->assertSame(research_logger::anon_user_id((int)$user->id, 'pilot2026a'), $stored->anonuserid);
+        $stored = $DB->get_record('local_hand2stack_event', ['eventid' => $pseudonymous['eventid']], '*', MUST_EXIST);
+        $this->assertNull($stored->userid);
+        $this->assertSame(0, (int)$stored->identified);
+
+        $records = research_export::recordset('pilot2026a', (int)$quiz->cmid);
+        $rows = [];
+        foreach ($records as $record) {
+            $rows[] = array_combine(research_export::COLUMNS, research_export::row($record));
+        }
+        $records->close();
+        $this->assertCount(1, $rows);
+        $this->assertSame(1, $rows[0]['identified']);
+        $this->assertSame((int)$user->id, $rows[0]['userid']);
+        $this->assertSame('taro', $rows[0]['username']);
+        $this->assertSame('S1234', $rows[0]['idnumber']);
+        $this->assertSame(fullname($user), $rows[0]['fullname']);
+
+        // The privacy API finds and deletes both kinds of event.
+        $contextlist = privacy\provider::get_contexts_for_userid((int)$user->id);
+        $userlist = new \core_privacy\local\request\userlist(\context_system::instance(), 'local_hand2stack');
+        privacy\provider::get_users_in_context($userlist);
+        $this->assertSame([(int)$user->id], array_values(array_unique(array_map('intval', $userlist->get_userids()))));
+        privacy\provider::delete_data_for_user(new \core_privacy\local\request\approved_contextlist($user,
+            'local_hand2stack', $contextlist->get_contextids()));
+        $this->assertSame(0, $DB->count_records('local_hand2stack_event'));
+
+        // Like the input mode, the setting is kept on a quiz row and removed with the quiz.
+        input_mode::set_identified_for_cm((int)$quiz->cmid, false);
+        $this->assertFalse(input_mode::identified_for_cm((int)$quiz->cmid));
+        $this->assertSame(input_mode::NORMAL, input_mode::for_cm((int)$quiz->cmid));
     }
 
     public function test_only_teachers_and_managers_may_download_a_quiz_log(): void {
