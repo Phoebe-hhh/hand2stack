@@ -35,7 +35,7 @@ define([
             lineIndex: Number.isInteger(lineIndex) && lineIndex >= 0 ? lineIndex : null,
             latex: research.clip(latex),
             value: research.clip(value)
-        }, {modality: panel._hand2stackSource || null});
+        }, {modality: panel._hand2stackSource || answerBox._hand2stackModality || null});
     };
 
     // A clicked or shift-extended selection is what Insert inserts, exactly as

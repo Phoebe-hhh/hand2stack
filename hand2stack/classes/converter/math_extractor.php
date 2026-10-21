@@ -109,6 +109,15 @@ final class math_extractor {
         if (!$hasprose) {
             return trim($s);
         }
+        // Prose between two statements ("x>0 \\text{ so } x>2") separates
+        // them: keep both for normalize(), which lists them, rather than
+        // picking one and joining a stray letter of the other to it.
+        $statements = array_filter(statement_splitter::split_statements($s), static function(array $segment): bool {
+            return $segment[0] === 'math';
+        });
+        if (count($statements) > 1) {
+            return trim($s);
+        }
 
         // A unit after a number belongs to the quantity: keep it through the
         // prose removal below.

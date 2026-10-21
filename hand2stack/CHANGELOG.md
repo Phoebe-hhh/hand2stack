@@ -3,6 +3,13 @@
 Hand2STACK was previously known as STACK Input Helper. Releases from 0.3.0 onward
 use the Moodle component name `local_hand2stack` and install in `local/hand2stack`.
 
+## Unreleased
+
+- Record the input method of a part of a formula selected on a panel restored after a Check. The `candidate_selected` event with `kind: partial` logged `modality: null` there, as the restored panel has no recognition of its own; it now falls back to the method saved with the result, as the panel's other events already did.
+- Keep both statements of a review row whose prose sits inside the formula. `x>0 \text{ so } x>2`, as Mathpix often returns a handwritten line, was converted to `x>0*x`, dropping `x>2` without a STACK error; it is now `x>0,x>2`, as when the prose lies outside the formula. Only `or`, `and` and their Japanese forms were handled before.
+- Leave a `cases` block unconverted when a branch without a condition comes before another branch. `\begin{cases} 1 \\ 2 & x>0\end{cases}` became `1 elseif x>0 then 2`; there is no `if`/`elseif` form in the order written, and moving the branch would rewrite the answer, so STACK now rejects the block as OCR returned it. A last branch without a condition is still the `else`.
+- Record `pageActive: false` on the first `interaction_started` of a quiz page opened in a background tab. The page paused only after its first events, so they still claimed to be worked on; the active time was already right.
+
 ## 0.6.0-alpha - 2026-10-20
 
 - Record each question's active time, one question at a time. The research log gets two new events, `activity_paused` and `activity_resumed`. A question alone on its page is timed from the start; on a page with several, the one the learner focuses, points at, types in or uses Hand2STACK on becomes the current one, and switching logs `question_switch` for both. Only the current question pauses when the page is hidden, the window loses focus or the learner leaves, and resumes when they come back; a file or camera picker, or STACK's preview frame, does not count as leaving. `submit_triggered` and `task_finished` carry `activeTimeMs`, the question's time so far across reloads, so time on other questions or other tabs is no longer part of a task's duration. A finished question's clock does not run again; `interaction_started` marks such a visit with `revisit: true`.

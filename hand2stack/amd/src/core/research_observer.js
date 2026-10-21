@@ -140,6 +140,9 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
     };
 
     const beginResearch = (boxes, mayStartTask) => {
+        // A page opened in a background tab is not being worked on: say so
+        // before the first event, whose interaction_started records it.
+        if (document.visibilityState !== 'visible') research.pause('hidden');
         boxes.forEach(bindResearchAnswerBox);
 
         // One representative box per question carries question-level events.
@@ -299,7 +302,6 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
                 research.restore();
             }
         });
-        if (document.visibilityState !== 'visible') research.pause('hidden');
         if (questionBoxes.size === 1) research.activate(questionBoxes.values().next().value, 'start');
         // Send what earlier pages, a lost connection or a beacon left unconfirmed.
         window.addEventListener('online', () => research.restore());

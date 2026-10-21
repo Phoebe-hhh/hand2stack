@@ -20,8 +20,11 @@ use local_hand2stack\converter\stack_converter;
 defined('MOODLE_INTERNAL') || die();
 
 final class piecewise {
-    /** The STACK if/elseif form of a cases or array block, or '' when $input has none. */
-    public static function normalize(string $input): string {
+    /**
+     * The STACK if/elseif form of a cases or array block, '' when $input has
+     * none, or null when the block has no faithful STACK form.
+     */
+    public static function normalize(string $input): ?string {
         if (!preg_match('/\\\\begin\{(cases|array)\}(?:\{[^}]*\})?([\s\S]*?)\\\\end\{\1\}/', $input, $match)) {
             return '';
         }
@@ -82,12 +85,19 @@ final class piecewise {
             }
         }
 
-        // Every branch keeps the condition the learner wrote; only a branch
-        // written without one is the else. No condition is inferred.
+        // Every branch keeps the condition the learner wrote; only the last
+        // branch may be written without one, as the else. A branch without a
+        // condition before others has no STACK if/elseif spelling in the order
+        // written, and moving it would rewrite the answer: keep it unconverted.
+        foreach (array_slice($branches, 0, -1) as $branch) {
+            if ($branch['condition'] === '') {
+                return null;
+            }
+        }
         $result = '';
         foreach ($branches as $index => $branch) {
             if ($branch['condition'] === '') {
-                $result .= ($index === 0 ? '' : ' else ') . $branch['expression'];
+                $result .= ' else ' . $branch['expression'];
             } else {
                 $result .= ($index === 0 ? 'if ' : ' elseif ') . $branch['condition'] . ' then ' . $branch['expression'];
             }

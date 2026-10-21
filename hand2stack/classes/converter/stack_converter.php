@@ -114,6 +114,10 @@ final class stack_converter {
         }
 
         $piecewise = piecewise::normalize($s);
+        if ($piecewise === null) {
+            // Like an approximation: STACK should reject what OCR returned.
+            return trim($input);
+        }
         if ($piecewise !== '') {
             return $piecewise;
         }

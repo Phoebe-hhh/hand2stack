@@ -165,6 +165,15 @@ final class layout_test extends \advanced_testcase {
         $this->assertSame("`x=1`\n\n`y=2`", freetext_builder::build("\\(x=1\\)\n\n\\(y=2\\)"));
     }
 
+    public function test_prose_inside_a_formula_keeps_both_statements_of_a_review_row(): void {
+        // Mathpix puts prose in \text{} inside the formula, as for a handwritten
+        // line; the second statement must not be dropped ("x>0*x").
+        $this->assertSame(['x>0,x>2'], array_column(
+            document_builder::build_document_lines("\\(x>0 \\text{ so } x>2\\)"), 'stack'));
+        $this->assertSame(['x>0,x>2', 'x=3,y=5'], array_column(document_builder::build_document_lines(
+            "\\[\\begin{aligned}1.\\ x>0 \\text{ so } x>2 \\\\ 2.\\ x=3 \\text{ hence } y=5\\end{aligned}\\]"), 'stack'));
+    }
+
     public function test_freetext_uses_ascii_fallback_without_losing_lines(): void {
         $this->assertSame("`x=1\ny=2`", freetext_builder::build('', "x=1\ny=2"));
     }

@@ -218,6 +218,8 @@ final class stack_converter_test extends \advanced_testcase {
             'words and maths in one condition' => ['latex', 'f(x)=\\begin{cases} 1 & \\text{if } x>0 \\\\ 0 & \\text{otherwise} \\end{cases}', 'f(x)=if "if" x>0 then 1 elseif "otherwise" then 0'],
             'last branch keeps its own condition' => ['latex', 'f(x)=\\begin{cases} 1 & x<0 \\\\ 2 & x \\geq 0 \\end{cases}', 'f(x)=if x<0 then 1 elseif x>=0 then 2'],
             'branch without a condition is the else' => ['latex', 'f(x)=\\begin{cases} 1 & x<0 \\\\ 2 \\end{cases}', 'f(x)=if x<0 then 1 else 2'],
+            'first branch without a condition stays as written' => ['latex', '\\begin{cases} 1 \\\\ 2 & x>0\\end{cases}', '\\begin{cases} 1 \\\\ 2 & x>0\\end{cases}'],
+            'middle branch without a condition stays as written' => ['latex', '\\begin{cases} 1 & x<0 \\\\ 2 \\\\ 3 & x>1\\end{cases}', '\\begin{cases} 1 & x<0 \\\\ 2 \\\\ 3 & x>1\\end{cases}'],
             'prose before a system is prose' => ['latex', '\\text{Answer: } \\begin{cases} x=1 \\\\ y=2\\end{cases}', '[x=1,y=2]'],
             'variable times a scientific number' => ['latex', 'x 2.5e-3', 'x*2.5e-3'],
             'unbraced text subscript' => ['latex', 'x_\\text{max}=3', 'x[max]=3'],

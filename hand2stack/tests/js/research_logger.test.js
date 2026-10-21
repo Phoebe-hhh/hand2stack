@@ -949,6 +949,10 @@ test('a page opened in the background starts paused', async () => {
     assert.equal(tab.sent[0].payload.pageActive, false);
     assert.equal(tab.sent.find(event => event.type === 'activity_resumed').payload.pausedMs, 60000);
     assert.equal(tab.sent.find(event => event.type === 'submit_triggered').payload.activeTimeMs, 5000);
+    // The page pauses before its first event, so the order above is the page's.
+    const observer = fs.readFileSync(path.join(__dirname, '../../amd/src/core/research_observer.js'), 'utf8');
+    const begin = observer.slice(observer.indexOf('const beginResearch'));
+    assert.ok(begin.indexOf("research.pause('hidden')") < begin.indexOf("'task_started'"));
 });
 
 test('looking at a finished question again is a revisit and adds no active time', async () => {
@@ -1150,6 +1154,9 @@ test('a panel restored after a Check keeps the input method its result came from
     assert.match(attachButton, /answerBox\._hand2stackModality = savedResult\.modality/);
     // The panel's own events fall back to it rather than logging null.
     assert.match(resultView, /modality: panel\._hand2stackSource \|\| answerBox\._hand2stackModality \|\| null/);
+    // So does a part of a formula selected on it.
+    const formulaSelect = fs.readFileSync(path.join(__dirname, '../../amd/src/ui/formula_select.js'), 'utf8');
+    assert.match(formulaSelect, /modality: panel\._hand2stackSource \|\| answerBox\._hand2stackModality \|\| null/);
 });
 
 test('the outbox is made when first used, after the page config enabled logging', async () => {
