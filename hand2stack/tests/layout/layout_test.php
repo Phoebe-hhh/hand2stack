@@ -202,6 +202,7 @@ final class layout_test extends \advanced_testcase {
             ['3*(x-2)+4=2*x+7', '3*x-6+4=2*x+7', '3*x-2=2*x+7', 'x=9'],
             array_column($result['lines'], 'stack')
         );
+        $this->assertSame([true, true, true, true], array_column($result['lines'], 'ascii_from_mathpix'));
 
         $page = file_get_contents(__DIR__ . '/fixtures/mathpix_prose_and_blocks.json');
         $result = response_parser::parse($page, 0, '', 200);
@@ -215,6 +216,18 @@ final class layout_test extends \advanced_testcase {
         $this->assertSame('x=2,x=2', $mathlines[4]['ascii']);
         $this->assertSame('=1+sqrt8', $mathlines[6]['ascii']);
         $this->assertSame('1+sqrt(8)', $mathlines[6]['stack']);
+    }
+
+    /** Positional LaTeX/ASCII pairing is used only when both sides have the same rows. */
+    public function test_algebraic_lines_reject_mismatched_asciimath_rows(): void {
+        $latex = '\\begin{aligned}p(x)&=1\\\\q(x)&=2\\end{aligned}';
+        $matching = line_builder::build_math_lines($latex, '{:[p(x)=1],[q(x)=2]:}');
+        $this->assertSame(['p(x)=1', 'q(x)=2'], array_column($matching, 'ascii'));
+        $this->assertSame([true, true], array_column($matching, 'ascii_from_mathpix'));
+
+        $mismatched = line_builder::build_math_lines($latex, '{:[wrong=0]:}');
+        $this->assertSame(['p(x)=1', 'q(x)=2'], array_column($mismatched, 'ascii'));
+        $this->assertSame([false, false], array_column($mismatched, 'ascii_from_mathpix'));
     }
 
     public static function mathpix_page_provider(): array {

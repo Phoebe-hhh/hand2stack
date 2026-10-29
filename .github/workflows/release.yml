@@ -54,10 +54,15 @@ jobs:
             exit 0
           fi
 
+          release_kind=(--latest)
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            release_kind=(--prerelease)
+          fi
+
           gh release create "$GITHUB_REF_NAME" \
             "$zip_asset#Moodle plugin ZIP" \
             "$changelog_asset#Version changelog" \
             --verify-tag \
             --generate-notes \
             --title "Hand2STACK ${GITHUB_REF_NAME}" \
-            --latest
+            "${release_kind[@]}"

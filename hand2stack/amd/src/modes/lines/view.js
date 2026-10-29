@@ -155,6 +155,35 @@ define([
         const updateSelectedPreview = () => {
             panel._stackTextarea.value = stackValueForLine(resultLines[selectedIndex]);
         };
+        const validationGeneration = (panel._lineValidationGeneration || 0) + 1;
+        panel._lineValidationGeneration = validationGeneration;
+        const validateAsciiLine = line => {
+            const ascii = line ? line.ascii : '';
+            if (!ascii) return Promise.resolve('');
+            if (line._validatedAscii === ascii && line._validatedStack) {
+                return Promise.resolve(line._validatedStack);
+            }
+            if (line._validatingAscii === ascii && line._validationPromise) {
+                return line._validationPromise;
+            }
+            line._validatingAscii = ascii;
+            line._validationPromise = postAscii(ascii).then(stack => {
+                if (panel._lineValidationGeneration === validationGeneration && line.ascii === ascii && stack) {
+                    line._validatedAscii = ascii;
+                    line._validatedStack = stack;
+                    if (resultLines[selectedIndex] === line && !panel._partialSelection) {
+                        updateSelectedPreview();
+                    }
+                }
+                return stack;
+            }).finally(() => {
+                if (line._validatingAscii === ascii) {
+                    line._validatingAscii = '';
+                    line._validationPromise = null;
+                }
+            });
+            return line._validationPromise;
+        };
         const {renderFormatRows, selectFormat} = createFormatRows({
             panel, answerBox, resultLines, getSelectedIndex: () => selectedIndex, lineTracker, logOptions,
             syncDiagnosticProcess, refreshCandidateLine: index => refreshCandidateLine(index), updateSelectedPreview,
@@ -386,6 +415,16 @@ define([
         const selected = resultLines[defaultIndex];
         panel._stackTextarea.value = selected ? (selected.stack || selected.math || '') : (stackResult || '');
         selectFormat('ascii');
+        // Resolve the real Insert value while the learner reviews the panel.
+        // A LaTeX-derived fallback is already STACK and must not go through the
+        // AsciiMath-only implicit-product rules unless the learner edits it.
+        resultLines.forEach(line => {
+            if (line.asciiFromMathpix && !line.edited && line.ascii) {
+                validateAsciiLine(line).catch(() => {
+                    // Insert reports a conversion failure if the learner chooses this row.
+                });
+            }
+        });
         panel._applyBtn.onclick = async () => {
             const requestId = (panel._insertRequestId || 0) + 1;
             panel._insertRequestId = requestId;
@@ -400,10 +439,10 @@ define([
                     ? panel._partialSelection.value
                     : stackValueForLine(line);
                 const partial = Boolean(panel._partialSelection && panel._partialSelection.value);
-                // The ASCII tab is Mathpix's OCR value, not a pre-converted
-                // STACK expression. Always normalize and validate the complete
-                // current ASCII on Insert, whether or not the learner edited it.
-                if (line && ascii && !partial) {
+                // Normalize genuine Mathpix AsciiMath, and anything the learner
+                // edited in the ASCII tab. An untouched LaTeX-derived fallback
+                // is already STACK and deliberately preserves p(x)-style ambiguity.
+                if (line && ascii && !partial && (line.asciiFromMathpix || line.edited)) {
                     const validationStartedAt = Date.now();
                     const logValidation = (valid, stack, error = null) => research.log(answerBox, 'validation_completed', {
                         source: 'h2s_convert',
@@ -414,22 +453,16 @@ define([
                         message: error ? research.clip(error.message, 300) : '',
                         latencyMs: Date.now() - validationStartedAt
                     }, logOptions());
-                    if (line._validatedAscii === ascii && line._validatedStack) {
-                        stackValue = line._validatedStack;
-                    } else {
-                        try {
-                            stackValue = await postAscii(ascii);
-                        } catch (error) {
-                            if (panel._insertRequestId === requestId) logValidation(false, '', error);
-                            throw error;
-                        }
-                        if (panel._insertRequestId !== requestId || selectedIndex !== lineIndex || line.ascii !== ascii) {
-                            return;
-                        }
-                        logValidation(Boolean(stackValue), stackValue);
-                        line._validatedAscii = ascii;
-                        line._validatedStack = stackValue;
+                    try {
+                        stackValue = await validateAsciiLine(line);
+                    } catch (error) {
+                        if (panel._insertRequestId === requestId) logValidation(false, '', error);
+                        throw error;
                     }
+                    if (panel._insertRequestId !== requestId || selectedIndex !== lineIndex || line.ascii !== ascii) {
+                        return;
+                    }
+                    logValidation(Boolean(stackValue), stackValue);
                 }
                 if (!stackValue) {
                     throw new Error(config.recognizefailed || 'Conversion failed.');

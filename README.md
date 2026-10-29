@@ -4,15 +4,15 @@
 
 Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-> **Current pilot release:** [v0.6.3-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.6.3-alpha)
+> **Current pilot release:** [v0.6.2-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.6.2-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download hand2stack-v0.6.3-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.6.3-alpha/hand2stack-v0.6.3-alpha.zip)**
+**[Download hand2stack-v0.6.2-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.6.2-alpha/hand2stack-v0.6.2-alpha.zip)**
 
-Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.6.3-alpha.zip` and contains the plugin root folder `hand2stack/`.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.6.2-alpha.zip` and contains the plugin root folder `hand2stack/`.
 
 ## Features
 
@@ -115,4 +115,4 @@ See the [plugin README](hand2stack/README.md) for development details, configura
 
 ## Status
 
-Version `0.6.3-alpha` is intended for controlled pilot testing. New in 0.6.3, Algebraic input shows Mathpix's original AsciiMath in its ASCII tab and converts that value to strict STACK syntax only when it is inserted. Implicit products such as `2x(x+4)` now become `2*x*(x+4)`, and Mathpix's `log_(2)(x-1)` base notation is converted correctly. Version 0.6.2 added AsciiMath Free-text working, safer conversion of ambiguous notation, complete multiline operator conversion, and the iPad image fix. The research log retains events across connection loss and records each question's active time; `cli/check_research_log.php` reports gaps, failed deliveries and split traces before analysis. Run the Moodle upgrade after installing it, and do not purge caches or upgrade while a study is running. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, research event logging and its privacy provider, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+Version `0.6.2-alpha` is intended for controlled pilot testing. Algebraic input shows Mathpix's original AsciiMath in its ASCII tab and validates it in the background so the STACK preview matches Insert. Implicit products such as `2x(x+4)` become `2*x*(x+4)` only for genuine Mathpix ASCII; LaTeX fallbacks preserve ambiguous notation such as `p(x)`, and mismatched LaTeX/ASCII row counts fall back safely instead of pairing the wrong rows. This release also adds AsciiMath Free-text working, complete multiline operator conversion, Mathpix logarithm-base conversion, and the iPad image fix. The research log retains events across connection loss and records each question's active time; `cli/check_research_log.php` reports gaps, failed deliveries and split traces before analysis. Run the Moodle upgrade after installing it, and do not purge caches or upgrade while a study is running. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, research event logging and its privacy provider, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.

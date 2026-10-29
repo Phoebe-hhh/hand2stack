@@ -100,17 +100,18 @@ final class line_builder {
         }
 
         $asciirows = asciimath::rows($ascii);
-        $nextascii = 0;
-        foreach ($lines as &$line) {
-            if (($line['math'] ?? '') === '' || !isset($asciirows[$nextascii])) {
-                continue;
+        // Mathpix's LaTeX and AsciiMath sometimes split the same block into a
+        // different number of rows. Positional pairing is safe only when both
+        // sides agree; otherwise keep every row's LaTeX-derived STACK value.
+        if ($asciirows && count($asciirows) === count($lines)) {
+            foreach ($lines as $index => &$line) {
+                // The ASCII tab is the OCR value itself. The separately computed
+                // stack value remains the fallback until this AsciiMath is validated.
+                $line['ascii'] = $asciirows[$index];
+                $line['ascii_from_mathpix'] = true;
             }
-            // The ASCII tab is the OCR value itself. The separately computed
-            // stack value remains the preview and fallback until Insert asks
-            // the server to normalize and validate this AsciiMath.
-            $line['ascii'] = $asciirows[$nextascii++];
+            unset($line);
         }
-        unset($line);
         return $lines;
     }
 
@@ -144,6 +145,7 @@ final class line_builder {
             'display_parts' => $displayparts,
             'math' => $math,
             'ascii' => trim($ascii) !== '' ? trim($ascii) : $stack,
+            'ascii_from_mathpix' => false,
             'normalized' => $normalized,
             'stack' => $stack,
             'type' => $metadata['type'],

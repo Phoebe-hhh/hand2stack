@@ -199,6 +199,9 @@ final class document_builder {
             $math = math_extractor::extract($part[0]);
             return $math === '' ? '' : \local_hand2stack\converter\stack_converter::normalize($math);
         }, $mathparts));
+        $asciifrommathpix = $mathparts && count(array_filter($mathparts, static function(array $part): bool {
+            return trim($part[1]) !== '';
+        })) === count($mathparts);
         if ($text === '' && !$maths) {
             return null;
         }
@@ -237,7 +240,9 @@ final class document_builder {
             $source = $maths[0];
         }
         $math = implode(', ', array_map([math_extractor::class, 'extract'], $maths));
-        return line_builder::candidate_line($source, $math, $display, $ascii);
+        $line = line_builder::candidate_line($source, $math, $display, $ascii);
+        $line['ascii_from_mathpix'] = $asciifrommathpix;
+        return $line;
     }
 
     /** The next pair whose LaTeX is this formula's, or no ASCII fallback. */

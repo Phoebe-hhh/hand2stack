@@ -3,14 +3,15 @@
 Hand2STACK was previously known as STACK Input Helper. Releases from 0.3.0 onward
 use the Moodle component name `local_hand2stack` and install in `local/hand2stack`.
 
-## 0.6.3-alpha - 2026-10-29
+## 0.6.2-alpha - 2026-10-30
 
 - Show Mathpix's original AsciiMath in an Algebraic input's ASCII tab, while keeping the LaTeX tab unchanged. On Insert, normalize and validate the current ASCII as STACK before writing it to the answer. The plugin version is advanced so Moodle refreshes the class map for the new AsciiMath row parser during an update.
 - Make AsciiMath's implicit multiplication explicit before inserting it into a STACK answer. Mathpix's `(2x(x+4)-(x^(2)+1))/(x+4)` previously became `(2*x(x+4)-(x^2+1))/(x+4)`, which strict STACK rejected for a missing star; it now becomes `(2*x*(x+4)-(x^2+1))/(x+4)`. This ASCII-only rule keeps ordinary `f(x)`, `g(x)` and `h(x)` calls, while the conservative LaTeX review path remains unchanged.
 - Read Mathpix's parenthesised AsciiMath logarithm base, such as `log_(2)(x-1)(x-3)`. It previously stayed as invalid `log_(2)*(x-1)*(x-3)` after an edit; it now becomes `(log(x-1)/log(2))*(x-3)`. An explicitly grouped product, `log_(2)((x-1)(x-3))`, keeps the whole product inside the logarithm.
-
-## 0.6.2-alpha - 2026-10-29
-
+- Validate untouched Mathpix AsciiMath in the background when the review panel opens, so the **Converted for STACK** preview is the value Insert will use. An Insert immediately after recognition now reuses the same in-flight validation.
+- Keep the source of each review row's ASCII explicit. A row whose ASCII is a LaTeX-derived STACK fallback no longer goes through the AsciiMath-only implicit-product rule on Insert, so ambiguous notation such as `p(x)` remains for the learner to decide.
+- Pair Mathpix AsciiMath rows with LaTeX rows only when both representations contain the same number of rows. If their line splitting differs, every row keeps its LaTeX-derived STACK fallback instead of silently receiving another row's ASCII.
+- Publish alpha tags as GitHub pre-releases rather than marking them as the latest stable release.
 - Convert every integral in a sum or difference of integrals. `\int_{0}^{2} x^{2} d x-\int_{0}^{2} x d x+\frac{2}{3}`, as Mathpix returned a handwritten line, was left as `\int[0]^2*x^2*d*x-\int[0]^2*x*d*x+2/3`: an integral ran on to the next relation or closing bracket, so the terms after its differential made it unrecognisable. Each integral now ends at its own differential when a `+` or `-` follows it, giving `int(x^2,x,0,2)-int(x,x,0,2)+2/3`.
 - Convert every limit, sum, product and `\frac{d}{dx}` derivative in a row, not only the first: `\lim_{x\to 0} x=\lim_{y\to 0} y` left the second as `\lim[y->0]*y` and is now `limit(x,x,0)=limit(y,y,0)`, and `\lim_{x\to 0}(x^2+2x)+\sum_{i=0}^{\infty}(i^2+2i+1)` converts both operators.
 - End a limit, sum, product or derivative at the bracket or argument list around it: `\int_0^1 \sum_{k=1}^{n} x^k dx` gave `int(sum(x^k,x,0,1),k,1,n)` and is now `int(sum(x^k,k,1,n),x,0,1)`. An integral also ends at its differential before a product or quotient: `\int_0^1 x dx \cdot \int_0^1 y dy` is `int(x,x,0,1)*int(y,y,0,1)`.

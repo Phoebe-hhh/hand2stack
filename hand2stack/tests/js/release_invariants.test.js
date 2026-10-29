@@ -29,6 +29,7 @@ const installXml = fs.readFileSync(path.join(pluginRoot, 'db/install.xml'), 'utf
 const versionPhp = fs.readFileSync(path.join(pluginRoot, 'version.php'), 'utf8');
 const installPhp = fs.readFileSync(path.join(pluginRoot, 'db/install.php'), 'utf8');
 const anchorsEndpoint = fs.readFileSync(path.join(pluginRoot, 'anchors.php'), 'utf8');
+const releaseWorkflow = fs.readFileSync(path.resolve(pluginRoot, '../.github/workflows/release.yml'), 'utf8');
 
 test('the public and Moodle component identity is Hand2STACK', () => {
     assert.match(versionPhp, /\$plugin->component = 'local_hand2stack'/);
@@ -280,13 +281,21 @@ test('insert recomputes the current selected value in STACK format', () => {
     assert.match(source, /if \(!line\.edited && line\.stack\) return line\.stack/);
     assert.match(source, /return clientSideStackFallback\(line\.ascii\) \|\| line\.ascii \|\| line\.stack/);
     assert.match(source, /let stackValue = panel\._partialSelection[\s\S]*stackValueForLine\(line\)/);
-    assert.match(source, /stackValue = await postAscii\(ascii\)/);
-    assert.match(source, /if \(line && ascii && !partial\)/);
-    assert.doesNotMatch(source, /if \(line && line\.edited && !partial\)/);
+    assert.match(source, /const validateAsciiLine = line =>/);
+    assert.match(source, /stackValue = await validateAsciiLine\(line\)/);
+    assert.match(source, /if \(line && ascii && !partial && \(line\.asciiFromMathpix \|\| line\.edited\)\)/);
     assert.match(source, /line\._validatedAscii = ascii/);
+    assert.match(source, /if \(line\.asciiFromMathpix && !line\.edited && line\.ascii\)[\s\S]*validateAsciiLine\(line\)/);
+    assert.match(source, /asciiFromMathpix: Boolean\(line\.ascii_from_mathpix\)/);
     // The inserted value is the validated STACK value, exactly as the box shows it.
     assert.match(source, /panel\._stackTextarea\.value = stackValue;[\s\S]*setAnswerValue\(answerBox, stackValue\)/);
     assert.match(source, /updateEditedControls\(\);\s*updateSelectedPreview\(\);/);
+});
+
+test('alpha tags are GitHub pre-releases rather than latest stable releases', () => {
+    assert.match(releaseWorkflow, /if \[\[ "\$GITHUB_REF_NAME" == \*-\* \]\]/);
+    assert.match(releaseWorkflow, /release_kind=\(--prerelease\)/);
+    assert.match(releaseWorkflow, /"\$\{release_kind\[@\]\}"/);
 });
 
 test('edited ASCII is normalized and validated by STACK before insertion', () => {
