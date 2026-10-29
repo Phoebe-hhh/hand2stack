@@ -40,11 +40,20 @@ final class trig_log {
         $offset = 0;
         // Learners editing the STACK text type the same notation without the
         // backslash, e.g. `log_2(x(x-2))`.
-        $pattern = '/(?:\\\\|(?<![A-Za-z\\\\]))log\s*_\s*(?:\{([^{}]+)\}|([A-Za-z0-9]+))\s*/';
+        // Mathpix AsciiMath writes a grouped subscript as `log_(2)`, while
+        // LaTeX and learner edits commonly use `log_{2}` and `log_2`.
+        $pattern = '/(?:\\\\|(?<![A-Za-z\\\\]))log\s*_\s*'
+            . '(?:\{([^{}]+)\}|\(([^()]+)\)|([A-Za-z0-9]+))\s*/';
 
         while (preg_match($pattern, $input, $match, PREG_OFFSET_CAPTURE, $offset)) {
             $start = $match[0][1];
-            $base = $match[1][1] !== -1 ? $match[1][0] : $match[2][0];
+            $base = '';
+            foreach ([1, 2, 3] as $group) {
+                if ($match[$group][1] !== -1) {
+                    $base = $match[$group][0];
+                    break;
+                }
+            }
             $argument = brackets::read_function_argument($input, $start + strlen($match[0][0]));
             if ($argument === null) {
                 $offset = $start + strlen($match[0][0]);

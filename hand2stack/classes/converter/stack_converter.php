@@ -43,6 +43,26 @@ final class stack_converter {
             $input = \Normalizer::normalize($input, \Normalizer::FORM_KC);
         }
         $input = str_replace(['−', '–', '—', '＝'], ['-', '-', '-', '='], $input);
+        $input = str_replace('!=', '#', $input);
+        // Mathpix AsciiMath uses // for a displayed fraction. STACK uses the
+        // ordinary division operator; the grouping already present in the OCR
+        // value preserves its numerator and denominator.
+        $input = str_replace('//', '/', $input);
+        // A continued aligned row such as "=1+sqrt8" is the value on that row,
+        // just as the LaTeX review path has always treated it.
+        $input = preg_replace('/^\s*=\s*/', '', $input);
+        // Mathpix's quoted spans are prose. Preserve logical connectives but
+        // remove labels such as "Answer: " before converting an algebraic row.
+        $input = preg_replace_callback('/"([^"]*)"/', static function(array $match): string {
+            $word = strtolower(trim($match[1]));
+            return in_array($word, ['and', 'or'], true) ? ' ' . $word . ' ' : ' ';
+        }, $input);
+        // `quad` and a leading `:.` are AsciiMath layout/proof marks.
+        $input = preg_replace('/(?<![A-Za-z])quad(?![A-Za-z])/', ' ', $input);
+        $input = preg_replace('/^\s*:\.\s*/', '', $input);
+        // Mathpix may omit brackets around a one-token square-root argument,
+        // including after a coefficient: 2sqrt2 is 2*sqrt(2).
+        $input = preg_replace('/(?<![A-Za-z])sqrt\s*(?!\()([A-Za-z0-9.%]+)/', 'sqrt($1)', $input);
         // A typed {1,2,3} is a set; braces after ^ or _ group, as in LaTeX.
         $stack = [];
         $typed = '';
@@ -58,7 +78,10 @@ final class stack_converter {
                 $typed .= $char;
             }
         }
-        return self::normalize($typed);
+        // Mathpix's AsciiMath permits x(x+1), while strict STACK student input
+        // requires x*(x+1). Do this only for the ASCII path: the LaTeX path
+        // intentionally leaves an ambiguous p(x) for the learner to decide.
+        return tidy::ascii_implicit_products(self::normalize($typed));
     }
 
     /** Convert the mathematics a learner selected, which may include prose. */

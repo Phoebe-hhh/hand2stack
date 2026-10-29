@@ -147,8 +147,8 @@ define([
         };
         const stackValueForLine = line => {
             if (!line) return stackResult || '';
-            if (!line.edited && line.stack) return line.stack;
             if (line._validatedAscii === line.ascii && line._validatedStack) return line._validatedStack;
+            if (!line.edited && line.stack) return line.stack;
             return clientSideStackFallback(line.ascii) || line.ascii || line.stack || '';
         };
         // The Converted for STACK box shows exactly what Insert inserts.
@@ -157,7 +157,8 @@ define([
         };
         const {renderFormatRows, selectFormat} = createFormatRows({
             panel, answerBox, resultLines, getSelectedIndex: () => selectedIndex, lineTracker, logOptions,
-            syncDiagnosticProcess, refreshCandidateLine: index => refreshCandidateLine(index), updateSelectedPreview
+            syncDiagnosticProcess, refreshCandidateLine: index => refreshCandidateLine(index), updateSelectedPreview,
+            clearRequestStatus: () => setRequestStatus(panel)
         });
         panel._asciiTab.disabled = false;
         panel._asciiTab.title = '';
@@ -399,7 +400,10 @@ define([
                     ? panel._partialSelection.value
                     : stackValueForLine(line);
                 const partial = Boolean(panel._partialSelection && panel._partialSelection.value);
-                if (line && line.edited && !partial) {
+                // The ASCII tab is Mathpix's OCR value, not a pre-converted
+                // STACK expression. Always normalize and validate the complete
+                // current ASCII on Insert, whether or not the learner edited it.
+                if (line && ascii && !partial) {
                     const validationStartedAt = Date.now();
                     const logValidation = (valid, stack, error = null) => research.log(answerBox, 'validation_completed', {
                         source: 'h2s_convert',
@@ -410,18 +414,22 @@ define([
                         message: error ? research.clip(error.message, 300) : '',
                         latencyMs: Date.now() - validationStartedAt
                     }, logOptions());
-                    try {
-                        stackValue = await postAscii(ascii);
-                    } catch (error) {
-                        if (panel._insertRequestId === requestId) logValidation(false, '', error);
-                        throw error;
+                    if (line._validatedAscii === ascii && line._validatedStack) {
+                        stackValue = line._validatedStack;
+                    } else {
+                        try {
+                            stackValue = await postAscii(ascii);
+                        } catch (error) {
+                            if (panel._insertRequestId === requestId) logValidation(false, '', error);
+                            throw error;
+                        }
+                        if (panel._insertRequestId !== requestId || selectedIndex !== lineIndex || line.ascii !== ascii) {
+                            return;
+                        }
+                        logValidation(Boolean(stackValue), stackValue);
+                        line._validatedAscii = ascii;
+                        line._validatedStack = stackValue;
                     }
-                    if (panel._insertRequestId !== requestId || selectedIndex !== lineIndex || line.ascii !== ascii) {
-                        return;
-                    }
-                    logValidation(Boolean(stackValue), stackValue);
-                    line._validatedAscii = ascii;
-                    line._validatedStack = stackValue;
                 }
                 if (!stackValue) {
                     throw new Error(config.recognizefailed || 'Conversion failed.');

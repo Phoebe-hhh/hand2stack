@@ -28,7 +28,7 @@ define([
     const {createChangeHighlighter} = ChangeHighlighter;
 
     const createFormatRows = ({panel, answerBox, resultLines, getSelectedIndex, lineTracker, logOptions,
-            syncDiagnosticProcess, refreshCandidateLine, updateSelectedPreview}) => {
+            syncDiagnosticProcess, refreshCandidateLine, updateSelectedPreview, clearRequestStatus}) => {
         let selectedFormat = 'ascii';
         const renderFormatRows = () => {
             panel._formatRows.innerHTML = '';
@@ -146,6 +146,7 @@ define([
                 }
                 syncDiagnosticProcess();
                 window.clearTimeout(line._editTimer);
+                clearRequestStatus();
                 updateEditedControls();
                 refreshCandidateLine(index);
                 updateSelectedPreview();
@@ -161,6 +162,7 @@ define([
                     // that part still in flight must not write it back.
                     panel._partialSelection = null;
                     panel._selectionRequestId = (panel._selectionRequestId || 0) + 1;
+                    clearRequestStatus();
                     line.ascii = field.value;
                     tracker.input();
                     line.latex = asciiToLatexPreview(line.ascii);

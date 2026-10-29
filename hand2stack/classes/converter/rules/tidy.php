@@ -18,6 +18,35 @@ namespace local_hand2stack\converter\rules;
 defined('MOODLE_INTERNAL') || die();
 
 final class tidy {
+    /**
+     * Make AsciiMath's implicit products explicit for STACK student input.
+     *
+     * Mathpix writes a product such as x(x+1) without a multiplication sign.
+     * That notation is valid AsciiMath but, with STACK's usual strict student
+     * input settings, x(x+1) is rejected as a missing star. Keep the ordinary
+     * one-letter function names f, g and h, and all named functions, as calls;
+     * every other short identifier immediately before brackets is a factor.
+     *
+     * This is deliberately used only by the AsciiMath entry point. LaTeX OCR
+     * still leaves an ambiguous p(x) or a(x+1) for the learner to decide.
+     *
+     * @param string $input Normalized AsciiMath.
+     * @return string STACK input with explicit products.
+     */
+    public static function ascii_implicit_products(string $input): string {
+        $functions = ['f', 'g', 'h', 'min', 'max', 'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+            'sinh', 'cosh', 'tanh', 'asin', 'acos', 'atan', 'atan2', 'log', 'ln', 'log10', 'sqrt', 'nthroot', 'exp',
+            'abs', 'floor', 'ceiling', 'signum', 'mod', 'gcd', 'lcm', 'realpart', 'imagpart',
+            'limit', 'diff', 'int', 'sum', 'product', 'matrix', 'determinant', 'binomial', 'lg', 'not', 'elementp'];
+
+        return preg_replace_callback('/(?<![\\\\A-Za-z0-9])([a-zA-Z]+(?:10|2)?)\(/',
+            static function(array $match) use ($functions): string {
+                return in_array($match[1], $functions, true) || strlen($match[1]) >= 3
+                    ? $match[0]
+                    : $match[1] . '*(';
+            }, $input);
+    }
+
     /** Drop brackets that carry no meaning and restore calls such as f(x). */
     public static function beautify(string $input): string {
         $s = $input;

@@ -36,7 +36,7 @@ final class line_builder {
     }
 
     /** Rows of a bare LaTeX formula: every row is maths; prose is only \\text{...}. */
-    public static function build_math_lines(string $latex): array {
+    public static function build_math_lines(string $latex, string $ascii = ''): array {
         $latex = trim($latex);
         if ($latex === '') {
             return [];
@@ -99,6 +99,18 @@ final class line_builder {
             $lines[] = $line;
         }
 
+        $asciirows = asciimath::rows($ascii);
+        $nextascii = 0;
+        foreach ($lines as &$line) {
+            if (($line['math'] ?? '') === '' || !isset($asciirows[$nextascii])) {
+                continue;
+            }
+            // The ASCII tab is the OCR value itself. The separately computed
+            // stack value remains the preview and fallback until Insert asks
+            // the server to normalize and validate this AsciiMath.
+            $line['ascii'] = $asciirows[$nextascii++];
+        }
+        unset($line);
         return $lines;
     }
 
@@ -119,7 +131,7 @@ final class line_builder {
     }
 
     /** The review row for $source whose maths is $math. */
-    public static function candidate_line(string $source, string $math, array $displayparts): array {
+    public static function candidate_line(string $source, string $math, array $displayparts, string $ascii = ''): array {
         $metadata = self::classify_candidate($source, $math);
         $stack = $math === '' ? '' : stack_converter::normalize($math);
         // normalize() already resolves an approximation; converting the value
@@ -131,7 +143,7 @@ final class line_builder {
             'display' => self::display_latex($source),
             'display_parts' => $displayparts,
             'math' => $math,
-            'ascii' => $stack,
+            'ascii' => trim($ascii) !== '' ? trim($ascii) : $stack,
             'normalized' => $normalized,
             'stack' => $stack,
             'type' => $metadata['type'],

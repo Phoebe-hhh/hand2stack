@@ -22,18 +22,20 @@ defined('MOODLE_INTERNAL') || die();
 
 final class document_builder {
     /** Build every visible document row, retaining prose around its maths. */
-    public static function build_document_lines(string $text, string $latex = ''): array {
+    public static function build_document_lines(string $text, string $latex = '', array $asciimath = []): array {
         $text = trim(str_replace(["\r\n", "\r"], "\n", $text));
         if ($text === '') {
-            return line_builder::build_math_lines($latex);
+            $next = 0;
+            return line_builder::build_math_lines($latex, self::matching_ascii($latex, $asciimath, $next));
         }
 
-        $lines = self::build_document_rows($text);
+        $lines = self::build_document_rows($text, $asciimath);
         $hasmath = array_filter($lines, static function(array $line): bool {
             return $line['math'] !== '';
         });
         if (!$hasmath && trim($latex) !== '') {
-            return line_builder::build_math_lines($latex);
+            $next = 0;
+            return line_builder::build_math_lines($latex, self::matching_ascii($latex, $asciimath, $next));
         }
         return $lines;
     }
@@ -42,9 +44,10 @@ final class document_builder {
      * One review row per document row. Mathpix decides what is prose: text
      * outside the formula delimiters is shown as text and never converted.
      */
-    public static function build_document_rows(string $text): array {
+    public static function build_document_rows(string $text, array $asciimath = []): array {
         $lines = [];
         $row = [];
+        $nextascii = 0;
         $flush = static function() use (&$row, &$lines): void {
             $line = self::document_row_line($row);
             if ($line !== null) {
@@ -55,13 +58,14 @@ final class document_builder {
         foreach (self::document_segments($text) as [$type, $value]) {
             if ($type === 'display') {
                 $flush();
-                foreach (line_builder::build_math_lines($value) as $line) {
+                $ascii = self::matching_ascii($value, $asciimath, $nextascii);
+                foreach (line_builder::build_math_lines($value, $ascii) as $line) {
                     $lines[] = $line;
                 }
                 continue;
             }
             if ($type === 'inline') {
-                $row[] = ['math', $value];
+                $row[] = ['math', $value, self::matching_ascii($value, $asciimath, $nextascii)];
                 continue;
             }
             $pieces = explode("\n", $value);
@@ -174,11 +178,27 @@ final class document_builder {
         $text = trim(implode('', array_map(static function(array $part): string {
             return $part[0] === 'text' ? $part[1] : '';
         }, $parts)));
-        $maths = array_values(array_filter(array_map(static function(array $part): string {
-            return $part[0] === 'math' ? line_builder::clean_line_latex($part[1]) : '';
-        }, $parts), static function(string $math): bool {
-            return $math !== '';
+        $mathparts = array_values(array_filter(array_map(static function(array $part): array {
+            $math = $part[0] === 'math' ? line_builder::clean_line_latex($part[1]) : '';
+            return [$math, $part[2] ?? ''];
+        }, $parts), static function(array $part): bool {
+            return $part[0] !== '';
         }));
+        $maths = array_map(static function(array $part): string {
+            return $part[0];
+        }, $mathparts);
+        /*
+         * Keep every Mathpix AsciiMath formula on a mixed row. If Mathpix did
+         * not provide one of them, only that formula falls back to the existing
+         * LaTeX conversion instead of making the whole row lose its OCR ASCII.
+         */
+        $ascii = implode(',', array_map(static function(array $part): string {
+            if (trim($part[1]) !== '') {
+                return trim($part[1]);
+            }
+            $math = math_extractor::extract($part[0]);
+            return $math === '' ? '' : \local_hand2stack\converter\stack_converter::normalize($math);
+        }, $mathparts));
         if ($text === '' && !$maths) {
             return null;
         }
@@ -217,6 +237,22 @@ final class document_builder {
             $source = $maths[0];
         }
         $math = implode(', ', array_map([math_extractor::class, 'extract'], $maths));
-        return line_builder::candidate_line($source, $math, $display);
+        return line_builder::candidate_line($source, $math, $display, $ascii);
+    }
+
+    /** The next pair whose LaTeX is this formula's, or no ASCII fallback. */
+    private static function matching_ascii(string $latex, array $pairs, int &$next): string {
+        $wanted = preg_replace('/\s+/', '', trim($latex));
+        for ($i = $next, $count = count($pairs); $i < $count; $i++) {
+            if (!is_array($pairs[$i]) || !isset($pairs[$i][0], $pairs[$i][1])) {
+                continue;
+            }
+            if (preg_replace('/\s+/', '', trim((string)$pairs[$i][0])) !== $wanted) {
+                continue;
+            }
+            $next = $i + 1;
+            return trim((string)$pairs[$i][1]);
+        }
+        return '';
     }
 }

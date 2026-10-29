@@ -276,10 +276,13 @@ test('LaTeX review remains black while ASCII edits use blue diff highlighting', 
 
 test('insert recomputes the current selected value in STACK format', () => {
     assert.match(source, /const stackValueForLine = line =>/);
+    assert.match(source, /if \(line\._validatedAscii === line\.ascii && line\._validatedStack\) return line\._validatedStack/);
     assert.match(source, /if \(!line\.edited && line\.stack\) return line\.stack/);
     assert.match(source, /return clientSideStackFallback\(line\.ascii\) \|\| line\.ascii \|\| line\.stack/);
     assert.match(source, /let stackValue = panel\._partialSelection[\s\S]*stackValueForLine\(line\)/);
     assert.match(source, /stackValue = await postAscii\(ascii\)/);
+    assert.match(source, /if \(line && ascii && !partial\)/);
+    assert.doesNotMatch(source, /if \(line && line\.edited && !partial\)/);
     assert.match(source, /line\._validatedAscii = ascii/);
     // The inserted value is the validated STACK value, exactly as the box shows it.
     assert.match(source, /panel\._stackTextarea\.value = stackValue;[\s\S]*setAnswerValue\(answerBox, stackValue\)/);

@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quiz>
+  <!--
+    Hand2STACK Algebraic input test questions.
+    Import with: Question bank > Import > Moodle XML format.
+  -->
+
+  <question type="stack">
+    <name>
+      <text>H2S Algebraic 01 - 一次方程</text>
+    </name>
+    <questiontext format="html">
+      <text><![CDATA[
+        <p>解方程</p>
+        <p>\[3(x-2)+4=2x+7.\]</p>
+        <p>请将答案写成方程，例如 \(x=1\)。</p>
+        <p>[[input:ans1]] [[validation:ans1]]</p>
+      ]]></text>
+    </questiontext>
+    <generalfeedback format="html">
+      <text><![CDATA[<p>正确答案是 \(x=9\)。</p>]]></text>
+    </generalfeedback>
+    <defaultgrade>1</defaultgrade>
+    <penalty>0.1</penalty>
+    <hidden>0</hidden>
+    <questionvariables>
+      <text>ta1:x=9;</text>
+    </questionvariables>
+    <specificfeedback format="html">
+      <text>[[feedback:prt1]]</text>
+    </specificfeedback>
+    <questionnote format="html">
+      <text>H2S-algebraic-linear-equation-v1</text>
+    </questionnote>
+    <input>
+      <name>ans1</name>
+      <type>algebraic</type>
+      <tans>ta1</tans>
+      <boxsize>24</boxsize>
+      <strictsyntax>1</strictsyntax>
+      <insertstars>0</insertstars>
+      <forbidfloat>1</forbidfloat>
+      <mustverify>1</mustverify>
+      <showvalidation>1</showvalidation>
+    </input>
+  </question>
+
+  <question type="stack">
+    <name>
+      <text>H2S Algebraic 02 - 分式化简</text>
+    </name>
+    <questiontext format="html">
+      <text><![CDATA[
+        <p>化简</p>
+        <p>\[\frac{x^2-1}{x+1}.\]</p>
+        <p>[[input:ans1]] [[validation:ans1]]</p>
+      ]]></text>
+    </questiontext>
+    <generalfeedback format="html">
+      <text><![CDATA[<p>分子可以分解为 \(x^2-1=(x-1)(x+1)\)，所以答案是 \(x-1\)。</p>]]></text>
+    </generalfeedback>
+    <defaultgrade>1</defaultgrade>
+    <penalty>0.1</penalty>
+    <hidden>0</hidden>
+    <questionvariables>
+      <text>ta1:x-1;</text>
+    </questionvariables>
+    <specificfeedback format="html">
+      <text>[[feedback:prt1]]</text>
+    </specificfeedback>
+    <questionnote format="html">
+      <text>H2S-algebraic-fraction-v1</text>
+    </questionnote>
+    <input>
+      <name>ans1</name>
+      <type>algebraic</type>
+      <tans>ta1</tans>
+      <boxsize>24</boxsize>
+      <strictsyntax>1</strictsyntax>
+      <insertstars>0</insertstars>
+      <forbidfloat>1</forbidfloat>
+      <mustverify>1</mustverify>
+      <showvalidation>1</showvalidation>
+    </input>
+  </question>
+
+  <question type="stack">
+    <name>
+      <text>H2S Algebraic 03 - 根式化简</text>
+    </name>
+    <questiontext format="html">
+      <text><![CDATA[
+        <p>精确化简</p>
+        <p>\[\sqrt{8}+\sqrt{18}.\]</p>
+        <p>不要使用小数近似值。</p>
+        <p>[[input:ans1]] [[validation:ans1]]</p>
+      ]]></text>
+    </questiontext>
+    <generalfeedback format="html">
+      <text><![CDATA[<p>\(\sqrt8=2\sqrt2\)，\(\sqrt{18}=3\sqrt2\)，所以答案是 \(5\sqrt2\)。</p>]]></text>
+    </generalfeedback>
+    <defaultgrade>1</defaultgrade>
+    <penalty>0.1</penalty>
+    <hidden>0</hidden>
+    <questionvariables>
+      <text>ta1:5*sqrt(2);</text>
+    </questionvariables>
+    <specificfeedback format="html">
+      <text>[[feedback:prt1]]</text>
+    </specificfeedback>
+    <questionnote format="html">
+      <text>H2S-algebraic-roots-v1</text>
+    </questionnote>
+    <input>
+      <name>ans1</name>
+      <type>algebraic</type>
+      <tans>ta1</tans>
+      <boxsize>24</boxsize>
+      <strictsyntax>1</strictsyntax>
+      <insertstars>0</insertstars>
+      <forbidfloat>1</forbidfloat>
+      <mustverify>1</mustverify>
+      <showvalidation>1</showvalidation>
+    </input>
+  </question>
+
+  <question type="stack">
+    <name>
+      <text>H2S Algebraic 04 - 展开并化简</text>
+    </name>
+    <questiontext format="html">
+      <text><![CDATA[
+        <p>展开并化简</p>
+        <p>\[2(x-3)^2-(x+1)(x-1).\]</p>
+        <p>[[input:ans1]] [[validation:ans1]]</p>
+      ]]></text>
+    </questiontext>
+    <generalfeedback format="html">
+      <text><![CDATA[<p>化简结果是 \(x^2-12x+19\)。</p>]]></text>
+    </generalfeedback>
+    <defaultgrade>1</defaultgrade>
+    <penalty>0.1</penalty>
+    <hidden>0</hidden>
+    <questionvariables>
+      <text>ta1:x^2-12*x+19;</text>
+    </questionvariables>
+    <specificfeedback format="html">
+      <text>[[feedback:prt1]]</text>
+    </specificfeedback>
+    <questionnote format="html">
+      <text>H2S-algebraic-expand-v1</text>
+    </questionnote>
+    <input>
+      <name>ans1</name>
+      <type>algebraic</type>
+      <tans>ta1</tans>
+      <boxsize>24</boxsize>
+      <strictsyntax>1</strictsyntax>
+      <insertstars>0</insertstars>
+      <forbidfloat>1</forbidfloat>
+      <mustverify>1</mustverify>
+      <showvalidation>1</showvalidation>
+    </input>
+  </question>
+
+  <question type="stack">
+    <name>
+      <text>H2S Algebraic 05 - 分式与根式方程</text>
+    </name>
+    <questiontext format="html">
+      <text><![CDATA[
+        <p>精确求解方程</p>
+        <p>\[\frac{x}{3}+\sqrt2=5.\]</p>
+        <p>请将答案写成方程。</p>
+        <p>[[input:ans1]] [[validation:ans1]]</p>
+      ]]></text>
+    </questiontext>
+    <generalfeedback format="html">
+      <text><![CDATA[<p>正确答案是 \(x=15-3\sqrt2\)。</p>]]></text>
+    </generalfeedback>
+    <defaultgrade>1</defaultgrade>
+    <penalty>0.1</penalty>
+    <hidden>0</hidden>
+    <questionvariables>
+      <text>ta1:x=15-3*sqrt(2);</text>
+    </questionvariables>
+    <specificfeedback format="html">
+      <text>[[feedback:prt1]]</text>
+    </specificfeedback>
+    <questionnote format="html">
+      <text>H2S-algebraic-fraction-root-equation-v1</text>
+    </questionnote>
+    <input>
+      <name>ans1</name>
+      <type>algebraic</type>
+      <tans>ta1</tans>
+      <boxsize>28</boxsize>
+      <strictsyntax>1</strictsyntax>
+      <insertstars>0</insertstars>
+      <forbidfloat>1</forbidfloat>
+      <mustverify>1</mustverify>
+      <showvalidation>1</showvalidation>
+    </input>
+  </question>
+
+  <question type="stack">
+    <name>
+      <text>H2S Algebraic 06 - 不等于条件</text>
+    </name>
+    <questiontext format="html">
+      <text><![CDATA[
+        <p>为了使下面的式子有定义，请写出 \(x\) 需要满足的限制条件：</p>
+        <p>\[\frac{x+2}{x-2}\]</p>
+        <p>请将答案写成“不等于”的形式。</p>
+        <p>[[input:ans1]] [[validation:ans1]]</p>
+      ]]></text>
+    </questiontext>
+    <generalfeedback format="html">
+      <text><![CDATA[<p>分母不能为零，所以 \(x\ne2\)。</p>]]></text>
+    </generalfeedback>
+    <defaultgrade>1</defaultgrade>
+    <penalty>0.1</penalty>
+    <hidden>0</hidden>
+    <questionvariables>
+      <text>ta1:x#2;</text>
+    </questionvariables>
+    <specificfeedback format="html">
+      <text>[[feedback:prt1]]</text>
+    </specificfeedback>
+    <questionnote format="html">
+      <text>H2S-algebraic-not-equal-v1</text>
+    </questionnote>
+    <input>
+      <name>ans1</name>
+      <type>algebraic</type>
+      <tans>ta1</tans>
+      <boxsize>24</boxsize>
+      <strictsyntax>1</strictsyntax>
+      <insertstars>0</insertstars>
+      <forbidfloat>1</forbidfloat>
+      <mustverify>1</mustverify>
+      <showvalidation>1</showvalidation>
+    </input>
+  </question>
+</quiz>

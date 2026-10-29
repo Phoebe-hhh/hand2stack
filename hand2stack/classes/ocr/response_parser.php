@@ -49,7 +49,8 @@ final class response_parser {
         // The data/latex field may contain only the first formula in a page.
         // Mathpix's text field contains the complete document, including prose
         // and every maths line, so use it for the algebraic review rows.
-        $lines = document_builder::build_document_lines($rawtext, $rawlatex);
+        $asciimath = self::asciimath_by_latex($data);
+        $lines = document_builder::build_document_lines($rawtext, $rawlatex, $asciimath);
         $stack = self::recommended_stack($lines);
         if ($stack === '') {
             $stack = stack_converter::normalize_selection($rawlatex);
@@ -59,7 +60,7 @@ final class response_parser {
             'raw_latex' => $rawlatex,
             'raw_asciimath' => $rawascii,
             'raw_text' => $rawtext,
-            'freetext' => freetext_builder::build($rawtext, $rawascii, $rawlatex, self::asciimath_by_latex($data)),
+            'freetext' => freetext_builder::build($rawtext, $rawascii, $rawlatex, $asciimath),
             'stack' => $stack,
             'text' => $stack,
             'lines' => $lines,

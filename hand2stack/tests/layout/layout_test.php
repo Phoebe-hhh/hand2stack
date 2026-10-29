@@ -190,6 +190,33 @@ final class layout_test extends \advanced_testcase {
         $this->assertSame(trim($expected), $result['freetext']);
     }
 
+    /** Algebraic review shows Mathpix's own AsciiMath, while keeping STACK separate. */
+    public function test_algebraic_lines_keep_mathpix_asciimath(): void {
+        $aligned = file_get_contents(__DIR__ . '/fixtures/mathpix_aligned_block.json');
+        $result = response_parser::parse($aligned, 0, '', 200);
+        $this->assertSame(
+            ['3(x-2)+4=2x+7', '3x-6+4=2x+7', '3x-2=2x+7', 'x=9'],
+            array_column($result['lines'], 'ascii')
+        );
+        $this->assertSame(
+            ['3*(x-2)+4=2*x+7', '3*x-6+4=2*x+7', '3*x-2=2*x+7', 'x=9'],
+            array_column($result['lines'], 'stack')
+        );
+
+        $page = file_get_contents(__DIR__ . '/fixtures/mathpix_prose_and_blocks.json');
+        $result = response_parser::parse($page, 0, '', 200);
+        $mathlines = array_values(array_filter($result['lines'], static function(array $line): bool {
+            return $line['math'] !== '';
+        }));
+        // The raw double slash and compact roots prove this is Mathpix ASCII,
+        // not the plugin's already-converted STACK value.
+        $this->assertSame('f(x)=(x^(2)-1)//(x+1)+sqrt(x^(2)+4)', $mathlines[0]['ascii']);
+        $this->assertSame('f(x)=(x^2-1)/(x+1)+sqrt(x^2+4)', $mathlines[0]['stack']);
+        $this->assertSame('x=2,x=2', $mathlines[4]['ascii']);
+        $this->assertSame('=1+sqrt8', $mathlines[6]['ascii']);
+        $this->assertSame('1+sqrt(8)', $mathlines[6]['stack']);
+    }
+
     public static function mathpix_page_provider(): array {
         return [
             'prose with inline maths and display blocks' => ['prose_and_blocks'],

@@ -447,9 +447,39 @@ final class stack_converter_test extends \advanced_testcase {
             'typed set' => ['{1,2,3}', '{1,2,3}'],
             'adjacent groups' => ['(x+1)(x-1)', '(x+1)*(x-1)'],
             'number before group' => ['2(x+1)', '2*(x+1)'],
+            'Mathpix variable before group becomes a STACK product' => ['x(x+1)', 'x*(x+1)'],
+            'Mathpix product chain becomes valid strict STACK input' => [
+                '(2x(x+4)-(x^(2)+1))/(x+4)',
+                '(2*x*(x+4)-(x^2+1))/(x+4)',
+            ],
+            'ordinary one-letter function stays a function' => ['f(x+1)', 'f(x+1)'],
             'absolute value' => ['|x-1|', 'abs(x-1)'],
             'unicode minus' => ['x=−1', 'x=-1'],
-            'logarithm base with nested argument' => ['log_2(x(x-2))=3', '(log(x(x-2))/log(2))=3'],
+            'Mathpix displayed fraction' => [
+                'f(x)=(x^(2)-1)//(x+1)+sqrt(x^(2)+4)',
+                'f(x)=(x^2-1)/(x+1)+sqrt(x^2+4)',
+            ],
+            'Mathpix compact square root' => ['=1+sqrt8', '1+sqrt(8)'],
+            'Mathpix compact root after a coefficient' => ['=1+2sqrt2', '1+2*sqrt(2)'],
+            'Mathpix layout word' => ['quad f(2)>g(1)', 'f(2)>g(1)'],
+            'Mathpix quoted connective' => ['x=2quad" or "quad x=3', 'x=2 or x=3'],
+            'Mathpix not equal after another expression' => [
+                'f(x)=x-1+sqrt(x^(2)+4),quad x!=-1',
+                'f(x)=x-1+sqrt(x^2+4),x#-1',
+            ],
+            'logarithm base with nested argument' => ['log_2(x(x-2))=3', '(log(x*(x-2))/log(2))=3'],
+            'Mathpix parenthesized logarithm base' => [
+                'log_(2)(x-1)(x-3)',
+                '(log(x-1)/log(2))*(x-3)',
+            ],
+            'Mathpix parenthesized logarithm base with an equation' => [
+                'log_(2)(x-1)(x-3)=3',
+                '(log(x-1)/log(2))*(x-3)=3',
+            ],
+            'Mathpix logarithm of an explicitly grouped product' => [
+                'log_(2)((x-1)(x-3))',
+                '(log((x-1)*(x-3))/log(2))',
+            ],
             'logarithm base inside a word stays one name' => ['catalog_2', 'catalog_2'],
             'logical interval with implicit multiplication' => [
                 '1<=x and x<=3*2x',
