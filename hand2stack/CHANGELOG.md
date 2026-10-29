@@ -3,7 +3,7 @@
 Hand2STACK was previously known as STACK Input Helper. Releases from 0.3.0 onward
 use the Moodle component name `local_hand2stack` and install in `local/hand2stack`.
 
-## Unreleased
+## 0.6.2-alpha - 2026-10-29
 
 - Convert every integral in a sum or difference of integrals. `\int_{0}^{2} x^{2} d x-\int_{0}^{2} x d x+\frac{2}{3}`, as Mathpix returned a handwritten line, was left as `\int[0]^2*x^2*d*x-\int[0]^2*x*d*x+2/3`: an integral ran on to the next relation or closing bracket, so the terms after its differential made it unrecognisable. Each integral now ends at its own differential when a `+` or `-` follows it, giving `int(x^2,x,0,2)-int(x,x,0,2)+2/3`.
 - Convert every limit, sum, product and `\frac{d}{dx}` derivative in a row, not only the first: `\lim_{x\to 0} x=\lim_{y\to 0} y` left the second as `\lim[y->0]*y` and is now `limit(x,x,0)=limit(y,y,0)`, and `\lim_{x\to 0}(x^2+2x)+\sum_{i=0}^{\infty}(i^2+2i+1)` converts both operators.

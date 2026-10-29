@@ -4,15 +4,15 @@
 
 Hand2STACK is a Moodle local plugin that adds handwriting, image, and mobile-camera input to STACK answer fields. Students review the recognized mathematics before inserting the converted STACK/Maxima expression.
 
-> **Current pilot release:** [v0.6.1-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.6.1-alpha)
+> **Current pilot release:** [v0.6.2-alpha](https://github.com/Phoebe-hhh/hand2stack/releases/tag/v0.6.2-alpha)
 
 ## Download
 
 Moodle administrators should download the prepared plugin package from the release assets:
 
-**[Download hand2stack-v0.6.1-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.6.1-alpha/hand2stack-v0.6.1-alpha.zip)**
+**[Download hand2stack-v0.6.2-alpha.zip](https://github.com/Phoebe-hhh/hand2stack/releases/download/v0.6.2-alpha/hand2stack-v0.6.2-alpha.zip)**
 
-Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.6.1-alpha.zip` and contains the plugin root folder `hand2stack/`.
+Do not upload GitHub's automatically generated **Source code** archives to Moodle. The correct package is named `hand2stack-v0.6.2-alpha.zip` and contains the plugin root folder `hand2stack/`.
 
 ## Features
 
@@ -115,4 +115,4 @@ See the [plugin README](hand2stack/README.md) for development details, configura
 
 ## Status
 
-Version `0.6.1-alpha` is intended for controlled pilot testing. It prepares the research log for a study: each quiz has an input mode for a keyboard condition, every event carries the study condition, teachers can download a quiz's log, and the browser keeps each event until the server has stored it, so a lost connection, a reload or a closed tab no longer loses data. Each question's active time is recorded one question at a time, and `cli/check_research_log.php` reports gaps, failed deliveries and split traces before analysis. New in 0.6.1: each quiz can log identified for everyday use, finishing a quiz now ends every question's trace (by the server for questions the browser could not see), and the step where STACK fills the final answer from the working is logged. Handwriting now stays on the canvas until the quiz is finished. Run the Moodle upgrade after installing it, and do not purge caches or upgrade while a study is running. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, research event logging and its privacy provider, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+Version `0.6.2-alpha` is intended for controlled pilot testing. It prepares the research log for a study: each quiz has an input mode for a keyboard condition, every event carries the study condition, teachers can download a quiz's log, and the browser keeps each event until the server has stored it, so a lost connection, a reload or a closed tab no longer loses data. Each question's active time is recorded one question at a time, and `cli/check_research_log.php` reports gaps, failed deliveries and split traces before analysis. New in 0.6.2: Free-text working shows each formula as the learner wrote it, in the AsciiMath Mathpix returns (a definite integral is no longer shown as `int(..,x,0,2)`), with displayed formulas one row per line; the conversion for algebraic answers leaves notation with more than one reading as written instead of guessing (an unbracketed limit or sum before a `+`, a letter before brackets, `f^{-1}(x)`), and converts every integral, limit and sum in a row; and an uploaded image under a Free-text answer is no longer blank on iPad. Since 0.6.1, each quiz can log identified for everyday use and finishing a quiz ends every question's trace. Run the Moodle upgrade after installing it, and do not purge caches or upgrade while a study is running. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, research event logging and its privacy provider, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.

@@ -73,7 +73,7 @@ x = -1
 
 the plugin displays each recognized line separately and waits for the student to select one. The selected line is then converted to STACK syntax in the editable preview before insertion. A candidate is never treated as an answer merely because it is the last line.
 
-For a STACK 4.13 or later free-text input, the workflow changes automatically: the plugin keeps the complete Mathpix document, converts delimited mathematics to displayed AsciiMath while retaining surrounding prose, and presents the source image beside one editable transcription. Edits remain synchronized with the hidden STACK answer field; no answer-line selector is shown. Algebraic inputs continue to use the line-selection workflow above.
+For a STACK 4.13 or later free-text input, the workflow changes automatically: the plugin keeps the complete Mathpix document, writes each delimited formula in the AsciiMath Mathpix returns for it while retaining surrounding prose (a displayed formula as an `[[ascii]]` block, one row per line, and a row that opens with prose, such as `Answer: 4`, outside the block, where STACK's `[[extractor]]` finds it), and presents the source image beside one editable transcription. Edits remain synchronized with the hidden STACK answer field; no answer-line selector is shown. Algebraic inputs continue to use the line-selection workflow above.
 
 Lay out a Free-text question with the input, its validation and any `[[ascii]]` preview one after another, not inside STACK's side-by-side `<div class="free-text-container">`:
 
@@ -267,8 +267,8 @@ amd/src/modes/freetext/      review of a Free-text input's working
 Update `version.php` and `CHANGELOG.md`, commit the change to `main`, and push a matching version tag:
 
 ```bash
-git tag v0.6.1-alpha
-git push origin v0.6.1-alpha
+git tag v0.6.2-alpha
+git push origin v0.6.2-alpha
 ```
 
 The GitHub Actions workflow then runs the JavaScript tests, rebuilds `amd/build/` and fails if it differs from the committed files, checks PHP syntax, and checks that the tag matches `$plugin->release` and that `$plugin->version` is greater than the previous tag's. It then creates a GitHub Release containing:
@@ -284,5 +284,5 @@ The workflow refuses to publish if the tag does not match `$plugin->release` in 
 Current version:
 
 ```text
-0.6.1-alpha
+0.6.2-alpha
 ```
