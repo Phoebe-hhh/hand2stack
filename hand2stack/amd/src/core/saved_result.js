@@ -107,16 +107,8 @@ define([], function() {
         }
     };
 
-    const compressSourceImage = sourceUrl => new Promise(resolve => {
-        if (!sourceUrl) {
-            resolve('');
-            return;
-        }
-        if (savedJpegs.has(sourceUrl)) {
-            savedJpegs.delete(sourceUrl);
-            resolve(sourceUrl);
-            return;
-        }
+    // An uploaded image read into an <img> and shrunk.
+    const loadAndShrink = sourceUrl => new Promise(resolve => {
         const image = new Image();
         image.onload = () => {
             // Draw only once the image is decoded: WebKit may otherwise draw nothing.
@@ -132,6 +124,41 @@ define([], function() {
         image.onerror = () => resolve('');
         image.src = sourceUrl;
     });
+
+    // Uploaded images being shrunk for saving, by the URL the panel shows.
+    const preparedImages = new Map();
+
+    // Shrink an uploaded image for saving as soon as it is chosen, while it
+    // is recognized, decoded straight from the file. An image first shown in
+    // an <img> and drawn after the result came back was sometimes saved blank
+    // on iPad Safari, and a Check pressed soon after could catch it unsaved.
+    const prepareSourceImage = (sourceUrl, file) => {
+        if (!sourceUrl || !file) return;
+        const shrink = typeof window.createImageBitmap === 'function'
+            ? window.createImageBitmap(file).then(bitmap => {
+                try {
+                    return toSavedJpeg(bitmap, bitmap.width, bitmap.height);
+                } finally {
+                    if (typeof bitmap.close === 'function') bitmap.close();
+                }
+            }).catch(() => loadAndShrink(sourceUrl))
+            : loadAndShrink(sourceUrl);
+        preparedImages.set(sourceUrl, shrink);
+    };
+
+    const compressSourceImage = sourceUrl => {
+        if (!sourceUrl) return Promise.resolve('');
+        if (savedJpegs.has(sourceUrl)) {
+            savedJpegs.delete(sourceUrl);
+            return Promise.resolve(sourceUrl);
+        }
+        if (preparedImages.has(sourceUrl)) {
+            const prepared = preparedImages.get(sourceUrl);
+            preparedImages.delete(sourceUrl);
+            return prepared;
+        }
+        return loadAndShrink(sourceUrl);
+    };
 
     const saveRecognitionResult = (answerBox, result) => {
         if (!answerBox || !answerBox.name) return;
@@ -192,5 +219,5 @@ define([], function() {
         writeSavedResult(key, Object.assign({}, drawing, {savedAt: Date.now()}), savedResultKey(answerBox));
     };
 
-    return {loadSavedResult, saveRecognitionResult, saveFreeTextWorking, loadSavedStrokes, saveStrokes, snapshotCanvas};
+    return {loadSavedResult, saveRecognitionResult, saveFreeTextWorking, loadSavedStrokes, saveStrokes, snapshotCanvas, prepareSourceImage};
 });

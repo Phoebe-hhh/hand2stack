@@ -78,3 +78,35 @@ test('saving strokes over quota drops other boxes’ results, never this box’s
     assert.ok(!session.items.has(other));
     assert.ok(load(session).loadSavedStrokes(box('q12:1_ans1')));
 });
+
+test('an uploaded image is shrunk from the file as soon as it is chosen, not read back from an <img>', async () => {
+    const session = storage();
+    const drawn = [];
+    let exported;
+    vm.runInNewContext(source, {
+        window: {
+            sessionStorage: session,
+            createImageBitmap: file => Promise.resolve({width: 3000, height: 2000, file, close() {
+                this.closed = true;
+            }}),
+        },
+        document: {
+            createElement: () => ({
+                getContext: () => ({fillRect() {}, drawImage: (bitmap, x, y, w, h) => drawn.push([bitmap.file, w, h])}),
+                toDataURL: type => 'data:' + type + ';base64,SHRUNK',
+            }),
+        },
+        Image: function() {
+            throw new Error('the upload must not be loaded into an <img>');
+        },
+        define: (deps, factory) => {
+            exported = factory();
+        }
+    });
+    exported.prepareSourceImage('blob:photo', 'photo.png');
+    // The recognition comes back later and saves the result with that image.
+    exported.saveRecognitionResult({name: 'q12:1_working'}, {sourceUrl: 'blob:photo'});
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(drawn, [['photo.png', 1600, 1067]]);
+    assert.equal(exported.loadSavedResult({name: 'q12:1_working'}).sourceUrl, 'data:image/jpeg;base64,SHRUNK');
+});

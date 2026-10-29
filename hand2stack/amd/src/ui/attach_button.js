@@ -34,7 +34,7 @@ define([
     const {isFreeTextInput, captureAnswerAnchor} = StackInputs;
     const {logRecognitionFailure, research} = Research;
     const {postImage, createMobileSession, fetchSessionResult} = Api;
-    const {loadSavedResult} = SavedResult;
+    const {loadSavedResult, prepareSourceImage} = SavedResult;
     const {icons, setIconButtonLabel, paintIconButton, createIconButton} = Icons;
     const {createResultPanel, setRequestStatus} = ResultPanel;
     const {updateResultPanel} = ResultView;
@@ -142,6 +142,7 @@ define([
                 image: {mime: file.type || '', bytes: file.size || 0}
             }, {modality: source});
             const sourceUrl = URL.createObjectURL(file);
+            prepareSourceImage(sourceUrl, file);
             button.disabled = true;
             setIconButtonLabel(button, config.uploading || 'Recognizing...');
             setRequestStatus(resultPanel);
