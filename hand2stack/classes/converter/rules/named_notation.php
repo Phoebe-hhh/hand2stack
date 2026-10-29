@@ -29,7 +29,8 @@ final class named_notation {
         $s = preg_replace('/\\\\(?:emptyset|varnothing)(?![A-Za-z])|∅/u', '\\{\\}', $s);
         $s = preg_replace('/\s*(?:\\\\(?:land|wedge)(?![A-Za-z])|∧)\s*/u', ' \\text{and} ', $s);
         $s = preg_replace('/\s*(?:\\\\(?:lor|vee)(?![A-Za-z])|∨)\s*/u', ' \\text{or} ', $s);
-        $s = preg_replace('/\\\\(?:mathrm|operatorname|text)\s*\{\s*d\s*\}\s*(?=[A-Za-z])/', 'd', $s);
+        // Mathpix spaces the d of a handwritten differential as \\mathrm{~d}.
+        $s = preg_replace('/\\\\(?:mathrm|operatorname|text)\s*\{\s*~?\s*d\s*\}\s*(?=[A-Za-z])/', 'd', $s);
         $s = preg_replace('/\\\\var(epsilon|theta|rho|sigma|phi)(?![A-Za-z])/', '\\\\$1', $s);
         $s = preg_replace('/\\\\(?:no)?limits(?![A-Za-z])/', '', $s);
         // Maxima's names for the sign function and complex parts.

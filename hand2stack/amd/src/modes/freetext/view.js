@@ -70,9 +70,12 @@ define([
         panel._stackTextarea.style.height = '';
         panel._stackTextarea.style.minHeight = '';
         panel._stackTextarea.style.background = 'transparent';
-        panel._stackTextarea.style.fontFamily = 'inherit';
-        panel._stackTextarea.style.fontSize = '16px';
-        panel._stackTextarea.style.lineHeight = '1.65';
+        // The working box looks like the page's other textareas, STACK's own
+        // Free-text box among them: only its text is made transparent, so the
+        // change highlighter drawn behind it shows through.
+        panel._stackTextarea.style.fontFamily = '';
+        panel._stackTextarea.style.fontSize = '';
+        panel._stackTextarea.style.lineHeight = '';
         panel._stackTextarea.style.color = 'transparent';
         panel._stackTextarea.style.webkitTextFillColor = 'transparent';
         panel._stackTextarea.style.caretColor = '#111827';

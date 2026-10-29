@@ -127,10 +127,23 @@ final class stack_converter {
             return $matrix;
         }
 
+        // A sum or product over i (\\sum_{i=0}^{n}) makes i an index throughout
+        // the expression, as a subscript i does, not the imaginary unit.
+        $indexi = preg_match('/\\\\(?:sum|prod)\s*_\s*\{\s*i\s*=/', $s) === 1;
+        if (algebra::has_ambiguous_bars($s)) {
+            return trim($input);
+        }
         $s = self::operators_and_relations($s);
         $s = self::calculus_and_functions($s);
-        $indexi = false;
+        if ($s === null) {
+            // An operator body without brackets that a + or - follows: which
+            // terms belong to it is the learner's to say, not ours.
+            return trim($input);
+        }
         $s = self::identifiers($s, $indexi);
+        if ($s === null) {
+            return trim($input);
+        }
         $s = self::constants_and_products($s, $indexi);
         $s = self::restore($s, $kept, $scientific, $units);
 
@@ -167,6 +180,8 @@ final class stack_converter {
         // Display-size variants mean the same fraction; \displaystyle is layout.
         $s = preg_replace('/\\\\[dtc]frac(?![A-Za-z])/', '\\\\frac', $s);
         $s = preg_replace('/\\\\(?:displaystyle|textstyle)(?![A-Za-z])/', '', $s);
+        // \\big and its kin only size the bracket after them.
+        $s = preg_replace('/\\\\[bB]igg?[lrm]?(?![A-Za-z])\s*/', '', $s);
         // A leading implication arrow or ∴ introduces the line; it is not a factor.
         $s = preg_replace(
             '/^\s*(?:\\\\(?:Rightarrow|Longrightarrow|implies|Leftrightarrow|Longleftrightarrow|iff)(?![A-Za-z])|[⇒⇔⟹⟺∴∵])\s*/u',
@@ -243,18 +258,31 @@ final class stack_converter {
     }
 
     /** Primes, powers, functions and their arguments, calculus and determinants. */
-    private static function calculus_and_functions(string $s): string {
+    private static function calculus_and_functions(string $s): ?string {
         $s = preg_replace('/\^\s*\{\s*\\\\prime\s*\\\\prime\s*\}|\^\s*\\\\prime\s*\\\\prime(?![A-Za-z])/', "''", $s);
         $s = preg_replace('/\^\s*\{\s*\\\\prime\s*\}|\^\s*\\\\prime(?![A-Za-z])/', "'", $s);
         $s = calculus::prime_derivative($s);
         // A bare prime does not state its independent variable. Keep it as OCR
         // wrote it; only f'(x) supplies enough information to convert safely.
         $s = str_replace(['\\,', '\\!', '\\;', '\\:', '\\ '], '', $s);
+        // An unbraced superscript is the one token after ^, as in LaTeX:
+        // 2^\\frac{1}{2} is 2^(1/2), not 2^1/2.
+        $s = preg_replace('/\^\s*(\\\\(?:[dt]?frac|sqrt)\s*(?:\[[^\]]*\]\s*)?(\{(?:[^{}]|(?2))*\})(?:\s*(\{(?:[^{}]|(?3))*\}))?)/', '^{$1}', $s);
         $s = preg_replace('/\^\{([^{}]+)\}/', '^($1)', $s);
 
         $s = preg_replace('/\\\\binom\s*\{([^{}]+)\}\s*\{([^{}]+)\}/', 'binomial($1,$2)', $s);
 
         $s = trig_log::inverse_trig($s);
+        // What remains of f^{-1}: \\log^{-1} x may be the inverse or 1/log(x),
+        // f^{-1}(x) an inverse function or a product. Keep it as written.
+        if (preg_match('/\\\\(?:' . patterns::BARE_ARGUMENT_FUNCTIONS . ')\s*\^\s*\(\s*-\s*1\s*\)/', $s)
+                || preg_match('/(?<![A-Za-z\\\\])[A-Za-z]\s*\^\s*\(\s*-\s*1\s*\)\s*\(/', $s)) {
+            return null;
+        }
+        // \\pi_{i=1}^{n} may be a product sign Mathpix read as pi, or pi itself.
+        if (preg_match('/\\\\pi\s*_\s*\{\s*[a-zA-Z]\s*=/', $s)) {
+            return null;
+        }
         $s = preg_replace('/(?<!%)e\^\(([^()]+)\)/', '%e^($1)', $s);
         $s = preg_replace('/(?<!%)e\^([a-zA-Z0-9]+)/', '%e^$1', $s);
 
@@ -263,6 +291,9 @@ final class stack_converter {
         // Capture the differential before function normalization can consume
         // a compact tail such as "\\sin x\\,dx" as one function argument.
         $s = calculus::integrals($s);
+        if (calculus::has_ambiguous_body($s)) {
+            return null;
+        }
 
         $s = trig_log::function_arguments($s);
         $s = str_replace(patterns::IMPLICIT_PRODUCT, '*', $s);
@@ -282,10 +313,10 @@ final class stack_converter {
 
     /**
      * Subscripts, words and remaining commands become STACK names, and spaces
-     * between letters become products. $indexi tells whether a subscript i
-     * makes i an index rather than the imaginary unit.
+     * between letters become products. $indexi tells whether a subscript i,
+     * or an index i found earlier, makes i an index rather than the imaginary unit.
      */
-    private static function identifiers(string $s, bool &$indexi): string {
+    private static function identifiers(string $s, bool &$indexi): ?string {
         $textlabels = [];
         $s = preg_replace_callback(
             '/([a-zA-Z])_\{\s*\\\\(?:text|mathrm)\s*\{\s*([^{}]+?)\s*\}\s*\}/',
@@ -298,7 +329,7 @@ final class stack_converter {
         );
         // A subscript i (a_{i}) is an index, so i is a variable in this
         // expression rather than the imaginary unit.
-        $indexi = preg_match('/[a-zA-Z]_(?:\{[^{}]*(?<![A-Za-z\\\\])i(?![A-Za-z])[^{}]*\}|i(?![A-Za-z]))/', $s) === 1;
+        $indexi = $indexi || preg_match('/[a-zA-Z]_(?:\{[^{}]*(?<![A-Za-z\\\\])i(?![A-Za-z])[^{}]*\}|i(?![A-Za-z]))/', $s) === 1;
         $s = preg_replace('/([a-zA-Z])_\{\s*([^{}]+?)\s*\}/', '$1[$2]', $s);
         $s = preg_replace('/_\{([^{}]+)\}/', '_$1', $s);
 
@@ -319,6 +350,12 @@ final class stack_converter {
         // Lookahead, so "a b c" is a*b*c: each letter both ends one gap and starts the next.
         $s = preg_replace('/([a-zA-Z])\s+(?=[a-zA-Z])/', '$1*', $s);
         $s = preg_replace('/(\d)\s+(?=[a-zA-Z])/', '$1*', $s);
+        // A space before a number would join it to what comes before: "2 3"
+        // as 23, "x 2" as the name x2. A product, a list and a thousands
+        // separator are all possible, so it is the learner's to say.
+        if (preg_match('/[A-Za-z0-9.)\]]\s+[0-9.]/', $s)) {
+            return null;
+        }
         $s = preg_replace('/\s+/', '', $s);
 
         // Restore set/interval placeholders before splitting unknown letter
@@ -362,12 +399,13 @@ final class stack_converter {
             $s = preg_replace('/(^|[^%A-Za-z0-9_])i(?![A-Za-z0-9_])/', '$1%i', $s);
         }
         $s = algebra::absolute($s);
-        $s = preg_replace('/\b([a-df-zA-DF-Z])x(?=(\^|\+|\-|\*|\/|\)|$))/', '$1*x', $s);
         $s = preg_replace('/^(.+?)\s+in\s+(\[[^\]]+\])$/', 'elementp($1,$2)', $s);
         $s = str_replace(["\x01", "\x02"], ['{', '}'], $s);
         // log(x,2) is not Maxima; it means the base-2 logarithm.
         $s = preg_replace('/\blog\(([^(),]+),([^(),]+)\)/', '(log($1)/log($2))', $s);
-        $s = tidy::protect_functions($s);
+        // A letter before brackets, F(2) or a(x+1), may be a function value or
+        // a product; like a run-together name such as xy, it stays as written
+        // for the question's insert-stars setting to decide.
         return tidy::beautify($s);
     }
 

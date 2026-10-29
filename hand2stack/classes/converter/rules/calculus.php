@@ -43,30 +43,69 @@ final class calculus {
             $output
         );
 
-        $output = preg_replace_callback(
+        $operator = '/\\\\frac\s*\{\s*(?:d|\\\\partial)\s*(?=[\^}])/';
+        $output = self::each_from_last($output, $operator,
             '/\\\\frac\s*\{\s*(d|\\\\partial)\s*\^\s*(?:\((\d+)\)|(\d+))\s*\}\s*\{\s*\1\s*([a-zA-Z])\s*\^\s*(?:\((\d+)\)|(\d+))\s*\}\s*(.+)$/',
             static function($m) {
                 $num = $m[2] ?: $m[3];
                 $den = $m[5] ?: $m[6];
                 [$body, $rest] = brackets::split_operator_body(trim($m[7]));
                 return $num === $den ? 'diff(' . $body . ',' . trim($m[4]) . ',' . $num . ')' . $rest : $m[0];
-            },
-            $output
+            }
         );
 
-        return preg_replace_callback(
+        return self::each_from_last($output, $operator,
             '/\\\\frac\s*\{\s*(d|\\\\partial)\s*\}\s*\{\s*\1\s*([a-zA-Z])\s*\}\s*(.+)$/',
             static function($m) {
                 [$body, $rest] = brackets::split_operator_body(trim($m[3]));
                 return 'diff(' . $body . ',' . trim($m[2]) . ')' . $rest;
-            },
-            $output
+            }
         );
+    }
+
+    /**
+     * Whether a limit, sum, product or d/dx operator leaves its extent to a
+     * guess: "\\lim_{x\\to 0} x^2+2x" may mean limit(x^2)+2x or
+     * limit(x^2+2x). A body in one pair of brackets, or one that a relation,
+     * comma or closing bracket ends, is clear; a product stays in the body as
+     * usual ("\\sum a_k b_k"). Run after integrals, whose int(..) bounds a body.
+     */
+    public static function has_ambiguous_body(string $input): bool {
+        $order = '\s*(?:\^\s*(?:\(\s*\d+\s*\)|\d+))?\s*';
+        $operator = '/\\\\lim\s*_\s*\{[^{}]*\}'
+            . '|\\\\(?:sum|prod)\s*_\s*\{\s*[a-zA-Z]\s*=[^{}]*\}\s*\^\s*'
+            . '(?:\{[^{}]*\}|\([^()]*\)|inf|minf|[A-Za-z]|[+\-]?\d+(?:\.\d+)?)'
+            . '|\\\\frac\s*\{\s*(?:d|\\\\partial)' . $order . '\}\s*\{\s*(?:d|\\\\partial)\s*[a-zA-Z]' . $order . '\}/';
+        if (!preg_match_all($operator, $input, $matches, PREG_OFFSET_CAPTURE)) {
+            return false;
+        }
+        foreach ($matches[0] as [$header, $offset]) {
+            [$body, $rest] = brackets::split_operator_body(trim(substr($input, $offset + strlen($header))));
+            if (preg_match('/^\s*[+\-]/', $rest) && !brackets::is_one_group($body)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Convert each operator whose body runs to the end of the input, from the
+     * last one back, so "\\lim_{x\\to 0} x+\\lim_{x\\to 1} x^2" converts both:
+     * the earlier body then meets the later operator already converted.
+     */
+    private static function each_from_last(string $input, string $operator, string $pattern, callable $convert): string {
+        if (!preg_match_all($operator, $input, $matches, PREG_OFFSET_CAPTURE)) {
+            return $input;
+        }
+        foreach (array_reverse($matches[0]) as [, $offset]) {
+            $input = substr($input, 0, $offset) . preg_replace_callback($pattern, $convert, substr($input, $offset), 1);
+        }
+        return $input;
     }
 
     /** f'(x) and f''(x) as diff(...), unless the conversion keeps primes as written. */
     public static function prime_derivative(string $input): string {
-        if (notation_keeper::keeps_primes()) {
+        if (notation_keeper::keeps_as_written()) {
             return $input;
         }
         $output = preg_replace('/([a-zA-Z])\s*\^\s*\{\s*\\\\prime\s*\\\\prime\s*\}\s*\(\s*([a-zA-Z])\s*\)/', 'diff($1($2),$2,2)', $input);
@@ -99,66 +138,100 @@ final class calculus {
                     break;
                 }
             }
-            $scope = rtrim(substr($input, $start, $end - $start));
+            $scope = self::through_differential(rtrim(substr($input, $start, $end - $start)));
             $input = substr($input, 0, $start) . self::integral($scope) . substr($input, $start + strlen($scope));
             $offset = $start + 1;
         }
         return $input;
     }
 
+    /**
+     * Cut a scope after the integral's own differential when a sum,
+     * difference, product or quotient follows it, so "\\int x^2 dx - \\int x dx
+     * + 2/3" gives three terms instead of one integral that never ends in its
+     * differential.
+     */
+    private static function through_differential(string $scope): string {
+        $length = strlen($scope);
+        $depth = 0;
+        for ($i = strlen('\\int'); $i < $length; $i++) {
+            $char = $scope[$i];
+            if ($char === '\\') {
+                // A command name such as \cdot is not a differential.
+                while ($i + 1 < $length && ctype_alpha($scope[$i + 1])) {
+                    $i++;
+                }
+            } else if (strpos('({[', $char) !== false) {
+                $depth++;
+            } else if (strpos(')}]', $char) !== false) {
+                $depth--;
+            } else if ($depth === 0 && $char === 'd'
+                    && preg_match('/\Gd\s*[a-zA-Z](?![A-Za-z])\s*(?=[+\-*\/]|\\\\(?:cdot|times)(?![A-Za-z]))/', $scope, $m, 0, $i)) {
+                return rtrim(substr($scope, 0, $i + strlen($m[0])));
+            }
+        }
+        return $scope;
+    }
+
+    /**
+     * An unbraced upper limit is one token, as in LaTeX: \\int_0^1x dx runs
+     * from 0 to 1, with x as the integrand.
+     */
     private static function integral(string $input): string {
         $output = preg_replace_callback(
-            '/\\\\int\s*_\s*\{\s*([^{}]+?)\s*\}\s*\^\s*(?:\{\s*([^{}]+?)\s*\}|\(\s*([^()]+?)\s*\)|((?:\\\\[A-Za-z]+|[A-Za-z0-9%.+\-]+)))\s*(.+?)\s*(?:\\\\[,;:!]\s*)*d\s*([a-zA-Z])\s*$/',
+            '/\\\\int\s*_\s*\{\s*([^{}]+?)\s*\}\s*\^\s*(?:\{\s*([^{}]+?)\s*\}|\(\s*([^()]+?)\s*\)|((?:\\\\[A-Za-z]+|[+\-]?(?:[0-9.]+|%[A-Za-z]+|inf(?![A-Za-z])|[A-Za-z]))))\s*(.*?)\s*(?:\\\\[,;:!]\s*)*d\s*([a-zA-Z])\s*$/',
             static function($m) {
                 $upper = $m[2] !== '' ? $m[2] : ($m[3] !== '' ? $m[3] : $m[4]);
-                $integrand = ltrim(trim($m[5]), '*' . patterns::IMPLICIT_PRODUCT);
-                return 'int(' . $integrand . ',' . trim($m[6]) . ',' . trim($m[1]) . ',' . trim($upper) . ')';
+                return 'int(' . self::integrand($m[5]) . ',' . trim($m[6]) . ',' . trim($m[1]) . ',' . trim($upper) . ')';
             },
             $input
         );
 
         $output = preg_replace_callback(
-            '/\\\\int\s*_\s*((?:\\\\[A-Za-z]+|[A-Za-z0-9%.+\-]+))\s*\^\s*(?:\{\s*([^{}]+?)\s*\}|\(\s*([^()]+?)\s*\)|((?:\\\\[A-Za-z]+|[A-Za-z0-9%.+\-]+)))\s*(.+?)\s*(?:\\\\[,;:!]\s*)*d\s*([a-zA-Z])\s*$/',
+            '/\\\\int\s*_\s*((?:\\\\[A-Za-z]+|[A-Za-z0-9%.+\-]+))\s*\^\s*(?:\{\s*([^{}]+?)\s*\}|\(\s*([^()]+?)\s*\)|((?:\\\\[A-Za-z]+|[+\-]?(?:[0-9.]+|%[A-Za-z]+|inf(?![A-Za-z])|[A-Za-z]))))\s*(.*?)\s*(?:\\\\[,;:!]\s*)*d\s*([a-zA-Z])\s*$/',
             static function($m) {
                 $upper = $m[2] !== '' ? $m[2] : ($m[3] !== '' ? $m[3] : $m[4]);
-                $integrand = ltrim(trim($m[5]), '*' . patterns::IMPLICIT_PRODUCT);
-                return 'int(' . $integrand . ',' . trim($m[6]) . ',' . trim($m[1]) . ',' . trim($upper) . ')';
+                return 'int(' . self::integrand($m[5]) . ',' . trim($m[6]) . ',' . trim($m[1]) . ',' . trim($upper) . ')';
             },
             $output
         );
 
         return preg_replace_callback(
-            '/\\\\int\s*(.+?)\s*(?:\\\\[,;:!]\s*)*d\s*([a-zA-Z])\s*$/',
+            '/\\\\int\s*(.*?)\s*(?:\\\\[,;:!]\s*)*d\s*([a-zA-Z])\s*$/',
             static function($m) {
-                return 'int(' . ltrim(trim($m[1]), '*' . patterns::IMPLICIT_PRODUCT) . ',' . trim($m[2]) . ')';
+                return 'int(' . self::integrand($m[1]) . ',' . trim($m[2]) . ')';
             },
             $output
         );
     }
 
+    /** The integrand as written, or 1 when only the differential is left: \\int_0^1 dx. */
+    private static function integrand(string $integrand): string {
+        $integrand = ltrim(trim($integrand), '*' . patterns::IMPLICIT_PRODUCT);
+        return $integrand === '' ? '1' : $integrand;
+    }
+
     /** \\lim_{x\\to a} f(x) as limit(f(x),x,a). */
     public static function limit(string $input): string {
-        return preg_replace_callback(
+        return self::each_from_last($input, '/\\\\lim\s*_/',
             '/\\\\lim\s*_\s*\{\s*([a-zA-Z])\s*(?:\\\\to|\\\\rightarrow|\\\\longrightarrow|->|→)\s*([^{}]+?)\s*\}\s*(.+)$/u',
             static function($m) {
                 [$body, $rest] = brackets::split_operator_body(trim($m[3]));
                 return 'limit(' . $body . ',' . trim($m[1]) . ',' . trim($m[2]) . ')' . $rest;
-            },
-            $input
+            }
         );
     }
 
     /** \\sum and \\prod with bounds as sum(...) and product(...). */
     public static function sum_product(string $input): string {
-        return preg_replace_callback(
-            '/\\\\(sum|prod|pi)\s*_\s*\{\s*([a-zA-Z])\s*=\s*([^{}]+?)\s*\}\s*\^\s*(?:\{\s*([^{}]+?)\s*\}|\(\s*([^()]+?)\s*\)|((?:inf|minf|[A-Za-z]|[+\-]?\d+(?:\.\d+)?)))\s*(.+)$/',
+        return self::each_from_last($input, '/\\\\(?:sum|prod)\s*_/',
+            '/\\\\(sum|prod)\s*_\s*\{\s*([a-zA-Z])\s*=\s*([^{}]+?)\s*\}\s*\^\s*(?:\{\s*([^{}]+?)\s*\}|\(\s*([^()]+?)\s*\)|((?:inf|minf|[A-Za-z]|[+\-]?\d+(?:\.\d+)?)))\s*(.+)$/',
             static function($m) {
                 $name = $m[1] === 'sum' ? 'sum' : 'product';
                 $upper = $m[4] !== '' ? $m[4] : ($m[5] !== '' ? $m[5] : $m[6]);
                 [$body, $rest] = brackets::split_operator_body(trim($m[7]));
                 return $name . '(' . $body . ',' . trim($m[2]) . ',' . trim($m[3]) . ',' . trim($upper) . ')' . $rest;
-            },
-            $input
+            }
         );
     }
 }

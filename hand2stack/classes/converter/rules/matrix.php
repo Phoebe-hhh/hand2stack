@@ -38,6 +38,31 @@ final class matrix {
             return $core === '' || $rest === '' ? '' : strtr($rest, [$token => $core]);
         }
 
+        // "\\left\\{ x+y &= 3 \\\\ x-y &= 1 \\right." aligns a system of equations at
+        // its relations: each row is one equation. With columns that are not
+        // aligned relations, a brace may open a piecewise function or a set
+        // of pairs; that is the learner's to say.
+        if ($match[1] === 'array' && preg_match('/(?:\\\\left\s*)?\\\\\{\s*$/', $before)
+                && strpos($match[2], '&') !== false) {
+            $relation = '/^(?:=|<|>|\\\\(?:leq?|geq?|neq?|lt|gt)(?![A-Za-z])|≤|≥|≠)/u';
+            $equations = [];
+            foreach (preg_split('/\\\\\\\\/', trim($match[2])) as $row) {
+                $cells = array_map('trim', explode('&', trim($row)));
+                if (count($cells) === 1 && $cells[0] === '') {
+                    continue;
+                }
+                foreach (array_slice($cells, 1) as $cell) {
+                    if (!preg_match($relation, $cell)) {
+                        return trim($input);
+                    }
+                }
+                $equations[] = implode(' ', $cells);
+            }
+            $input = substr_replace($input, '\\begin{array}{l}' . implode(' \\\\ ', $equations) . '\\end{array}',
+                $position, strlen($match[0]));
+            return self::normalize($input);
+        }
+
         $rows = [];
         foreach (preg_split('/\\\\\\\\/', trim($match[2])) as $row) {
             $row = trim($row);

@@ -106,10 +106,14 @@ final class trig_log {
             $s = preg_replace('/\\\\' . $latex . '\s*\(([^()]*)\)/', $stack . '($1)', $s);
             $s = preg_replace('/\\\\' . $latex . '\s+([a-zA-Z0-9]+)/', $stack . '($1)', $s);
         }
-        foreach (['sin' => 'asin', 'cos' => 'acos', 'tan' => 'atan'] as $latex => $stack) {
-            $s = preg_replace('/\\\\' . $latex . '\s*\^\s*\(\s*-1\s*\)\s*\\\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/', $stack . '(($1)/($2))', $s);
-            $s = preg_replace('/\\\\' . $latex . '\s*\^\s*\(\s*-1\s*\)\s*\(([^()]+)\)/', $stack . '($1)', $s);
-            $s = preg_replace('/\\\\' . $latex . '\s*\^\s*\(\s*-1\s*\)\s*([a-zA-Z0-9]+)/', $stack . '($1)', $s);
+        // \\sin^{-1} is the inverse function by convention, for every
+        // trigonometric and hyperbolic function alike.
+        $inverses = ['sinh' => 'asinh', 'cosh' => 'acosh', 'tanh' => 'atanh', 'sin' => 'asin', 'cos' => 'acos',
+            'tan' => 'atan', 'cot' => 'acot', 'sec' => 'asec', 'csc' => 'acsc'];
+        foreach ($inverses as $latex => $stack) {
+            $s = preg_replace('/\\\\' . $latex . '(?![A-Za-z])\s*\^\s*\(\s*-1\s*\)\s*\\\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/', $stack . '(($1)/($2))', $s);
+            $s = preg_replace('/\\\\' . $latex . '(?![A-Za-z])\s*\^\s*\(\s*-1\s*\)\s*\(([^()]+)\)/', $stack . '($1)', $s);
+            $s = preg_replace('/\\\\' . $latex . '(?![A-Za-z])\s*\^\s*\(\s*-1\s*\)\s*([a-zA-Z0-9]+)/', $stack . '($1)', $s);
         }
         return $s;
     }

@@ -30,6 +30,7 @@ final class piecewise {
         }
 
         $prefix = '';
+        $unnamed = false;
         $prefixpos = strpos($input, $match[0]);
         if ($prefixpos !== false) {
             $prefix = substr($input, 0, $prefixpos);
@@ -37,12 +38,15 @@ final class piecewise {
             $prefix = preg_replace('/\\\\left(?![a-zA-Z])/', '', $prefix);
             $prefix = str_replace(['\\{', '{'], '', $prefix);
             $prefix = trim($prefix);
-            if ($prefix !== '' && strpos($prefix, '=') !== false) {
-                $prefix = stack_converter::normalize($prefix);
-            } else {
-                $prefix = '';
-            }
+            // Only "f(x)=" names the block. A factor before it (2\\begin{cases})
+            // or a term after it (\\end{cases}+1) has no STACK if form, and
+            // dropping it would change the answer.
+            $unnamed = $prefix !== '' && !preg_match('/=$/', $prefix);
+            $prefix = $prefix === '' || $unnamed ? '' : stack_converter::normalize($prefix);
         }
+        $suffix = substr($input, strpos($input, $match[0]) + strlen($match[0]));
+        $unnamed = $unnamed
+            || trim(preg_replace('/^\s*\\\\right\s*(?:\\\\?[.}\]])?|[\s.,]+$/', '', $suffix)) !== '';
 
         $branches = [];
         foreach (preg_split('/\\\\\\\\/', trim($match[2])) as $row) {
@@ -53,6 +57,11 @@ final class piecewise {
             $parts = explode('&', $row);
             $expression = trim(preg_replace('/[,\s]+$/', '', array_shift($parts)));
             $condition = trim(implode('&', $parts));
+            // "x+y &= 3" or "x &\\geq 0" aligns equations at their relation:
+            // the cell after & continues the row, it is no condition.
+            if (preg_match('/^(?:=|<|>|\\\\(?:leq?|geq?|neq?|leqslant|geqslant)(?![A-Za-z])|≤|≥|≠)/u', $condition)) {
+                return '';
+            }
             if ($expression !== '') {
                 $branches[] = [
                     'expression' => stack_converter::normalize($expression),
@@ -68,21 +77,14 @@ final class piecewise {
         $conditions = array_filter(array_column($branches, 'condition'), static function(string $condition): bool {
             return $condition !== '';
         });
+        if ($match[1] === 'array' && !self::has_inequality($branches)) {
+            return '';
+        }
+        if ($unnamed) {
+            return null;
+        }
         if ($match[1] === 'cases' && !$conditions) {
             return $prefix . '[' . implode(',', array_column($branches, 'expression')) . ']';
-        }
-
-        if ($match[1] === 'array') {
-            $hascondition = false;
-            foreach ($branches as $branch) {
-                if (preg_match('/(<=|>=|<|>|\\\\leq|\\\\geq|\\\\leqslant|\\\\geqslant)/', $branch['condition'])) {
-                    $hascondition = true;
-                    break;
-                }
-            }
-            if (!$hascondition) {
-                return '';
-            }
         }
 
         // Every branch keeps the condition the learner wrote; only the last
@@ -104,6 +106,16 @@ final class piecewise {
         }
 
         return $prefix . $result;
+    }
+
+    /** Whether any branch has an inequality as its condition, as a piecewise array does. */
+    private static function has_inequality(array $branches): bool {
+        foreach ($branches as $branch) {
+            if (preg_match('/(<=|>=|<|>|\\\\leq|\\\\geq|\\\\leqslant|\\\\geqslant)/', $branch['condition'])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

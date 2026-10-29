@@ -27,7 +27,7 @@ final class freetext_builder {
      * into STACK free-text inline mathematics.
      */
     public static function build(string $text, string $ascii = '', string $latex = ''): string {
-        return notation_keeper::keeping_primes(static function() use ($text, $ascii, $latex): string {
+        return notation_keeper::keeping_as_written(static function() use ($text, $ascii, $latex): string {
             return self::convert($text, $ascii, $latex);
         });
     }

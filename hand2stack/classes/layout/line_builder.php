@@ -16,6 +16,7 @@
 namespace local_hand2stack\layout;
 
 use local_hand2stack\converter\math_extractor;
+use local_hand2stack\converter\notation_keeper;
 use local_hand2stack\converter\stack_converter;
 
 defined('MOODLE_INTERNAL') || die();
@@ -86,8 +87,8 @@ final class line_builder {
             if (!self::is_kept_math_row($part)) {
                 continue;
             }
-            // "1.5x=3" starts with a decimal, not the item number "1.".
-            $number = preg_match('/^\s*&?\s*(\d+)\s*(?:\.(?!\d)|\))\s*/', $part, $match) ? $match[1] : null;
+            // "1.5x=3" starts with a decimal and "3.x" with a product, not the item number "1.".
+            $number = preg_match('/^\s*&?\s*(\d+)\s*(?:\.(?=[\s&]|\\\\)|\))\s*/', $part, $match) ? $match[1] : null;
             $part = self::clean_line_latex($part);
 
             $math = math_extractor::extract($part);
@@ -182,9 +183,15 @@ final class line_builder {
             $line = str_replace('&', '', $line);
         }
         $line = str_replace(['\\therefore', '\\because'], '', $line);
-        $line = preg_replace('/^\s*=\s*/', '', $line);
-        // "1.5x=3" starts with a decimal, not the item number "1.".
-        $line = preg_replace('/^\s*(?:\d+(?:\.(?!\d)|\))\s*|[-*]\s+)/', '', $line);
+        // A review row is one value: "= 2" continuing the row above is 2.
+        // Free-text working keeps the "=" the learner wrote.
+        if (!notation_keeper::keeps_as_written()) {
+            $line = preg_replace('/^\s*=\s*/', '', $line);
+        }
+        // "1.5x=3" starts with a decimal and "3.x" with a product, not the
+        // item number "1.". A leading "- " in a formula is a minus sign: a
+        // list bullet stays in Mathpix's text, outside the formula.
+        $line = preg_replace('/^\s*(?:\d+(?:\.(?=[\s&]|\\\\)|\))\s*|\*\s+)/', '', $line);
         // Remove delimiters only when they wrap the complete row. Mixed prose
         // such as "Therefore, \(x>=1\)" must keep both delimiters until its
         // text and mathematical parts have been separated.

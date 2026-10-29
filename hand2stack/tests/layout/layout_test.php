@@ -159,6 +159,22 @@ final class layout_test extends \advanced_testcase {
         $this->assertSame('diff(f(x),x)=2*x', stack_converter::normalize("f^{\\prime}(x)=2 x"));
     }
 
+    public function test_freetext_keeps_continued_rows_and_function_values_as_written(): void {
+        // A handwritten integral worked out row by row, as Mathpix returns it.
+        $doc = "\\[\\begin{aligned}& \\int_{0}^{2}\\left(x^{2}-x\\right) d x \\\\ = & \\int_{0}^{2} x^{2} d x-\\int_{0}^{2} x d x \\\\ "
+            . "F(2)-F(0)= & \\frac{8}{3}-2 \\\\ = & \\frac{2}{3}\\end{aligned}\\]";
+        $this->assertSame("`int((x^2-x),x,0,2)`\n`=int(x^2,x,0,2)-int(x,x,0,2)`\n`F(2)-F(0)=8/3-2`\n`=2/3`",
+            freetext_builder::build($doc));
+        // A review row is still the value alone; F(2) stays as written there too.
+        $this->assertSame(['int((x^2-x),x,0,2)', 'int(x^2,x,0,2)-int(x,x,0,2)', 'F(2)-F(0)=8/3-2', '2/3'],
+            array_column(document_builder::build_document_lines($doc), 'stack'));
+    }
+
+    public function test_a_leading_minus_in_a_formula_is_a_sign_not_a_bullet(): void {
+        $this->assertSame(['-3*x+2', 'x=1'], array_column(line_builder::build_lines(
+            "\\begin{aligned}- 3 x+2 \\\\ 1.\\ x=1\\end{aligned}"), 'stack'));
+    }
+
     public function test_freetext_formula_rows_are_not_separated_by_an_extra_blank_line(): void {
         $this->assertSame("`x=1`\n`y=2`", freetext_builder::build("\\(x=1\\)\n\\(y=2\\)"));
         $this->assertSame("`x=1`\n`y=2`", freetext_builder::build("\\(x=1\\) \\(y=2\\)"));
@@ -187,7 +203,7 @@ final class layout_test extends \advanced_testcase {
 
         $this->assertStringContainsString('For `theta=1`', $result);
         $this->assertStringContainsString("`g(1)=2*sin(%pi/2)^2+1/sqrt(2)`\n", $result);
-        $this->assertStringContainsString("`2+1/sqrt(2)`\n`~~2.71`", $result);
+        $this->assertStringContainsString("`=2+1/sqrt(2)`\n`~~2.71`", $result);
         $this->assertStringContainsString('Therefore, this is the final value.', $result);
         $this->assertStringNotContainsString('b*%e*g*%i*n', $result);
         $this->assertStringNotContainsString('a*p*p*r*o*x', $result);
@@ -327,7 +343,7 @@ final class layout_test extends \advanced_testcase {
 
     public function test_freetext_keeps_prose_between_statements_outside_the_maths(): void {
         $latex = "\\begin{array}{l}\nx>0 \\text { and } x-2>0, \\text { so } x>2 . \\\\\nx(x-2)=8\n\\end{array}";
-        $this->assertSame("`x>0 and x-2>0`, so `x>2`.\n`x*(x-2)=8`", freetext_builder::build($latex));
+        $this->assertSame("`x>0 and x-2>0`, so `x>2`.\n`x(x-2)=8`", freetext_builder::build($latex));
         // Statements written on one row with a gap stay on that row.
         $this->assertSame("because `x-2>0` `x>2`", freetext_builder::build('because $x-2>0 \\quad x>2$'));    }
 

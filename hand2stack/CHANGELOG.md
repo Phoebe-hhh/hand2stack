@@ -3,6 +3,32 @@
 Hand2STACK was previously known as STACK Input Helper. Releases from 0.3.0 onward
 use the Moodle component name `local_hand2stack` and install in `local/hand2stack`.
 
+## Unreleased
+
+- Convert every integral in a sum or difference of integrals. `\int_{0}^{2} x^{2} d x-\int_{0}^{2} x d x+\frac{2}{3}`, as Mathpix returned a handwritten line, was left as `\int[0]^2*x^2*d*x-\int[0]^2*x*d*x+2/3`: an integral ran on to the next relation or closing bracket, so the terms after its differential made it unrecognisable. Each integral now ends at its own differential when a `+` or `-` follows it, giving `int(x^2,x,0,2)-int(x,x,0,2)+2/3`.
+- Convert every limit, sum, product and `\frac{d}{dx}` derivative in a row, not only the first: `\lim_{x\to 0} x=\lim_{y\to 0} y` left the second as `\lim[y->0]*y` and is now `limit(x,x,0)=limit(y,y,0)`, and `\lim_{x\to 0}(x^2+2x)+\sum_{i=0}^{\infty}(i^2+2i+1)` converts both operators.
+- End a limit, sum, product or derivative at the bracket or argument list around it: `\int_0^1 \sum_{k=1}^{n} x^k dx` gave `int(sum(x^k,x,0,1),k,1,n)` and is now `int(sum(x^k,k,1,n),x,0,1)`. An integral also ends at its differential before a product or quotient: `\int_0^1 x dx \cdot \int_0^1 y dy` is `int(x,x,0,1)*int(y,y,0,1)`.
+- A sum or product over `i` makes `i` an index throughout the expression, as a subscript `i` already did: `\sum_{i=1}^{n} \sum_{j=1}^{m} i j` is `sum(sum(i*j,j,1,m),i,1,n)`, where the outer index used to become `%i`.
+- Read Mathpix's spaced differential `\mathrm{~d} x` as `dx`. Only `\mathrm{d}` was recognised, so `\int x \mathrm{~d} x` converted to nothing and `\int_0^1 x \mathrm{~d} x` to `1*x*x`.
+- Integrate 1 when only the differential follows the integral sign: `\int_0^1 dx` gave `int(,x,0,1)`, which STACK rejects, and now gives `int(1,x,0,1)`.
+- Read an unbraced upper limit as one token, as LaTeX does: `\int_0^1x dx` is `int(x,x,0,1)`, not an integral up to `1*x`.
+- Free-text working keeps a row's leading `=` as written. A handwritten integral worked out row by row lost the `=` that continued each row (`= \int_0^2 x^2 dx - …` gave `` `int(x^2,x,0,2)-…` ``); it now stays `` `=int(x^2,x,0,2)-…` ``, as `f'(x)` already did. A review row still inserts the value alone: `= 2` inserts `2`.
+- Leave as written what has more than one reading, so that the learner, not the converter, decides it and STACK rejects it visibly until then:
+  - a limit, sum, product or `\frac{d}{dx}` body without brackets that a `+` or `-` follows: `\lim_{x\to 0} x^2+2x` may be `limit(x^2+2x,x,0)` or `limit(x^2,x,0)+2*x`, and used to give the second. A body in brackets, or one that a relation or the end of the row closes, still converts;
+  - a letter before brackets: `F(2)`, `p(x)` and `a(x+1)` stay as written for the question's insert-stars setting, as run-together names such as `xy` already did, instead of `F*(2)`, `p*(x)`, `a*(x+1)` (only `f`, `g` and `h` were read as functions). `ax` is no longer split into `a*x` while `xy` stays whole. A number or a closing bracket before brackets is still a product: `2(x+1)(x-1)` is `2*(x+1)*(x-1)`;
+  - a space before a number, which would join the two: `2 3` gave `23`, `\frac{1}{2} 3` gave `1/23` and `x 2` the name `x2`;
+  - `\log^{-1} x`, `\ln^{-1} x` and `f^{-1}(x)`, which may be an inverse or a reciprocal. `^{-1}` on every trigonometric and hyperbolic function is the inverse function by convention: `\sinh^{-1} x` is `asinh(x)` and `\sec^{-1} x` is `asec(x)`, where they gave `sinh(x)^(-1)` and `sec(x)^(-1)`;
+  - `\pi_{i=1}^{n}`, which was read as a product sign Mathpix had misread;
+  - absolute value bars that pair more than one way (`|a|b|c|` gave `abs(a)*b*abs(c)`) and norms (`||x||` gave `abs()*x*abs()`);
+  - a factor or term around a `cases` block, which was dropped: `2\begin{cases}…\end{cases}` lost the `2` and `…\end{cases}+1` the `+1`;
+  - a `\left\{` array whose columns are not aligned at a relation.
+- Keep the whole formula of a row after its prose. `\text{area } \frac{1}{2}\cdot 3\cdot 4=6` gave `1/2`, the first fraction, and other rows their longest equation; it is now `1/2*3*4=6`.
+- Read a system aligned at its relations as a list of equations: `\left\{\begin{array}{rl}x+y&=3\\x-y&=1\end{array}\right.` gave `matrix([x+y,=3],[x-y,=1])` and is now `[x+y=3,x-y=1]`.
+- Read an unbraced fraction or root in an exponent as the exponent: `2^\frac{1}{2}` gave `2^1/2`, which is 1, and is now `2^(1/2)`.
+- Keep a leading minus in a formula: `- 3x+2` lost its sign as if it were a list bullet. A row such as `3.x` is no longer read as item number 3.
+- Drop `\big`, `\Bigl` and similar size commands: `\bigl|x\bigr|` gave `\bigl*abs(x\bigr)` and is now `abs(x)`.
+- The Free-text working box no longer has a style of its own: it uses the page's textarea font and line height, like STACK's own Free-text box, instead of a 16px font with 1.65 line spacing.
+
 ## 0.6.1-alpha - 2026-10-22
 
 - Research traces now end when a quiz attempt is finished. Moodle's question navigation and **Finish attempt …** link submit the quiz by clicking Next with its name cleared, so these submits were logged as `submitterKind: other`, and the last page's Next as `next`: finishing a quiz never logged `task_finished`, which was only recorded for a question graded correct. They are now `finish` when they go to the summary page and the new `navigate` otherwise. Questions on other pages, a closed tab or an attempt submitted when time ran out are covered by the server: five minutes after an attempt is submitted or abandoned, it adds a `task_finished` with `"source": "server"`, `reason` `server_attempt_submitted` or `server_attempt_abandoned` and Moodle's final question state to the latest trace of each question that has events but none; a browser's `task_finished` arriving later is acknowledged and not stored twice. `task_finished` also carries the `submissionEventId` of its submit, which was always null. Run the Moodle upgrade after updating.

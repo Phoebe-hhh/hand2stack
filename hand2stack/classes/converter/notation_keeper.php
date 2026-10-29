@@ -19,27 +19,28 @@ namespace local_hand2stack\converter;
 defined('MOODLE_INTERNAL') || die();
 
 final class notation_keeper {
-    /** True while converting Free-text working, which keeps f'(x) as written. */
-    private static bool $keepprimes = false;
+    /** True while converting Free-text working, which keeps notation as written. */
+    private static bool $keepwritten = false;
 
     /**
-     * Run a conversion that keeps prime derivatives as the learner wrote them.
-     * Free-text working is read, not graded, so f'(x) and f'(2) stay alike
-     * instead of one becoming diff(f(x),x).
+     * Run a conversion that keeps notation as the learner wrote it. Free-text
+     * working is read, not graded, so f'(x) and f'(2) stay alike instead of
+     * one becoming diff(f(x),x), and a row that continues the one above
+     * keeps its leading "=".
      */
-    public static function keeping_primes(callable $convert) {
-        $previous = self::$keepprimes;
-        self::$keepprimes = true;
+    public static function keeping_as_written(callable $convert) {
+        $previous = self::$keepwritten;
+        self::$keepwritten = true;
         try {
             return $convert();
         } finally {
-            self::$keepprimes = $previous;
+            self::$keepwritten = $previous;
         }
     }
 
-    /** Whether the current conversion keeps prime derivatives as written. */
-    public static function keeps_primes(): bool {
-        return self::$keepprimes;
+    /** Whether the current conversion keeps notation as written. */
+    public static function keeps_as_written(): bool {
+        return self::$keepwritten;
     }
 
     /** Byte ranges of the units in $latex, so prose detection can skip them. */

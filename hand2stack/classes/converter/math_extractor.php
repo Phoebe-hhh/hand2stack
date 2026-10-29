@@ -133,88 +133,12 @@ final class math_extractor {
         $s = strtr($s, $units);
         $s = preg_replace('/\s+/', ' ', $s);
 
-        // A bound such as k=1 is part of the surrounding operator, not a
-        // standalone equation. Capture the whole sum/product before applying
-        // the generic equation matcher below.
-        if (preg_match('/(\\\\(?:sum|prod|pi)\s*_\s*\{\s*[a-zA-Z]\s*=\s*[^{}]+\}\s*\^\s*(?:\{[^{}]+\}|\([^()]+\))\s*.+)$/u', $s, $match)) {
-            return trim($match[1]);
-        }
-
-        if (preg_match('/(?<![A-Za-z])([A-Za-z]\s*=\s*[^,\s=]+\s*,\s*[^,\s=]+)/u', $s, $match)) {
-            return trim($match[1]);
-        }
-
-        $fraction = self::first_fraction($s);
-        if ($fraction !== null) {
-            $prefix = substr($s, 0, $fraction['start']);
-            if (preg_match('/(?<![A-Za-z])([A-Za-z](?![A-Za-z])\s*=\s*)$/u', $prefix, $match)) {
-                return trim($match[1] . $fraction['value']);
-            }
-            return $fraction['value'];
-        }
-
-        $atom = '(?:\\\\[a-zA-Z]+(?:\s*\{[^{}]*\}){0,2}|\([^()]+\)(?:\s*\^\s*(?:\{[^{}]+\}|[A-Za-z0-9]))?|[A-Za-z](?![A-Za-z])(?:\s*\^\s*(?:\{[^{}]+\}|[A-Za-z0-9]))?|\d+(?:\.\d+)?|[+\-*\/.])';
-        $equation = '/(?<![A-Za-z])' . $atom . '(?:\s*' . $atom . ')*\s*(?:=|<=|>=|#|<|>)\s*' . $atom . '(?:\s*' . $atom . ')*/u';
-        if (preg_match_all($equation, $s, $matches) && !empty($matches[0])) {
-            usort($matches[0], static function($a, $b) {
-                return strlen($b) <=> strlen($a);
-            });
-            return trim($matches[0][0]);
-        }
-
-        $expression = '/' . $atom . '(?:\s*' . $atom . ')+/u';
-        if (preg_match_all($expression, $s, $matches) && !empty($matches[0])) {
-            $candidates = array_values(array_filter($matches[0], static function($value) {
-                return preg_match('/(?:\d|[+\-*\/^]|\\\\frac|\\\\sqrt)/u', $value);
-            }));
-            if ($candidates) {
-                usort($candidates, static function($a, $b) {
-                    return strlen($b) <=> strlen($a);
-                });
-                return trim($candidates[0]);
-            }
-        }
-
+        // What is left after the prose is the learner's formula: keep all of
+        // it rather than picking a fraction or the longest equation out of it.
         if (preg_match('/[=+\-*\/^]|\d|\\\\frac|\\\\sqrt/u', $s)) {
-            return $s;
+            return trim($s);
         }
 
         return '';
-    }
-
-    private static function first_fraction(string $input): ?array {
-        $offset = 0;
-        while (($start = strpos($input, '\\frac', $offset)) !== false) {
-            $cursor = $start + strlen('\\frac');
-            $valid = true;
-            for ($group = 0; $group < 2; $group++) {
-                while (isset($input[$cursor]) && ctype_space($input[$cursor])) {
-                    $cursor++;
-                }
-                if (!isset($input[$cursor]) || $input[$cursor] !== '{') {
-                    $valid = false;
-                    break;
-                }
-                $depth = 1;
-                $cursor++;
-                while (isset($input[$cursor]) && $depth > 0) {
-                    if ($input[$cursor] === '{') {
-                        $depth++;
-                    } else if ($input[$cursor] === '}') {
-                        $depth--;
-                    }
-                    $cursor++;
-                }
-                if ($depth !== 0) {
-                    $valid = false;
-                    break;
-                }
-            }
-            if ($valid) {
-                return ['start' => $start, 'value' => substr($input, $start, $cursor - $start)];
-            }
-            $offset = $start + strlen('\\frac');
-        }
-        return null;
     }
 }

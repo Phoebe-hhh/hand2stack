@@ -141,6 +141,10 @@ final class brackets {
             $char = $body[$i];
             if (strpos('({[', $char) !== false) {
                 $depth++;
+            } else if ($depth === 0 && ($char === ',' || strpos(')}]', $char) !== false)) {
+                // The bracket or argument list the operator sits in ends here:
+                // "\\int_0^1 \\sum_k x^k dx" is already int(\\sum_k x^k,x,0,1).
+                return [rtrim(substr($body, 0, $i)), substr($body, $i) . $rest];
             } else if (strpos(')}]', $char) !== false) {
                 $depth--;
             } else if ($depth === 0 && ($char === '+' || $char === '-') && $previous !== ''
@@ -152,6 +156,23 @@ final class brackets {
             }
         }
         return [$body, $rest];
+    }
+
+    /** Whether $input is one bracketed group: "(i^2+2i+1)", not "(x+1)(x-1)". */
+    public static function is_one_group(string $input): bool {
+        $input = trim($input);
+        if ($input === '' || strpos('({[', $input[0]) === false) {
+            return false;
+        }
+        $depth = 0;
+        for ($i = 0, $length = strlen($input); $i < $length; $i++) {
+            if (strpos('({[', $input[$i]) !== false) {
+                $depth++;
+            } else if (strpos(')}]', $input[$i]) !== false && --$depth === 0) {
+                return $i === $length - 1;
+            }
+        }
+        return false;
     }
 
     /**

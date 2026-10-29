@@ -23,6 +23,25 @@ final class algebra {
     /** |x| and \\vert x\\vert as abs(x), when the bars pair up. */
     public static function absolute(string $input): string {
         $output = preg_replace('/\\\\[lr]?vert(?![a-zA-Z])/', '|', $input);
+        return self::pair_bars($output) ?? $output;
+    }
+
+    /**
+     * Whether the bars in $input do not pair up one way only: unpaired,
+     * |a|b|c| (|a|*b*|c| or |a*|b|*c|) or a norm ||x||. Such a row is the
+     * learner's to clarify, so it stays as written.
+     */
+    public static function has_ambiguous_bars(string $input): bool {
+        // \\left and \\big only size a bar: in "x-\\left|y\\right|" it follows the minus.
+        $output = preg_replace('/\\\\(?:left|right|[bB]igg?[lr]?)(?![a-zA-Z])\s*/', '', $input);
+        $output = preg_replace('/\\\\[lr]?vert(?![a-zA-Z])/', '|', $output);
+        // \\| is a norm, which has no STACK spelling here.
+        return strpos($output, '\\|') !== false
+            || strpos($output, '|') !== false && self::pair_bars($output) === null;
+    }
+
+    /** $input with each pair of bars as abs(..), or null when they do not pair one way. */
+    private static function pair_bars(string $output): ?string {
         if (strpos($output, '|') === false) {
             return $output;
         }
@@ -48,12 +67,20 @@ final class algebra {
                 $normalized .= ($previous !== '' && ctype_alpha($previous) ? ' ' : '') . 'abs(';
                 $depth++;
             } else {
+                // A bar right before a term, with two more bars to come, may
+                // close this pair or open one inside it.
+                $next = ltrim(substr($output, $index + 1));
+                if ($next !== '' && (ctype_alnum($next[0]) || strpos('(\\', $next[0]) !== false)
+                        && substr_count($output, '|', $index + 1) >= 2) {
+                    return null;
+                }
                 $normalized .= ')';
                 $depth--;
             }
         }
 
-        return $depth === 0 ? $normalized : $output;
+        // ||x|| is a norm, not two empty absolute values.
+        return $depth === 0 && strpos($normalized, 'abs()') === false ? $normalized : null;
     }
 
     /**

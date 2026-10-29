@@ -59,7 +59,8 @@ final class stack_converter_test extends \advanced_testcase {
             'logarithm base' => ['\\log _{10} x', 'log(x)/log(10)'],
             'logarithm base with nested argument' => [
                 '\\log _{2}(x(x-2))=3',
-                '(log(x*(x-2))/log(2))=3',
+                // x(x-2) may be a product or a function value: STACK's insert-stars setting decides.
+                '(log(x(x-2))/log(2))=3',
             ],
             'logarithm base with left-right nested argument' => [
                 '\\log_{3}\\left((x+1)(x-1)\\right)',
@@ -98,7 +99,8 @@ final class stack_converter_test extends \advanced_testcase {
                 'sum(1/k^2,k,1,n)',
             ],
             'product' => ['\\prod_{k=1}^{n} x_{k}', 'product(x[k],k,1,n)'],
-            'product OCR as pi' => ['\\pi_{i=1}^{n} i', 'product(i,i,1,n)'],
+            // A product sign Mathpix read as pi, or pi itself: not ours to say.
+            'pi with an index stays as written' => ['\\pi_{i=1}^{n} i', '\\pi_{i=1}^{n} i'],
             'parenthesised triple stays ambiguous' => ['(1,2,3)', '(1,2,3)'],
             'dot product' => ['\\vec{u} \\cdot \\vec{v}', 'u.v'],
             'multiplication commands' => ['2 \\cdot 3+a \\times b-6 \\div 2', '2*3+a*b-6/2'],
@@ -111,11 +113,12 @@ final class stack_converter_test extends \advanced_testcase {
             'transpose is not an arrow' => ['A^{\\top}', 'A^(\\top)'],
             'dense implicit multiplication' => [
                 '3x(x+1)(x-2)+2\\pi r^2h-4ab\\sqrt{c}',
-                '3*x*(x+1)*(x-2)+2*%pi*r^2*h-4*ab*sqrt(c)',
+                '3*x(x+1)*(x-2)+2*%pi*r^2*h-4*ab*sqrt(c)',
             ],
             'multivariable products' => [
                 '\\frac{ax^2+bxy+cy^2}{\\sqrt{a^2+b^2+c^2}}',
-                '(a*x^2+bxy+cy^2)/(sqrt(a^2+b^2+c^2))',
+                // Run-together names stay whole for STACK's insert-stars setting, ax as bxy.
+                '(ax^2+bxy+cy^2)/(sqrt(a^2+b^2+c^2))',
             ],
             'two solutions keep their variable' => ['x=1,2', 'x=1,2'],
             'therefore two solutions' => ['\\therefore x=2,3', 'x=2,3'],
@@ -174,7 +177,7 @@ final class stack_converter_test extends \advanced_testcase {
             'leading implication arrow' => ['\\Rightarrow x=3', 'x=3'],
             'bare prime' => ['y^{\\prime}=2 y', "y'=2*y"],
             'limit keeps its right-hand side' => ['\\lim _{x \\rightarrow 0} \\frac{\\sin x}{x}=1', 'limit(sin(x)/x,x,0)=1'],
-            'sum keeps its right-hand side' => ['\\sum_{k=1}^{n} k=\\frac{n(n+1)}{2}', 'sum(k,k,1,n)=(n*(n+1))/(2)'],
+            'sum keeps its right-hand side' => ['\\sum_{k=1}^{n} k=\\frac{n(n+1)}{2}', 'sum(k,k,1,n)=(n(n+1))/(2)'],
             'determinant keeps its right-hand side' => ['\\left|\\begin{array}{ll}a & b \\\\ c & d\\end{array}\\right|=a d-b c', 'determinant(matrix([a,b],[c,d]))=a*d-b*c'],
             'brace system is a list' => ['\\left\\{\\begin{array}{l}x+y=3 \\\\ x-y=1\\end{array}\\right.', '[x+y=3,x-y=1]'],
             'cases system is a list' => ['\\begin{cases}x+y=3 \\\\ x-y=1\\end{cases}', '[x+y=3,x-y=1]'],
@@ -206,9 +209,12 @@ final class stack_converter_test extends \advanced_testcase {
         return [
             'subscript i is an index' => ['latex', 'a_{i}+a_{i+1}', 'a[i]+a[i+1]'],
             'scientific number times a variable' => ['latex', '2.5e-3 x', '2.5e-3*x'],
-            'limit body ends at a plus' => ['latex', '\\lim_{x \\to 0} \\frac{\\sin x}{x} + 1', 'limit(sin(x)/x,x,0)+1'],
-            'sum body ends at a plus' => ['latex', '\\sum_{k=1}^{n} k^2 + n', 'sum(k^2,k,1,n)+n'],
-            'derivative body ends at a plus' => ['latex', '\\frac{d}{dx} x^2 + 1', 'diff(x^2,x)+1'],
+            // Without brackets, whether a following + or - term belongs to the
+            // operator is the learner's to say: the row stays as written.
+            'limit body before a plus stays as written' => ['latex', '\\lim_{x \\to 0} \\frac{\\sin x}{x} + 1', '\\lim_{x \\to 0} \\frac{\\sin x}{x} + 1'],
+            'sum body before a plus stays as written' => ['latex', '\\sum_{k=1}^{n} k^2 + n', '\\sum_{k=1}^{n} k^2 + n'],
+            'derivative body before a plus stays as written' => ['latex', '\\frac{d}{dx} x^2 + 1', '\\frac{d}{dx} x^2 + 1'],
+            'bracketed limit body before a plus' => ['latex', '\\lim_{x \\to 0} \\left(\\frac{\\sin x}{x}\\right) + 1', 'limit((sin(x)/x),x,0)+1'],
             'leading sign stays in a sum body' => ['latex', '\\sum_{k=1}^{n} -k', 'sum(-k,k,1,n)'],
             'bracketed sum body is whole' => ['latex', '\\sum_{k=1}^{n} (k^2 + k)', 'sum((k^2+k),k,1,n)'],
             'x double prime has no stated variable' => ['latex', "x''=3", "x''=3"],
@@ -239,6 +245,94 @@ final class stack_converter_test extends \advanced_testcase {
             'upright differential' => ['latex', '\\int \\frac{1}{x}\\,\\mathrm{d}x', 'int(1/x,x)'],
             'definite integral with value' => ['latex', '\\int_0^{\\pi} \\sin x dx = 2', 'int(sin(x),x,0,%pi)=2'],
             'integral inside a fraction' => ['latex', '\\frac{\\int_0^1(x+1)\\,dx}{(x+3)}', '(int((x+1),x,0,1))/((x+3))'],
+            // Each integral ends at its own differential when a sum follows it.
+            'difference of definite integrals' => [
+                'latex',
+                '\\int_{0}^{2} x^{2} d x-\\int_{0}^{2} x d x+\\frac{2}{3}',
+                'int(x^2,x,0,2)-int(x,x,0,2)+2/3',
+            ],
+            'integral equal to a difference of integrals' => [
+                'latex',
+                '\\int_{0}^{2}\\left(x^{2}-x+\\frac{2}{3}\\right) d x=\\int_{0}^{2} x^{2} d x-\\int_{0}^{2} x d x+\\frac{2}{3}',
+                'int((x^2-x+2/3),x,0,2)=int(x^2,x,0,2)-int(x,x,0,2)+2/3',
+            ],
+            'sum of indefinite integrals' => ['latex', '\\int x\\,dx+\\int 1\\,dx', 'int(x,x)+int(1,x)'],
+            'compact differential before a difference' => ['latex', '\\int_0^1 xdx-1', 'int(x,x,0,1)-1'],
+            'command letters are not a differential' => ['latex', '\\int_0^1 a \\cdot x d x-1', 'int(a*x,x,0,1)-1'],
+            // Every limit, sum, product and derivative in a row is converted,
+            // not only the first.
+            'handwritten limits, integral and sum with bracketed bodies' => [
+                'latex',
+                '\\lim _{x \\rightarrow 0}\\left(x^{2}+2 x\\right)+\\lim _{x \\rightarrow 0}\\left(\\int_{0}^{2}\\left(x^{2}-x+\\frac{2}{3}\\right) d x\\right)'
+                    . '+\\sum_{i=0}^{\\infty}\\left(i^{2}+2 i+1\\right)',
+                'limit((x^2+2*x),x,0)+limit((int((x^2-x+2/3),x,0,2)),x,0)+sum((i^2+2*i+1),i,0,inf)',
+            ],
+            // The same row without brackets: x^2+2x and i^2+2i+1 may each be
+            // the whole body or not.
+            'handwritten limits and sum without brackets stay as written' => [
+                'latex',
+                '\\lim _{x \\rightarrow 0} x^{2}+2 x+\\sum_{i=0}^{\\infty} i^{2}+2 i+1',
+                '\\lim _{x \\rightarrow 0} x^{2}+2 x+\\sum_{i=0}^{\\infty} i^{2}+2 i+1',
+            ],
+            'two limits' => ['latex', '\\lim_{x \\to 0} x=\\lim_{y \\to 0} y', 'limit(x,x,0)=limit(y,y,0)'],
+            'two sums' => ['latex', '\\sum_{k=1}^{n}(k)+\\sum_{k=1}^{n}\\left(k^{2}\\right)', 'sum((k),k,1,n)+sum((k^2),k,1,n)'],
+            'two derivatives' => ['latex', '\\frac{d}{d x}\\left(x^{2}\\right)-\\frac{d^{2}}{d x^{2}}\\left(x^{3}\\right)', 'diff((x^2),x)-diff((x^3),x,2)'],
+            'product of sums' => ['latex', '\\sum_{k=1}^{n} k \\cdot \\sum_{j=1}^{m} j', 'sum(k*sum(j,j,1,m),k,1,n)'],
+            // A body ends where the bracket or argument list around it does.
+            'sum inside an integral' => ['latex', '\\int_{0}^{1} \\sum_{k=1}^{n} x^{k} d x', 'int(sum(x^k,k,1,n),x,0,1)'],
+            'product of integrals' => ['latex', '\\int_0^1 x dx \\cdot \\int_0^1 y dy', 'int(x,x,0,1)*int(y,y,0,1)'],
+            // A sum over i makes i an index, not the imaginary unit.
+            'nested sums over i and j' => ['latex', '\\sum_{i=1}^{n} \\sum_{j=1}^{m} i j', 'sum(sum(i*j,j,1,m),i,1,n)'],
+            'imaginary unit without an index i' => ['latex', '3+2 i', '3+2*%i'],
+            // A space before a number would join it to what comes before: a
+            // product, a list or a thousands separator is the learner's to say.
+            'space between numbers stays as written' => ['latex', '2 3', '2 3'],
+            'number after a fraction stays as written' => ['latex', '\\frac{1}{2} 3', '\\frac{1}{2} 3'],
+            'number after a letter stays as written' => ['latex', 'x 2', 'x 2'],
+            // An unbraced superscript is the next token, as in LaTeX.
+            'unbraced fraction exponent' => ['latex', '2^\\frac{1}{2}+1', '2^(1/2)+1'],
+            // ^{-1} is the inverse of a trigonometric or hyperbolic function by
+            // convention; for other functions and f^{-1}(x) it may be either.
+            'inverse hyperbolic function' => ['latex', '\\sinh^{-1} x', 'asinh(x)'],
+            'inverse secant' => ['latex', '\\sec^{-1} x', 'asec(x)'],
+            'log to the minus one stays as written' => ['latex', '\\log^{-1} x', '\\log^{-1} x'],
+            'f inverse of x stays as written' => ['latex', 'f^{-1}(x)', 'f^{-1}(x)'],
+            'reciprocal power still converts' => ['latex', '\\pi^{-1}+x^{-1}', '%pi^(-1)+x^(-1)'],
+            // Bars that could pair two ways, and a norm, stay as written.
+            'ambiguous absolute bars stay as written' => ['latex', '|a|b|c|', '|a|b|c|'],
+            'norm stays as written' => ['latex', '\\left\\|x\\right\\|+||y||', '\\left\\|x\\right\\|+||y||'],
+            'separate absolute values' => ['latex', '|x-1|+|x+1|', 'abs(x-1)+abs(x+1)'],
+            // A letter before brackets is left to STACK's insert-stars setting.
+            'letter before brackets stays as written' => ['latex', 'F(2)-F(0)+a(x+1)', 'F(2)-F(0)+a(x+1)'],
+            'number before brackets is a product' => ['latex', '2(x+1)(x-1)', '2*(x+1)*(x-1)'],
+            // Prose marked by Mathpix is removed; the rest of the formula stays whole.
+            'formula after prose stays whole' => ['latex', '\\text{area } \\frac{1}{2}\\cdot 3\\cdot 4=6', '1/2*3*4=6'],
+            // A factor or term around cases has no STACK if form.
+            'factor before cases stays as written' => ['latex', '2\\begin{cases} x & x>0 \\\\ 0 & x \\leq 0 \\end{cases}',
+                '2\\begin{cases} x & x>0 \\\\ 0 & x \\leq 0 \\end{cases}'],
+            'term after cases stays as written' => ['latex', 'f(x)=\\begin{cases} x & x>0 \\\\ 0 & x \\leq 0 \\end{cases}+1',
+                'f(x)=\\begin{cases} x & x>0 \\\\ 0 & x \\leq 0 \\end{cases}+1'],
+            // A system aligned at its relations is a list of equations.
+            'aligned system is a list' => ['latex', '\\left\\{\\begin{array}{rl}2x+3y&\\leq 6\\\\x&\\geq 0\\end{array}\\right.',
+                '[2*x+3*y<=6,x>=0]'],
+            'brace around unaligned columns stays as written' => ['latex', '\\left\\{\\begin{array}{ll}1 & 2\\\\3 & 4\\end{array}\\right.',
+                '\\left\\{\\begin{array}{ll}1 & 2\\\\3 & 4\\end{array}\\right.'],
+            // Mathpix spaces a handwritten differential as \mathrm{~d}.
+            'spaced upright differential' => ['latex', '\\int x \\mathrm{~d} x', 'int(x,x)'],
+            'difference of integrals with spaced differentials' => [
+                'latex',
+                '\\int_{0}^{2} x^{2} \\mathrm{~d} x-\\int_{0}^{2} x \\mathrm{~d} x+\\frac{2}{3}',
+                'int(x^2,x,0,2)-int(x,x,0,2)+2/3',
+            ],
+            // An integral of the differential alone integrates 1.
+            'definite integral of the differential alone' => ['latex', '\\int_0^1 dx', 'int(1,x,0,1)'],
+            'indefinite integral of the differential alone' => ['latex', '\\int \\, dx', 'int(1,x)'],
+            'difference with an integral of the differential alone' => [
+                'latex',
+                '2\\int_0^1 x dx - 3\\int_0^1 dx',
+                '2*int(x,x,0,1)-3*int(1,x,0,1)',
+            ],
+            'unbraced upper limit is one token' => ['latex', '\\int_0^1x dx', 'int(x,x,0,1)'],
             'matrix inside a fraction' => ['latex', '\\frac{\\begin{pmatrix}3 & x \\\\ x & 3\\end{pmatrix}}{2}', '(matrix([3,x],[x,3]))/2'],
             'equivalence arrow splits statements' => ['latex', 'x^2=4 \\Leftrightarrow x=\\pm 2', 'x^2=4,x=+-2'],
             'therefore splits statements' => ['latex', '2x+3=7 \\therefore x=2', '2*x+3=7,x=2'],
@@ -343,7 +437,7 @@ final class stack_converter_test extends \advanced_testcase {
             'number before group' => ['2(x+1)', '2*(x+1)'],
             'absolute value' => ['|x-1|', 'abs(x-1)'],
             'unicode minus' => ['x=−1', 'x=-1'],
-            'logarithm base with nested argument' => ['log_2(x(x-2))=3', '(log(x*(x-2))/log(2))=3'],
+            'logarithm base with nested argument' => ['log_2(x(x-2))=3', '(log(x(x-2))/log(2))=3'],
             'logarithm base inside a word stays one name' => ['catalog_2', 'catalog_2'],
             'logical interval with implicit multiplication' => [
                 '1<=x and x<=3*2x',

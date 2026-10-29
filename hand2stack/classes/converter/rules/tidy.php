@@ -18,20 +18,6 @@ namespace local_hand2stack\converter\rules;
 defined('MOODLE_INTERNAL') || die();
 
 final class tidy {
-    /** A known function keeps its call; a single letter before brackets multiplies them. */
-    public static function protect_functions(string $input): string {
-        $functions = ['f', 'g', 'h', 'min', 'max', 'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
-            'sinh', 'cosh', 'tanh', 'asin', 'acos', 'atan', 'atan2', 'log', 'ln', 'log10', 'sqrt', 'nthroot', 'exp',
-            'abs', 'floor', 'ceiling', 'signum', 'mod', 'gcd', 'lcm', 'realpart', 'imagpart',
-            'limit', 'diff', 'int', 'sum', 'product', 'matrix', 'determinant', 'binomial', 'lg'];
-        $functions[] = 'not';
-        $functions[] = 'elementp';
-
-        return preg_replace_callback('/(?<![\\\\A-Za-z0-9])([a-zA-Z]+(?:10|2)?)\(/', static function($m) use ($functions) {
-            return in_array($m[1], $functions, true) || strlen($m[1]) >= 3 ? $m[0] : $m[1] . '*(';
-        }, $input);
-    }
-
     /** Drop brackets that carry no meaning and restore calls such as f(x). */
     public static function beautify(string $input): string {
         $s = $input;
