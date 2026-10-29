@@ -274,10 +274,16 @@ final class stack_converter {
 
         $s = trig_log::inverse_trig($s);
         // What remains of f^{-1}: \\log^{-1} x may be the inverse or 1/log(x),
-        // f^{-1}(x) an inverse function or a product. Keep it as written.
-        if (preg_match('/\\\\(?:' . patterns::BARE_ARGUMENT_FUNCTIONS . ')\s*\^\s*\(\s*-\s*1\s*\)/', $s)
-                || preg_match('/(?<![A-Za-z\\\\])[A-Za-z]\s*\^\s*\(\s*-\s*1\s*\)\s*\(/', $s)) {
+        // f^{-1}(x) an inverse function or a product. Keep it as written. The
+        // constant e is no function, and x^{-1}(x+1) does not apply x to x.
+        if (preg_match('/\\\\(?:' . patterns::BARE_ARGUMENT_FUNCTIONS . ')\s*\^\s*\(\s*-\s*1\s*\)/', $s)) {
             return null;
+        }
+        preg_match_all('/(?<![A-Za-z\\\\])([A-Za-df-z])\s*\^\s*\(\s*-\s*1\s*\)\s*(\((?:[^()]++|(?2))*\))/', $s, $inverses, PREG_SET_ORDER);
+        foreach ($inverses as [, $name, $argument]) {
+            if (!preg_match('/(?<![A-Za-z\\\\])' . $name . '(?![A-Za-z])/', $argument)) {
+                return null;
+            }
         }
         // \\pi_{i=1}^{n} may be a product sign Mathpix read as pi, or pi itself.
         if (preg_match('/\\\\pi\s*_\s*\{\s*[a-zA-Z]\s*=/', $s)) {

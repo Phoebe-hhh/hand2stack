@@ -86,13 +86,13 @@ test('an uploaded image is shrunk from the file as soon as it is chosen, not rea
     vm.runInNewContext(source, {
         window: {
             sessionStorage: session,
-            createImageBitmap: file => Promise.resolve({width: 3000, height: 2000, file, close() {
+            createImageBitmap: (file, options) => Promise.resolve({width: 3000, height: 2000, file, options, close() {
                 this.closed = true;
             }}),
         },
         document: {
             createElement: () => ({
-                getContext: () => ({fillRect() {}, drawImage: (bitmap, x, y, w, h) => drawn.push([bitmap.file, w, h])}),
+                getContext: () => ({fillRect() {}, drawImage: (bitmap, x, y, w, h) => drawn.push([bitmap.file, w, h, bitmap.options.imageOrientation])}),
                 toDataURL: type => 'data:' + type + ';base64,SHRUNK',
             }),
         },
@@ -107,6 +107,28 @@ test('an uploaded image is shrunk from the file as soon as it is chosen, not rea
     // The recognition comes back later and saves the result with that image.
     exported.saveRecognitionResult({name: 'q12:1_working'}, {sourceUrl: 'blob:photo'});
     await new Promise(resolve => setTimeout(resolve, 0));
-    assert.deepEqual(drawn, [['photo.png', 1600, 1067]]);
+    assert.deepEqual(drawn, [['photo.png', 1600, 1067, 'from-image']]);
     assert.equal(exported.loadSavedResult({name: 'q12:1_working'}).sourceUrl, 'data:image/jpeg;base64,SHRUNK');
+});
+
+test('an upload whose recognition failed is not kept', async () => {
+    const session = storage();
+    let exported;
+    vm.runInNewContext(source, {
+        window: {sessionStorage: session, createImageBitmap: () => Promise.resolve({width: 10, height: 10})},
+        document: {createElement: () => ({getContext: () => ({fillRect() {}, drawImage() {}}),
+            toDataURL: () => 'data:image/jpeg;base64,PREPARED'})},
+        // The fallback path, used once the prepared image is forgotten.
+        Image: function() {
+            setTimeout(() => this.onerror(), 0);
+        },
+        define: (deps, factory) => {
+            exported = factory();
+        }
+    });
+    exported.prepareSourceImage('blob:photo', 'photo.png');
+    exported.forgetSourceImage('blob:photo');
+    exported.saveRecognitionResult({name: 'q12:1_working'}, {sourceUrl: 'blob:photo'});
+    await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(exported.loadSavedResult({name: 'q12:1_working'}).sourceUrl, '');
 });

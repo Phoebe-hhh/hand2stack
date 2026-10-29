@@ -112,7 +112,8 @@ final class trig_log {
             'tan' => 'atan', 'cot' => 'acot', 'sec' => 'asec', 'csc' => 'acsc'];
         foreach ($inverses as $latex => $stack) {
             $s = preg_replace('/\\\\' . $latex . '(?![A-Za-z])\s*\^\s*\(\s*-1\s*\)\s*\\\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/', $stack . '(($1)/($2))', $s);
-            $s = preg_replace('/\\\\' . $latex . '(?![A-Za-z])\s*\^\s*\(\s*-1\s*\)\s*\(([^()]+)\)/', $stack . '($1)', $s);
+            // The argument in brackets may hold brackets of its own: \\tan^{-1}(x^{2}).
+            $s = preg_replace('/\\\\' . $latex . '(?![A-Za-z])\s*\^\s*\(\s*-1\s*\)\s*(\((?:[^()]++|(?1))*\))/', $stack . '$1', $s);
             $s = preg_replace('/\\\\' . $latex . '(?![A-Za-z])\s*\^\s*\(\s*-1\s*\)\s*([a-zA-Z0-9]+)/', $stack . '($1)', $s);
         }
         return $s;

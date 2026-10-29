@@ -30,7 +30,6 @@ final class piecewise {
         }
 
         $prefix = '';
-        $unnamed = false;
         $prefixpos = strpos($input, $match[0]);
         if ($prefixpos !== false) {
             $prefix = substr($input, 0, $prefixpos);
@@ -38,15 +37,20 @@ final class piecewise {
             $prefix = preg_replace('/\\\\left(?![a-zA-Z])/', '', $prefix);
             $prefix = str_replace(['\\{', '{'], '', $prefix);
             $prefix = trim($prefix);
-            // Only "f(x)=" names the block. A factor before it (2\\begin{cases})
-            // or a term after it (\\end{cases}+1) has no STACK if form, and
-            // dropping it would change the answer.
-            $unnamed = $prefix !== '' && !preg_match('/=$/', $prefix);
-            $prefix = $prefix === '' || $unnamed ? '' : stack_converter::normalize($prefix);
         }
         $suffix = substr($input, strpos($input, $match[0]) + strlen($match[0]));
-        $unnamed = $unnamed
+        // Brackets around the whole block, f(x)=\\left(\\begin{cases}..\\end{cases}\\right),
+        // only enclose it.
+        if (preg_match('/[(\[]$/', $prefix) && preg_match('/^\s*(?:\\\\right\s*)?[)\]]/', $suffix, $close)) {
+            $prefix = rtrim(substr($prefix, 0, -1));
+            $suffix = substr($suffix, strlen($close[0]));
+        }
+        // Only "f(x)=" names the block. A factor before it (2\\begin{cases})
+        // or a term after it (\\end{cases}+1) has no STACK if form, and
+        // dropping it would change the answer.
+        $unnamed = ($prefix !== '' && !preg_match('/=$/', $prefix))
             || trim(preg_replace('/^\s*\\\\right\s*(?:\\\\?[.}\]])?|[\s.,]+$/', '', $suffix)) !== '';
+        $prefix = $prefix === '' || $unnamed ? '' : stack_converter::normalize($prefix);
 
         $branches = [];
         foreach (preg_split('/\\\\\\\\/', trim($match[2])) as $row) {

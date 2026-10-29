@@ -34,7 +34,7 @@ define([
     const {isFreeTextInput, captureAnswerAnchor} = StackInputs;
     const {logRecognitionFailure, research} = Research;
     const {postImage, createMobileSession, fetchSessionResult} = Api;
-    const {loadSavedResult, prepareSourceImage} = SavedResult;
+    const {loadSavedResult, prepareSourceImage, forgetSourceImage} = SavedResult;
     const {icons, setIconButtonLabel, paintIconButton, createIconButton} = Icons;
     const {createResultPanel, setRequestStatus} = ResultPanel;
     const {updateResultPanel} = ResultView;
@@ -142,7 +142,8 @@ define([
                 image: {mime: file.type || '', bytes: file.size || 0}
             }, {modality: source});
             const sourceUrl = URL.createObjectURL(file);
-            prepareSourceImage(sourceUrl, file);
+            // Only a Free-text answer keeps the image it was recognized from.
+            if (isFreeTextInput(answerBox)) prepareSourceImage(sourceUrl, file);
             button.disabled = true;
             setIconButtonLabel(button, config.uploading || 'Recognizing...');
             setRequestStatus(resultPanel);
@@ -174,7 +175,10 @@ define([
                 resultPanel.style.display = 'block';
                 setRequestStatus(resultPanel, (config.recognizefailed || 'Recognition failed.') + ' ' + error.message, true);
             } finally {
-                if (resultPanel._sourceObjectUrl !== sourceUrl) URL.revokeObjectURL(sourceUrl);
+                if (resultPanel._sourceObjectUrl !== sourceUrl) {
+                    URL.revokeObjectURL(sourceUrl);
+                    forgetSourceImage(sourceUrl);
+                }
                 button.disabled = false;
                 setIconButtonLabel(button, idleLabel);
             }

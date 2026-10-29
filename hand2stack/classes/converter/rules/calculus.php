@@ -120,6 +120,15 @@ final class calculus {
      * "\\frac{\\int_0^1 x\\,dx}{2}" both end the integral at its differential.
      */
     public static function integrals(string $input): string {
+        // \\int \\frac{dx}{1+x^2} is \\int \\frac{1}{1+x^2} dx written with its
+        // differential on the fraction line.
+        $input = preg_replace(
+            '/(\\\\int(?![A-Za-z])(?:\s*_\s*(?:\{[^{}]*\}|\\\\[A-Za-z]+|[^\s\\\\{]))?'
+                . '(?:\s*\^\s*(?:\{[^{}]*\}|\([^()]*\)|\\\\[A-Za-z]+|[^\s\\\\{(]))?)'
+                . '\s*\\\\frac\s*\{\s*d\s*([a-zA-Z])\s*\}\s*(\{(?:[^{}]|(?3))*\})/',
+            '$1 \\\\frac{1}$3 d $2',
+            $input
+        );
         $offset = 0;
         while (preg_match('/\\\\int(?![A-Za-z])/', $input, $match, PREG_OFFSET_CAPTURE, $offset)) {
             $start = $match[0][1];

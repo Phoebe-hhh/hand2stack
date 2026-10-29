@@ -135,7 +135,8 @@ define([], function() {
     const prepareSourceImage = (sourceUrl, file) => {
         if (!sourceUrl || !file) return;
         const shrink = typeof window.createImageBitmap === 'function'
-            ? window.createImageBitmap(file).then(bitmap => {
+            // Upright as the photo's EXIF orientation says, as an <img> shows it.
+            ? window.createImageBitmap(file, {imageOrientation: 'from-image'}).then(bitmap => {
                 try {
                     return toSavedJpeg(bitmap, bitmap.width, bitmap.height);
                 } finally {
@@ -144,6 +145,11 @@ define([], function() {
             }).catch(() => loadAndShrink(sourceUrl))
             : loadAndShrink(sourceUrl);
         preparedImages.set(sourceUrl, shrink);
+    };
+
+    // An upload whose recognition failed or was overtaken is never saved.
+    const forgetSourceImage = sourceUrl => {
+        preparedImages.delete(sourceUrl);
     };
 
     const compressSourceImage = sourceUrl => {
@@ -219,5 +225,6 @@ define([], function() {
         writeSavedResult(key, Object.assign({}, drawing, {savedAt: Date.now()}), savedResultKey(answerBox));
     };
 
-    return {loadSavedResult, saveRecognitionResult, saveFreeTextWorking, loadSavedStrokes, saveStrokes, snapshotCanvas, prepareSourceImage};
+    return {loadSavedResult, saveRecognitionResult, saveFreeTextWorking, loadSavedStrokes, saveStrokes, snapshotCanvas,
+        prepareSourceImage, forgetSourceImage};
 });

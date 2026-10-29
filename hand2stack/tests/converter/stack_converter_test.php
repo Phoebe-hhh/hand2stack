@@ -295,6 +295,18 @@ final class stack_converter_test extends \advanced_testcase {
             // convention; for other functions and f^{-1}(x) it may be either.
             'inverse hyperbolic function' => ['latex', '\\sinh^{-1} x', 'asinh(x)'],
             'inverse secant' => ['latex', '\\sec^{-1} x', 'asec(x)'],
+            'inverse trigonometric function of a bracketed power' => ['latex', '\\tan^{-1}(x^{2})+1', 'atan(x^2)+1'],
+            'inverse cosine of a product' => ['latex', '\\cos^{-1}((x+1)(x-1))', 'acos((x+1)*(x-1))'],
+            // e is no function, and x^{-1}(x+1) does not apply x to x.
+            'reciprocal of e times a bracket' => ['latex', 'e^{-1}(x+1)', '%e^(-1)*(x+1)'],
+            'reciprocal of x times a bracket' => ['latex', 'x^{-1}(x+1)', 'x^(-1)*(x+1)'],
+            'g inverse of a value stays as written' => ['latex', 'g^{-1}(2)', 'g^{-1}(2)'],
+            // A differential on the fraction line.
+            'integral with dx over a denominator' => ['latex', '\\int_{0}^{1} \\frac{d x}{1+x^{2}}', 'int((1)/(1+x^2),x,0,1)'],
+            'indefinite integral with dx over x' => ['latex', '\\int \\frac{dx}{x}', 'int(1/x,x)'],
+            // Brackets around a whole cases block only enclose it.
+            'cases in round brackets' => ['latex', 'f(x)=\\left(\\begin{cases} x & x>0 \\\\ 0 & x\\leq 0\\end{cases}\\right)',
+                'f(x)=if x>0 then x elseif x<=0 then 0'],
             'log to the minus one stays as written' => ['latex', '\\log^{-1} x', '\\log^{-1} x'],
             'f inverse of x stays as written' => ['latex', 'f^{-1}(x)', 'f^{-1}(x)'],
             'reciprocal power still converts' => ['latex', '\\pi^{-1}+x^{-1}', '%pi^(-1)+x^(-1)'],
