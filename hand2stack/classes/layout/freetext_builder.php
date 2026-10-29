@@ -23,17 +23,26 @@ defined('MOODLE_INTERNAL') || die();
 
 final class freetext_builder {
     /**
-     * Preserve Mathpix prose and paragraphs while converting only delimited maths
-     * into STACK free-text inline mathematics.
+     * Preserve Mathpix prose and paragraphs while marking each formula as
+     * STACK free-text inline mathematics. A formula is written in the AsciiMath
+     * Mathpix returned for it, which [[ascii]] displays as the learner wrote it:
+     * the working is read, not graded, so nothing is converted to STACK syntax.
+     *
+     * @param array $asciimath [LaTeX, AsciiMath] for each formula, in Mathpix's order
      */
-    public static function build(string $text, string $ascii = '', string $latex = ''): string {
-        return notation_keeper::keeping_as_written(static function() use ($text, $ascii, $latex): string {
-            return self::convert($text, $ascii, $latex);
+    public static function build(string $text, string $ascii = '', string $latex = '', array $asciimath = []): string {
+        return notation_keeper::keeping_as_written(static function() use ($text, $ascii, $latex, $asciimath): string {
+            return self::convert($text, $ascii, $latex, $asciimath);
         });
     }
 
-    private static function convert(string $text, string $ascii, string $latex): string {
+    private static function convert(string $text, string $ascii, string $latex, array $asciimath): string {
         $text = trim(str_replace(["\r\n", "\r"], "\n", $text));
+        if ($text === '' && $asciimath) {
+            return implode("\n", array_map(static function(array $pair): string {
+                return self::asciimath_block($pair[1]);
+            }, $asciimath));
+        }
         if ($text === '') {
             $fallback = trim(str_replace(["\r\n", "\r"], "\n", $ascii));
             if ($fallback === '' && trim($latex) !== '') {
@@ -47,6 +56,7 @@ final class freetext_builder {
         // rows. Only the maths is converted, so a paragraph such as
         // "Therefore, \\(x=3\\)." remains readable prose.
         $converted = '';
+        $next = 0;
         foreach (document_builder::document_segments($text) as [$type, $value]) {
             if ($type === 'text') {
                 // The review rows drop the uploaded filename header too.
@@ -55,9 +65,30 @@ final class freetext_builder {
                 }));
                 continue;
             }
-            [$prose, $latex] = statement_splitter::split_leading_prose($value);
-            $math = $latex === '' ? '' : self::math_to_ascii($latex);
-            $piece = trim($prose . ' ' . ($math === '' ? $latex : self::wrap_math($math)));
+            // Mathpix's AsciiMath for this formula: the next one whose LaTeX
+            // is this segment's.
+            $piece = null;
+            for ($i = $next, $count = count($asciimath); $i < $count; $i++) {
+                if (preg_replace('/\s+/', '', $asciimath[$i][0]) === preg_replace('/\s+/', '', $value)) {
+                    $piece = $type === 'display'
+                        ? self::asciimath_block($asciimath[$i][1])
+                        : self::asciimath_row($asciimath[$i][1]);
+                    $next = $i + 1;
+                    break;
+                }
+            }
+            if ($piece !== null && $type === 'display') {
+                // A block stands on lines of its own, as Mathpix displayed it.
+                $converted = rtrim($converted, " \t");
+                $converted .= ($converted === '' || substr($converted, -1) === "\n" ? '' : "\n") . $piece . "\n";
+                continue;
+            }
+            if ($piece === null) {
+                // No AsciiMath for it: convert the LaTeX as before.
+                [$prose, $latex] = statement_splitter::split_leading_prose($value);
+                $math = $latex === '' ? '' : self::math_to_ascii($latex);
+                $piece = trim($prose . ' ' . ($math === '' ? $latex : self::wrap_math($math)));
+            }
             // Two formulas with nothing but spaces between them are two rows.
             // Only segment boundaries break: the value and condition of a
             // piecewise row ("`y=x^2+1` `x>1`") stay on their row. \z, not $:
@@ -70,6 +101,91 @@ final class freetext_builder {
         $text = $converted;
 
         return trim(preg_replace("/\\n{3,}/", "\n\n", $text));
+    }
+
+    /**
+     * A displayed formula as an [[ascii]] block: a backtick alone on the lines
+     * before and after, one row per line, which STACK shows aligned at the
+     * relations. Inline backticks on consecutive lines would run into one
+     * paragraph. Mathpix returns a handwritten block as {:[x^(2)-1=0],[x=+-1]:}.
+     */
+    private static function asciimath_block(string $ascii): string {
+        $ascii = trim($ascii);
+        if (!preg_match('/^\{:\[(.*)\]:\}$/s', $ascii, $match)) {
+            return self::block_of([$ascii]);
+        }
+        $rows = [];
+        $row = '';
+        $depth = 0;
+        $quoted = false;
+        $inner = $match[1];
+        for ($i = 0, $length = strlen($inner); $i < $length; $i++) {
+            $char = $inner[$i];
+            if ($char === '"') {
+                $quoted = !$quoted;
+            } else if (!$quoted && strpos('([{', $char) !== false) {
+                $depth++;
+            } else if (!$quoted && strpos(')]}', $char) !== false) {
+                if ($depth === 0 && substr($inner, $i, 3) === '],[') {
+                    $rows[] = $row;
+                    $row = '';
+                    $i += 2;
+                    continue;
+                }
+                $depth--;
+            }
+            $row .= $char;
+        }
+        $rows[] = $row;
+        return self::block_of($rows);
+    }
+
+    /**
+     * Rows as a block, except a row that opens with prose: "Answer: 4" or
+     * "so, x=4" written in the block comes back as "Answer: "4. That row is
+     * prose followed by its maths, outside the block, as STACK's extractors
+     * read a labelled line ("Answer: `4`") and as the learner wrote it.
+     */
+    private static function block_of(array $rows): string {
+        $lines = [];
+        $block = [];
+        foreach (array_map('trim', $rows) as $row) {
+            if ($row === '') {
+                continue;
+            }
+            if ($row[0] === '"') {
+                if ($block) {
+                    $lines[] = "`\n" . implode("\n", $block) . "\n`";
+                    $block = [];
+                }
+                $lines[] = self::asciimath_row($row);
+                continue;
+            }
+            $block[] = self::primes($row);
+        }
+        if ($block) {
+            $lines[] = "`\n" . implode("\n", $block) . "\n`";
+        }
+        return implode("\n", $lines);
+    }
+
+    /** One formula in a row of prose: "Answer: "4 is Answer: `4`. */
+    private static function asciimath_row(string $ascii): string {
+        $ascii = self::primes(trim($ascii));
+        if (preg_match('/^"([^"]*)"\s*(.*)$/s', $ascii, $match)) {
+            $prose = trim($match[1]);
+            $maths = trim($match[2]);
+            return trim($prose . ($maths === '' ? '' : ' `' . $maths . '`'));
+        }
+        return $ascii === '' ? '' : '`' . $ascii . '`';
+    }
+
+    /**
+     * Mathpix writes f^{\\prime}(x) as f^(')(x). It shows as f'(x) does, and
+     * f'(x) is what a learner, and a label such as "f'(x) =", writes.
+     */
+    private static function primes(string $ascii): string {
+        return preg_replace("/\\^\\(('+)\\)/", '$1', $ascii);
     }
 
     /** Wrap every converted row independently so STACK preserves line boundaries. */

@@ -175,6 +175,45 @@ final class layout_test extends \advanced_testcase {
             "\\begin{aligned}- 3 x+2 \\\\ 1.\\ x=1\\end{aligned}"), 'stack'));
     }
 
+    /**
+     * Free-text working writes each formula in the AsciiMath Mathpix returned
+     * for it: a display block on lines of its own, one row per line, and
+     * inline maths in backticks within the prose. Real responses from
+     * handwritten pages.
+     *
+     * @dataProvider mathpix_page_provider
+     */
+    public function test_freetext_writes_mathpix_asciimath(string $name): void {
+        $response = file_get_contents(__DIR__ . "/fixtures/mathpix_{$name}.json");
+        $expected = file_get_contents(__DIR__ . "/fixtures/mathpix_{$name}.freetext.txt");
+        $result = response_parser::parse($response, 0, '', 200);
+        $this->assertSame(trim($expected), $result['freetext']);
+    }
+
+    public static function mathpix_page_provider(): array {
+        return [
+            'prose with inline maths and display blocks' => ['prose_and_blocks'],
+            'a block with a word between equations' => ['block_with_prose_word'],
+            'an aligned block' => ['aligned_block'],
+        ];
+    }
+
+    public function test_freetext_asciimath_block_rows(): void {
+        // A row boundary inside quoted text or brackets is not one.
+        $text = "\\[\\begin{array}{l} x=1 \\\\ \\text{ ],[ } \\\\ [a,b] \\end{array}\\]";
+        $latex = "\\begin{array}{l} x=1 \\\\ \\text{ ],[ } \\\\ [a,b] \\end{array}";
+        $this->assertSame("`\nx=1\n`\n],[\n`\n[a,b]\n`",
+            freetext_builder::build($text, '', '', [[$latex, '{:[x=1],[" ],[ "],[[a,b]]:}']]));
+        // A row that opens with prose leaves the block, so a labelled line
+        // reads "Answer: `4`" for STACK's extractors; f^(')(x) is f'(x).
+        $latex = "\\begin{array}{l} f^{\\prime}(x)=6 x \\\\ \\text { so, } x=-3 \\\\ \\text { Answer: } 4 \\end{array}";
+        $this->assertSame("`\nf'(x)=6x\n`\nso, `x=-3`\nAnswer: `4`",
+            freetext_builder::build("\\(" . $latex . "\\)", '', '', [[$latex, "{:[f^(')(x)=6x],[\" so, \"x=-3],[\" Answer: \"4]:}"]]));
+        // A formula Mathpix gave no AsciiMath for is converted as before.
+        $this->assertSame("Let `x=1`, so `y^2=4`",
+            freetext_builder::build("Let \\(x=1\\), so \\(y^{2}=4\\)", '', '', [['x=1', 'x=1']]));
+    }
+
     public function test_freetext_formula_rows_are_not_separated_by_an_extra_blank_line(): void {
         $this->assertSame("`x=1`\n`y=2`", freetext_builder::build("\\(x=1\\)\n\\(y=2\\)"));
         $this->assertSame("`x=1`\n`y=2`", freetext_builder::build("\\(x=1\\) \\(y=2\\)"));

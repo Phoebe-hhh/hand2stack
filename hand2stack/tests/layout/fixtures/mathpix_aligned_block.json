@@ -1,0 +1,13 @@
+{
+  "text": "$\\begin{aligned} 3(x-2)+4 & =2 x+7 \\\\ 3 x-6+4 & =2 x+7 \\\\ 3 x-2 & =2 x+7 \\\\ x & =9\\end{aligned}$",
+  "data": [
+    {
+      "type": "asciimath",
+      "value": "{:[3(x-2)+4=2x+7],[3x-6+4=2x+7],[3x-2=2x+7],[x=9]:}"
+    },
+    {
+      "type": "latex",
+      "value": "\\begin{aligned} 3(x-2)+4 & =2 x+7 \\\\ 3 x-6+4 & =2 x+7 \\\\ 3 x-2 & =2 x+7 \\\\ x & =9\\end{aligned}"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "text": "\\[\n\\begin{array}{l}\nx^{2}-5 x+6=0 \\\\\n(x-2)(x-3)=0 \\\\\nx=2 \\quad \\text { or } \\quad x=3\n\\end{array}\n\\]\nthe larger one is $x=3$",
+  "data": [
+    {
+      "type": "asciimath",
+      "value": "{:[x^(2)-5x+6=0],[(x-2)(x-3)=0],[x=2quad\" or \"quad x=3]:}"
+    },
+    {
+      "type": "latex",
+      "value": "\\begin{array}{l}\nx^{2}-5 x+6=0 \\\\\n(x-2)(x-3)=0 \\\\\nx=2 \\quad \\text { or } \\quad x=3\n\\end{array}"
+    },
+    {
+      "type": "asciimath",
+      "value": "x=3"
+    },
+    {
+      "type": "latex",
+      "value": "x=3"
+    }
+  ]
+}

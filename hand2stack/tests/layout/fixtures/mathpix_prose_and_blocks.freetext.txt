@@ -1,0 +1,47 @@
+Solution
+First, I simplify the given expression
+`
+f(x)=(x^(2)-1)//(x+1)+sqrt(x^(2)+4)
+`
+
+Since
+`
+x^(2)-1=(x-1)(x+1)
+`
+
+we can cancel `x+1`. Therefore,
+`
+f(x)=x-1+sqrt(x^(2)+4),quad x!=-1
+`
+
+Next, let `x=2`. Substituting `x=2` gives
+`
+f(2)=2-1+sqrt((2^(2)+4))
+=1+sqrt8
+=1+2sqrt2
+`
+
+So the value is approximely 3.83 .
+However I first wrote
+`1+sqrt4=3`, which was incorrect cause I
+forget that `2^(2)+4=8`, not 4 .
+Next, consider another expression.
+`
+g(theta)=2sin^(2)((pi theta)/(2))+(1)/(sqrt(theta+1))
+`
+
+For `theta=1`
+`
+g(1)=2sin^(2)((pi)/(2))+(1)/(sqrt2)
+=2+(1)/(sqrt2)
+~~2.71.
+`
+
+Therefore, my final answers are
+1. `f(2)=1+2sqrt2~~383`
+`
+:.quad g(1)=2+(1)/(sqrt2)~~2.71
+`
+
+Thus. `quad f(2) > g(1)`
+Note. the first expression is only valid when `x!=-1`.

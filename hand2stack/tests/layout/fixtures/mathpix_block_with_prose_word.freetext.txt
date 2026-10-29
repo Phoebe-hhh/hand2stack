@@ -1,0 +1,7 @@
+`
+x^(2)-5x+6=0
+(x-2)(x-3)=0
+x=2quad" or "quad x=3
+`
+
+the larger one is `x=3`

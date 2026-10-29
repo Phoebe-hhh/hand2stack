@@ -1,0 +1,125 @@
+{
+  "text": "Solution\nFirst, I simplify the given expression\n\\[\nf(x)=\\left(x^{2}-1\\right) /(x+1)+\\sqrt{x^{2}+4}\n\\]\n\nSince\n\\[\nx^{2}-1=(x-1)(x+1)\n\\]\nwe can cancel $x+1$. Therefore,\n\\[\nf(x)=x-1+\\sqrt{x^{2}+4}, \\quad x \\neq-1\n\\]\n\nNext, let $x=2$. Substituting $x=2$ gives\n\\[\n\\begin{aligned}\nf(2) & =2-1+\\sqrt{\\left(2^{2}+4\\right)} \\\\\n& =1+\\sqrt{8} \\\\\n& =1+2 \\sqrt{2}\n\\end{aligned}\n\\]\n\nSo the value is approximely 3.83 .\nHowever I first wrote\n$1+\\sqrt{4}=3$, which was incorrect cause I\nforget that $2^{2}+4=8$, not 4 .\nNext, consider another expression.\n\\[\ng(\\theta)=2 \\sin ^{2}\\left(\\frac{\\pi \\theta}{2}\\right)+\\frac{1}{\\sqrt{\\theta+1}}\n\\]\n\nFor $\\theta=1$\n\\[\n\\begin{aligned}\ng(1) & =2 \\sin ^{2}\\left(\\frac{\\pi}{2}\\right)+\\frac{1}{\\sqrt{2}} \\\\\n& =2+\\frac{1}{\\sqrt{2}} \\\\\n& \\approx 2.71 .\n\\end{aligned}\n\\]\n\nTherefore, my final answers are\n\\[\n\\begin{array}{l}\n\\text { 1. } f(2)=1+2 \\sqrt{2} \\approx 383 \\\\\n\\therefore \\quad g(1)=2+\\frac{1}{\\sqrt{2}} \\approx 2.71\n\\end{array}\n\\]\n\nThus. $\\quad f(2)>g(1)$\nNote. the first expression is only valid when $x \\neq-1$.",
+  "data": [
+    {
+      "type": "asciimath",
+      "value": "f(x)=(x^(2)-1)//(x+1)+sqrt(x^(2)+4)"
+    },
+    {
+      "type": "latex",
+      "value": "f(x)=\\left(x^{2}-1\\right) /(x+1)+\\sqrt{x^{2}+4}"
+    },
+    {
+      "type": "asciimath",
+      "value": "x^(2)-1=(x-1)(x+1)"
+    },
+    {
+      "type": "latex",
+      "value": "x^{2}-1=(x-1)(x+1)"
+    },
+    {
+      "type": "asciimath",
+      "value": "x+1"
+    },
+    {
+      "type": "latex",
+      "value": "x+1"
+    },
+    {
+      "type": "asciimath",
+      "value": "f(x)=x-1+sqrt(x^(2)+4),quad x!=-1"
+    },
+    {
+      "type": "latex",
+      "value": "f(x)=x-1+\\sqrt{x^{2}+4}, \\quad x \\neq-1"
+    },
+    {
+      "type": "asciimath",
+      "value": "x=2"
+    },
+    {
+      "type": "latex",
+      "value": "x=2"
+    },
+    {
+      "type": "asciimath",
+      "value": "x=2"
+    },
+    {
+      "type": "latex",
+      "value": "x=2"
+    },
+    {
+      "type": "asciimath",
+      "value": "{:[f(2)=2-1+sqrt((2^(2)+4))],[=1+sqrt8],[=1+2sqrt2]:}"
+    },
+    {
+      "type": "latex",
+      "value": "\\begin{aligned}\nf(2) & =2-1+\\sqrt{\\left(2^{2}+4\\right)} \\\\\n& =1+\\sqrt{8} \\\\\n& =1+2 \\sqrt{2}\n\\end{aligned}"
+    },
+    {
+      "type": "asciimath",
+      "value": "1+sqrt4=3"
+    },
+    {
+      "type": "latex",
+      "value": "1+\\sqrt{4}=3"
+    },
+    {
+      "type": "asciimath",
+      "value": "2^(2)+4=8"
+    },
+    {
+      "type": "latex",
+      "value": "2^{2}+4=8"
+    },
+    {
+      "type": "asciimath",
+      "value": "g(theta)=2sin^(2)((pi theta)/(2))+(1)/(sqrt(theta+1))"
+    },
+    {
+      "type": "latex",
+      "value": "g(\\theta)=2 \\sin ^{2}\\left(\\frac{\\pi \\theta}{2}\\right)+\\frac{1}{\\sqrt{\\theta+1}}"
+    },
+    {
+      "type": "asciimath",
+      "value": "theta=1"
+    },
+    {
+      "type": "latex",
+      "value": "\\theta=1"
+    },
+    {
+      "type": "asciimath",
+      "value": "{:[g(1)=2sin^(2)((pi)/(2))+(1)/(sqrt2)],[=2+(1)/(sqrt2)],[~~2.71.]:}"
+    },
+    {
+      "type": "latex",
+      "value": "\\begin{aligned}\ng(1) & =2 \\sin ^{2}\\left(\\frac{\\pi}{2}\\right)+\\frac{1}{\\sqrt{2}} \\\\\n& =2+\\frac{1}{\\sqrt{2}} \\\\\n& \\approx 2.71 .\n\\end{aligned}"
+    },
+    {
+      "type": "asciimath",
+      "value": "{:[\" 1. \"f(2)=1+2sqrt2~~383],[:.quad g(1)=2+(1)/(sqrt2)~~2.71]:}"
+    },
+    {
+      "type": "latex",
+      "value": "\\begin{array}{l}\n\\text { 1. } f(2)=1+2 \\sqrt{2} \\approx 383 \\\\\n\\therefore \\quad g(1)=2+\\frac{1}{\\sqrt{2}} \\approx 2.71\n\\end{array}"
+    },
+    {
+      "type": "asciimath",
+      "value": "quad f(2) > g(1)"
+    },
+    {
+      "type": "latex",
+      "value": "\\quad f(2)>g(1)"
+    },
+    {
+      "type": "asciimath",
+      "value": "x!=-1"
+    },
+    {
+      "type": "latex",
+      "value": "x \\neq-1"
+    }
+  ]
+}

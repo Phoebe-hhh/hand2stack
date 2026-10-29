@@ -59,7 +59,7 @@ final class response_parser {
             'raw_latex' => $rawlatex,
             'raw_asciimath' => $rawascii,
             'raw_text' => $rawtext,
-            'freetext' => freetext_builder::build($rawtext, $rawascii, $rawlatex),
+            'freetext' => freetext_builder::build($rawtext, $rawascii, $rawlatex, self::asciimath_by_latex($data)),
             'stack' => $stack,
             'text' => $stack,
             'lines' => $lines,
@@ -98,6 +98,27 @@ final class response_parser {
         $value = preg_replace('/\s*\\\\\)$/', '', $value);
 
         return trim($value);
+    }
+
+    /**
+     * Each formula's [LaTeX, AsciiMath], in the order Mathpix lists them: an
+     * asciimath item followed by the latex item of the same formula.
+     */
+    private static function asciimath_by_latex(array $response): array {
+        $pairs = [];
+        $ascii = null;
+        foreach (is_array($response['data'] ?? null) ? $response['data'] : [] as $item) {
+            if (!is_array($item) || !is_string($item['value'] ?? null)) {
+                continue;
+            }
+            if (($item['type'] ?? '') === 'asciimath') {
+                $ascii = trim($item['value']);
+            } else if (($item['type'] ?? '') === 'latex' && $ascii !== null) {
+                $pairs[] = [trim($item['value']), $ascii];
+                $ascii = null;
+            }
+        }
+        return $pairs;
     }
 
     private static function extract_data_value(array $response, string $type): string {
