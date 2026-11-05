@@ -40,6 +40,10 @@ define([
             saveRecognitionResult(answerBox, {rawLatex, rawAscii, stackResult, lines, recognizedText,
                 sourceUrl: isFreeTextInput(answerBox) ? sourceUrl : '',
                 modality: answerBox._hand2stackModality || null});
+            // A new recognition: its recognition_completed, logged below,
+            // names the events that follow from it. The save above writes it
+            // once the image is ready, so it is kept for the restored panel.
+            answerBox._hand2stackRecognitionEventId = null;
         }
         setRequestStatus(panel);
         window.clearTimeout(panel._dragConversionTimer);
@@ -69,7 +73,7 @@ define([
         const logOptions = () => ({modality: panel._hand2stackSource || answerBox._hand2stackModality || null});
         const logRecognition = defaultIndex => {
             if (!recognition) return;
-            research.log(answerBox, 'recognition_completed', {
+            const completed = research.log(answerBox, 'recognition_completed', {
                 requestId: recognition.requestId,
                 source: recognition.source,
                 ok: true,
@@ -93,6 +97,7 @@ define([
                 truncatedLines: resultLines.length > 50,
                 defaultIndex
             }, logOptions());
+            if (completed) answerBox._hand2stackRecognitionEventId = completed.eventid;
         };
         const context = {answerBox, rawLatex, rawAscii, stackResult, lines, recognizedText, restore, savedWorking,
             resultLines, logOptions, logRecognition};

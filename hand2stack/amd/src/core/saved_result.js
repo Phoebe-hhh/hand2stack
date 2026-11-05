@@ -179,7 +179,10 @@ define([], function() {
             // The Free-text working as last edited, which may be newer than
             // the recognition if the learner edited while the image compressed.
             const working = answerBox._hand2stackWorking;
-            const entry = Object.assign({}, result, {sourceUrl: imageUrl, savedAt: Date.now()},
+            // The recognition_completed event of this result, for the
+            // research events of the panel restored from it.
+            const recognitionEventId = answerBox._hand2stackRecognitionEventId || null;
+            const entry = Object.assign({}, result, {sourceUrl: imageUrl, savedAt: Date.now(), recognitionEventId},
                 typeof working === 'string' ? {working} : {});
             if (!writeSavedResult(key, entry) && imageUrl) {
                 writeSavedResult(key, Object.assign(entry, {sourceUrl: ''}));

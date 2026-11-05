@@ -180,7 +180,8 @@ define([
                 previousValue: research.clip(previousValue),
                 anchor: normalizeAnchorText(result.anchor),
                 recognized: research.clip(result.expr),
-                lineIndex: result.lineIndex === undefined ? null : result.lineIndex
+                lineIndex: result.lineIndex === undefined ? null : result.lineIndex,
+                recognitionEventId: sourceBox._hand2stackRecognitionEventId || null
             }, logOptions);
             if (!result.expr) {
                 report(box, Object.assign({status: 'notfound'}, result));

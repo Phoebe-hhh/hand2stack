@@ -16,6 +16,7 @@
 namespace local_hand2stack;
 
 use local_hand2stack\local\input_mode;
+use local_hand2stack\local\research_cleanup;
 use local_hand2stack\local\research_export;
 use local_hand2stack\local\research_logger;
 use local_hand2stack\local\research_finisher;
@@ -31,6 +32,7 @@ require_once($CFG->dirroot . '/mod/quiz/locallib.php');
  * @covers \local_hand2stack\local\research_logger
  * @covers \local_hand2stack\local\input_mode
  * @covers \local_hand2stack\local\research_export
+ * @covers \local_hand2stack\local\research_cleanup
  * @covers \local_hand2stack\privacy\provider
  */
 final class research_logger_test extends \advanced_testcase {
@@ -56,10 +58,11 @@ final class research_logger_test extends \advanced_testcase {
     }
 
     /** A quiz in the given input mode and the user's started attempt, as [quiz, usageid, slot]. */
-    private function create_quiz_attempt(\stdClass $user, string $mode, array $names = []): array {
+    private function create_quiz_attempt(\stdClass $user, string $mode, array $names = [],
+            array $settings = []): array {
         $course = $this->getDataGenerator()->create_course(array_filter(['shortname' => $names['course'] ?? null]));
         $quiz = $this->getDataGenerator()->create_module('quiz',
-            ['course' => $course->id] + array_filter(['name' => $names['quiz'] ?? null]));
+            ['course' => $course->id] + array_filter(['name' => $names['quiz'] ?? null]) + $settings);
         input_mode::set_for_cm((int)$quiz->cmid, $mode);
 
         $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
@@ -329,6 +332,138 @@ final class research_logger_test extends \advanced_testcase {
             $this->assertNull($row[$column]);
         }
         $this->assertNotContains((string)$usageid, [(string)$row['anonattemptid']]);
+    }
+
+    public function test_export_rows_carry_the_round_graded_again_from_each_check(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->enable_study();
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->make_participant($user);
+        [$quiz, $usageid, $slot] = $this->create_quiz_attempt($user, input_mode::NORMAL, [],
+            ['preferredbehaviour' => 'interactive']);
+        $start = (int)$DB->get_field_sql("SELECT MIN(s.timecreated)
+                                            FROM {question_attempt_steps} s
+                                            JOIN {question_attempts} qa ON qa.id = s.questionattemptid
+                                           WHERE qa.questionusageid = ?", [$usageid]);
+
+        // A partly right Check that leaves tries, Try again, then the right answer.
+        $this->setUser($user);
+        $attemptobj = \mod_quiz\quiz_attempt::create_from_usage_id($usageid);
+        $attemptobj->process_submitted_actions($start + 10, false, [$slot => ['answer' => 'toad', '-submit' => 1]]);
+        $attemptobj = \mod_quiz\quiz_attempt::create_from_usage_id($usageid);
+        $attemptobj->process_submitted_actions($start + 20, false, [$slot => ['-tryagain' => 1]]);
+        $attemptobj = \mod_quiz\quiz_attempt::create_from_usage_id($usageid);
+        $attemptobj->process_submitted_actions($start + 30, false, [$slot => ['answer' => 'frog', '-submit' => 1]]);
+        $this->setUser(null);
+
+        // Interactive mode keeps no fraction for the first Check, only its tries.
+        $steps = array_values($DB->get_records_sql("SELECT s.sequencenumber, s.state, s.fraction
+                                                      FROM {question_attempt_steps} s
+                                                      JOIN {question_attempts} qa ON qa.id = s.questionattemptid
+                                                     WHERE qa.questionusageid = ? AND qa.slot = ?
+                                                  ORDER BY s.sequencenumber", [$usageid, $slot]));
+        $this->assertSame(['todo', 'todo', 'todo', 'gradedright'], array_column($steps, 'state'));
+        $this->assertNull($steps[1]->fraction);
+
+        // The learner's browser clock is 100 s slow. Each event is [type, when it happened, when the
+        // server received its batch], in ms after the attempt started. The revision and the second
+        // Check's submit_triggered only arrive with the batch after it, 31.5 s in; the submit_triggered
+        // happened in the same second as the Check's step, just before it.
+        $happened = [
+            ['task_started', 1000, 1300],
+            ['feedback_observed', 11000, 11300],
+            ['revision_started', 25000, 31500],
+            ['submit_triggered', 30200, 31500],
+            ['feedback_observed', 31200, 31500],
+        ];
+        $events = [];
+        foreach ($happened as [$type, $at]) {
+            $events[] = $this->event($usageid, $slot, ['type' => $type, 'input' => null, 'payload' => [],
+                'clienttime' => $start * 1000 + $at - 100000]);
+        }
+        research_logger::record_batch($events, (int)$user->id);
+        foreach ($happened as $index => [, , $received]) {
+            $DB->set_field('local_hand2stack_event', 'servertime', $start * 1000 + $received,
+                ['eventid' => $events[$index]['eventid']]);
+        }
+
+        $records = research_export::recordset('pilot2026a', (int)$quiz->cmid);
+        $rows = [];
+        foreach ($records as $record) {
+            $row = array_combine(research_export::COLUMNS, research_export::row($record));
+            $rows[] = [$row['eventtype'], $row['stepseq'], $row['stepstate'], $row['steptriesleft'],
+                $row['steprawfraction'], $row['finalstate']];
+        }
+        $records->close();
+
+        // Dated by its batch's arrival, the revision and the submit_triggered would show the second
+        // Check's step; on the corrected clock they show the round they happened in.
+        $this->assertSame([
+            ['task_started', 0, 'todo', $rows[0][3], null, 'gradedright'],
+            ['feedback_observed', 1, 'todo', $rows[0][3] - 1, 0.8, 'gradedright'],
+            ['revision_started', 2, 'todo', $rows[0][3] - 1, 0.8, 'gradedright'],
+            ['submit_triggered', 2, 'todo', $rows[0][3] - 1, 0.8, 'gradedright'],
+            ['feedback_observed', 3, 'gradedright', $rows[0][3] - 1, 1.0, 'gradedright'],
+        ], $rows);
+        $this->assertGreaterThan(1, $rows[0][3]);
+    }
+
+    public function test_deleting_a_quiz_attempt_deletes_its_events_and_only_its_events(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->enable_study();
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->make_participant($user);
+        [$quiz, $usageid, $slot] = $this->create_quiz_attempt($user, input_mode::NORMAL);
+        [, $otherusage] = $this->create_quiz_attempt($user, input_mode::NORMAL);
+        research_logger::record_batch([
+            $this->event($usageid, $slot),
+            $this->event($usageid, $slot, ['type' => 'submit_triggered']),
+            $this->event($otherusage, $slot),
+        ], (int)$user->id);
+
+        // As the quiz report's "Delete selected attempts" does.
+        $attempt = $DB->get_record('quiz_attempts', ['uniqueid' => $usageid]);
+        quiz_delete_attempt($attempt, $DB->get_record('quiz', ['id' => $quiz->id]));
+
+        $this->assertSame(0, $DB->count_records('local_hand2stack_event', ['usageid' => $usageid]));
+        $this->assertSame(1, $DB->count_records('local_hand2stack_event', ['usageid' => $otherusage]));
+        // A page still open on the deleted attempt cannot bring its events back.
+        $result = research_logger::record_batch([$this->event($usageid, $slot)], (int)$user->id);
+        $this->assertSame(1, $result['rejected']);
+        $this->assertSame(0, $DB->count_records('local_hand2stack_event', ['usageid' => $usageid]));
+    }
+
+    public function test_the_hourly_cleanup_deletes_events_of_usages_deleted_without_a_notice(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->enable_study();
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->make_participant($user);
+        [$previewusage, $previewslot] = $this->create_preview_usage($user);
+        [, $quizusage, $slot] = $this->create_quiz_attempt($user, input_mode::NORMAL);
+        research_logger::record_batch([
+            $this->event($previewusage, $previewslot),
+            $this->event($quizusage, $slot),
+        ], (int)$user->id);
+
+        // A question preview is cleaned up by Moodle with no event or hook.
+        \question_engine::delete_questions_usage_by_activity($previewusage);
+        $this->assertSame(1, $DB->count_records('local_hand2stack_event', ['usageid' => $previewusage]));
+
+        ob_start();
+        (new \local_hand2stack\task\cleanup_sessions())->execute();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('Deleted 1 research events', $output);
+        $this->assertSame(0, $DB->count_records('local_hand2stack_event', ['usageid' => $previewusage]));
+        $this->assertSame(1, $DB->count_records('local_hand2stack_event', ['usageid' => $quizusage]));
+        // Nothing left over: the next run deletes nothing.
+        $this->assertSame(0, research_cleanup::delete_orphaned_events());
     }
 
     public function test_an_identified_quiz_keeps_the_user_id_and_exports_who_it_was(): void {

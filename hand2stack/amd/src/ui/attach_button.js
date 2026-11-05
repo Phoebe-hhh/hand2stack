@@ -392,6 +392,9 @@ define([
             if (!answerBox._hand2stackModality && typeof savedResult.modality === 'string') {
                 answerBox._hand2stackModality = savedResult.modality;
             }
+            if (typeof savedResult.recognitionEventId === 'string') {
+                answerBox._hand2stackRecognitionEventId = savedResult.recognitionEventId;
+            }
             updateResultPanel(resultPanel, savedResult.rawLatex || '', savedResult.rawAscii || '',
                 savedResult.stackResult || '', answerBox, Array.isArray(savedResult.lines) ? savedResult.lines : [],
                 savedResult.recognizedText || '', savedResult.sourceUrl || '', {restore: true, savedWorking: savedResult.working});

@@ -34,7 +34,8 @@ define([
             kind: 'partial',
             lineIndex: Number.isInteger(lineIndex) && lineIndex >= 0 ? lineIndex : null,
             latex: research.clip(latex),
-            value: research.clip(value)
+            value: research.clip(value),
+            recognitionEventId: answerBox._hand2stackRecognitionEventId || null
         }, {modality: panel._hand2stackSource || answerBox._hand2stackModality || null});
     };
 

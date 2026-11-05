@@ -3,6 +3,15 @@
 Hand2STACK was previously known as STACK Input Helper. Releases from 0.3.0 onward
 use the Moodle component name `local_hand2stack` and install in `local/hand2stack`.
 
+## Unreleased
+
+- Research log: interactive mode's **Try again** (`q<usage>:<slot>_-tryagain`) is logged as `submitterKind: "tryagain"` for its own question only. It was logged as `other`, with a `submit_triggered` for every question on the page. Try again does not grade, so it awaits no `feedback_observed` and keeps the earlier feedback for the revision that follows.
+- Research log: `revision_started` names the feedback it answers (`feedbackEventId`) and the Check that produced it (`submissionEventId`), so a revision after several Checks is linked to the right one without inferring it from event order.
+- Research log: `feedback_observed` and `revision_started` record `tryAgainShown`. In interactive mode a wrong Check that leaves tries keeps the question in Moodle's `notyetanswered` state, so `state` alone could not tell it from an unanswered question; the Try again button the page then shows can.
+- Research log: events that come from a recognition result (line and Free-text edits, line and partial selections, inserts and anchored fills) carry `recognitionEventId`, the `eventid` of its `recognition_completed`. It is saved with the result, so the panel restored after a Check still names the Mathpix output its edits came from.
+- Research export: every row also shows the question's Moodle step at the time of the event (`stepseq`, `stepstate`, `steptriesleft`) and `steprawfraction`, the raw fraction of the latest Check up to then. Interactive mode stores no fraction for a Check that leaves tries (its step is `todo`), so the export grades that Check's saved response again, without the behaviour's penalty: a two-part answer now reads `0 → 0.5 → 1` round by round, where only the final `1` was available. The existing columns are unchanged. An event is dated by its browser time on the server clock, using each trace's smallest `servertime - clienttime`: `servertime` is stamped once per batch, so an edit that arrived with a later batch would otherwise show a later round. A `submit_triggered` shows the round before the step it causes.
+- Research log: deleting a quiz attempt also deletes its research events. Without the attempt there is no mark, step or saved response to read them with, a quiz export cannot place them, and a privacy request cannot find whose they are. Moodle does not notify plugins when it removes previews or deletes a course, so the hourly cleanup task also deletes the events of any question usage that no longer exists. Deleted events cannot be recovered: export the study before deleting attempts or resetting a course.
+
 ## 0.6.2-alpha - 2026-10-30
 
 - Show Mathpix's original AsciiMath in an Algebraic input's ASCII tab, while keeping the LaTeX tab unchanged. On Insert, normalize and validate the current ASCII as STACK before writing it to the answer. The plugin version is advanced so Moodle refreshes the class map for the new AsciiMath row parser during an update.

@@ -131,6 +131,8 @@ define([
             }
         }
         logRecognition(defaultIndex);
+        // The recognition these lines came from; a restored panel keeps the saved one.
+        const recognitionEventId = answerBox._hand2stackRecognitionEventId || null;
         let selectedIndex = defaultIndex;
         // Created when a line's row is first rendered, so its baseline is the
         // value before the learner's first keystroke.
@@ -139,7 +141,8 @@ define([
                 line._hand2stackTracker = research.editTracker(answerBox, () => line.ascii, () => ({
                     target: 'line',
                     lineIndex: index,
-                    ocrOriginal: research.clip(line.originalAscii)
+                    ocrOriginal: research.clip(line.originalAscii),
+                    recognitionEventId
                 }), {logOptions});
                 panel._hand2stackTrackers.push(line._hand2stackTracker);
             }
@@ -233,7 +236,8 @@ define([
                     isDefault: index === defaultIndex,
                     value: research.clip(stackValueForLine(line)),
                     ocrValue: research.clip(line && line.stack),
-                    lineEdited: Boolean(line && line.edited)
+                    lineEdited: Boolean(line && line.edited),
+                    recognitionEventId
                 }, logOptions());
             }
             selectedIndex = index;
@@ -480,7 +484,8 @@ define([
                     lineIndex,
                     partial,
                     lineEdited: Boolean(line && line.edited),
-                    ocrValue: research.clip(line && line.stack)
+                    ocrValue: research.clip(line && line.stack),
+                    recognitionEventId
                 }, logOptions());
                 processBound = true;
                 syncDiagnosticProcess();

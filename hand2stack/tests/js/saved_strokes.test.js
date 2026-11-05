@@ -132,3 +132,19 @@ test('an upload whose recognition failed is not kept', async () => {
     await new Promise(resolve => setTimeout(resolve, 5));
     assert.equal(exported.loadSavedResult({name: 'q12:1_working'}).sourceUrl, '');
 });
+
+test('a saved result keeps the recognition event logged for it, for the panel restored after a Check', async () => {
+    let exported;
+    vm.runInNewContext(source, {
+        window: {sessionStorage: storage()},
+        define: (deps, factory) => {
+            exported = factory();
+        }
+    });
+    const box = {name: 'q12:1_ans1'};
+    exported.saveRecognitionResult(box, {sourceUrl: ''});
+    // recognition_completed is logged while the panel renders, before the save is written.
+    box._hand2stackRecognitionEventId = 'recognition-uuid';
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(exported.loadSavedResult(box).recognitionEventId, 'recognition-uuid');
+});

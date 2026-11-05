@@ -10,7 +10,11 @@ namespace local_hand2stack\task;
 
 defined('MOODLE_INTERNAL') || die();
 
-/** Removes expired mobile-upload sessions and their recognition results. */
+/**
+ * Removes expired mobile-upload sessions and their recognition results, and
+ * the research events of question usages Moodle has deleted without telling
+ * plugins (previews, course deletion); see research_cleanup.
+ */
 final class cleanup_sessions extends \core\task\scheduled_task {
     public function get_name(): string {
         return get_string('taskcleanupexpiredsessions', 'local_hand2stack');
@@ -20,5 +24,9 @@ final class cleanup_sessions extends \core\task\scheduled_task {
         global $DB;
 
         $DB->delete_records_select('local_hand2stack_sess', 'expiresat < ?', [time()]);
+        $orphaned = \local_hand2stack\local\research_cleanup::delete_orphaned_events();
+        if ($orphaned) {
+            mtrace("Deleted $orphaned research events of deleted question usages.");
+        }
     }
 }

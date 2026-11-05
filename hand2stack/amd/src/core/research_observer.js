@@ -51,11 +51,19 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
         return states.find(state => question.classList.contains(state)) || 'unknown';
     };
 
+    // Interactive mode keeps a question with tries left in Moodle's
+    // "notyetanswered" state even after a wrong Check; what tells it apart
+    // from an unanswered question is the Try again button it then shows.
+    const tryAgainShown = (question, key) => Boolean(key && question.querySelector(
+        'input[name="q' + key + '_-tryagain"], button[name="q' + key + '_-tryagain"]'));
+
     // A question's own Check button is named "q<usage>:<slot>_-submit"; it
-    // submits the whole form but only grades that question.
+    // submits the whole form but only grades that question. Interactive
+    // mode's Try again, "q<usage>:<slot>_-tryagain", also belongs to one
+    // question, but it only reopens the question for editing: no new grade.
     const classifySubmitter = name => {
-        const check = /^q(\d+):(\d+)_-submit$/.exec(name);
-        if (check) return {kind: 'check', key: check[1] + ':' + check[2]};
+        const own = /^q(\d+):(\d+)_-(submit|tryagain)$/.exec(name);
+        if (own) return {kind: own[3] === 'submit' ? 'check' : 'tryagain', key: own[1] + ':' + own[2]};
         if (name === 'next') return {kind: 'next', key: null};
         if (name === 'previous') return {kind: 'previous', key: null};
         if (name === 'save') return {kind: 'save', key: null};
@@ -185,7 +193,7 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
             if (key && !questions.has(key)) questions.set(key, box);
         });
 
-        questions.forEach(box => {
+        questions.forEach((box, key) => {
             const question = box.closest('.que');
             if (!question) return;
             const pending = research.pendingSubmit(box);
@@ -216,6 +224,7 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
             research.log(box, 'feedback_observed', {
                 submissionEventId: pending.eventid || null,
                 state: questionState(question),
+                tryAgainShown: tryAgainShown(question, key),
                 queClasses: Array.from(question.classList),
                 hasPrtFeedback: prtFeedback.length > 0,
                 feedbackText: research.clip(flatten(outcome), 1000),

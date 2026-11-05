@@ -21,4 +21,9 @@ $callbacks = [
         'callback' => [\local_hand2stack\local\hook_callbacks::class, 'before_standard_top_of_body_html_generation'],
         'priority' => 500,
     ],
+    [
+        // A deleted quiz attempt takes its research events with it; see research_cleanup.
+        'hook' => \mod_quiz\hook\attempt_state_changed::class,
+        'callback' => [\local_hand2stack\local\research_cleanup::class, 'attempt_state_changed'],
+    ],
 ];

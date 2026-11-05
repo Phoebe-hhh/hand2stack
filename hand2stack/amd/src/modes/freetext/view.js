@@ -132,11 +132,15 @@ define([
             research.log(answerBox, 'answer_inserted', {
                 via: 'freetext_recognition',
                 value: research.clip(panel._stackTextarea.value, 8000),
-                previousValue: research.clip(previousValue, 8000)
+                previousValue: research.clip(previousValue, 8000),
+                recognitionEventId: answerBox._hand2stackRecognitionEventId || null
             }, logOptions());
         }
+        // The recognition this working came from, fixed when the panel is
+        // shown: a later recognition disposes this tracker after resetting it.
+        const recognitionEventId = answerBox._hand2stackRecognitionEventId || null;
         const freeTextTracker = research.editTracker(answerBox, () => panel._stackTextarea.value,
-            () => ({target: 'freetext'}), {max: 8000, logOptions});
+            () => ({target: 'freetext', recognitionEventId}), {max: 8000, logOptions});
         panel._hand2stackTrackers.push(freeTextTracker);
         if (panel._freeTextSyncHandler) {
             panel._stackTextarea.removeEventListener('input', panel._freeTextSyncHandler);

@@ -619,7 +619,12 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             const revisionAction = options.activity || (REVISION_TRIGGERS.includes(type) ? type : '');
             if (state.feedback && revisionAction) {
                 push('revision_started', {
+                    // The feedback this revision answers, and the Check that produced it.
+                    feedbackEventId: state.feedback.eventid || null,
+                    submissionEventId: state.feedback.submissionEventId || null,
                     feedbackState: state.feedback.state,
+                    // With tries left a wrong Check stays "notyetanswered"; this says it was graded.
+                    tryAgainShown: Boolean(state.feedback.tryAgainShown),
                     previousSubmitted: state.feedback.answers || {},
                     msSinceFeedback: Math.max(0, env.now() - state.feedback.at),
                     firstAction: revisionAction
@@ -647,7 +652,11 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
                     : null;
             } else if (type === 'feedback_observed') {
                 state.feedback = {
+                    eventid: event ? event.eventid : null,
+                    submissionEventId: (payload && payload.submissionEventId)
+                        || (state.pendingSubmit ? state.pendingSubmit.eventid : null),
                     state: payload.state,
+                    tryAgainShown: Boolean(payload && payload.tryAgainShown),
                     answers: state.pendingSubmit ? state.pendingSubmit.answers : {},
                     at: env.now()
                 };

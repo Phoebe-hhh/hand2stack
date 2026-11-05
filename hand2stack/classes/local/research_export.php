@@ -11,6 +11,10 @@
  *
  * Builds the downloadable research log: one row per event, with the quiz,
  * question and final mark alongside so the file can be analysed on its own.
+ * Each row also carries the question's Moodle step at the time of the event,
+ * and the raw fraction of the latest Check up to then,
+ * graded again from the response that step saved: interactive mode keeps no
+ * fraction for a Check that leaves tries, so it is not in the step itself.
  * Learners are the stored HMAC pseudonym and attempts get one of their own;
  * no usage id leaves the server. Only events from a quiz set to identified
  * logging (everyday use) also carry the user id, username, ID number and
@@ -32,6 +36,7 @@ final class research_export {
         'courseid', 'course', 'cmid', 'quiz', 'studycondition',
         'slot', 'questionid', 'qbankentryid', 'questionversion', 'question',
         'finalstate', 'finalfraction', 'maxmark', 'finalmark',
+        'stepseq', 'stepstate', 'steptriesleft', 'steprawfraction',
         'traceid', 'pageid', 'eventseq', 'eventtype', 'inputname', 'modality',
         'clienttime', 'clienttimeiso', 'elapsedms', 'servertime',
         'pluginversion', 'schemaversion', 'eventid', 'payload',
@@ -70,17 +75,29 @@ final class research_export {
     public static function recordset(string $studyid, ?int $cmid = null, ?int $courseid = null): \moodle_recordset {
         global $DB;
 
+        self::$rounds = ['usageid' => null, 'slots' => []];
         [$join, $where, $params] = self::scope($cmid, $courseid);
         $namefields = \core_user\fields::for_name()->get_sql('u', false, 'u_', '', true)->selects;
+        // How far each trace's browser clock is behind the server's: the
+        // smallest servertime - clienttime of its events, the one delivered
+        // soonest. A batch is stamped once when it arrives, so servertime
+        // alone would date a late batch's older events to its arrival. The
+        // finisher's own events are already in server time.
+        $notserver = $DB->sql_like('c.payload', ':serverpayload', true, true, true);
         $sql = "SELECT e.id, e.studyid, e.anonuserid, e.identified, e.userid, u.username, u.idnumber $namefields,
                        e.usageid, e.slot, e.traceid, e.pageid, e.eventseq,
                        e.eventtype, e.inputname, e.modality, e.studycondition, e.questionid, e.qbankentryid,
                        e.questionversion, e.pluginversion, e.schemaversion, e.clienttime, e.elapsedms,
                        e.servertime, e.eventid, e.payload,
                        qza.attempt, c.id AS courseid, c.shortname AS course, cm.id AS cmid, qz.name AS quiz,
-                       q.name AS question, qat.maxmark, qas.state AS finalstate, qas.fraction AS finalfraction
+                       q.name AS question, qat.maxmark, qas.state AS finalstate, qas.fraction AS finalfraction,
+                       clk.clockoffset
                   FROM {local_hand2stack_event} e
                        $join
+             LEFT JOIN (SELECT c.traceid, MIN(c.servertime - c.clienttime) AS clockoffset
+                          FROM {local_hand2stack_event} c
+                         WHERE c.studyid = :clockstudyid AND $notserver
+                      GROUP BY c.traceid) clk ON clk.traceid = e.traceid
              LEFT JOIN {user} u ON u.id = e.userid AND e.identified = 1
              LEFT JOIN {question} q ON q.id = e.questionid
              LEFT JOIN {question_attempts} qat ON qat.questionusageid = e.usageid AND qat.slot = e.slot
@@ -90,8 +107,12 @@ final class research_export {
                                                   WHERE s2.questionattemptid = qat.id)
                  WHERE $where AND e.studyid = :studyid
               ORDER BY e.usageid, e.slot, e.traceid, e.eventseq";
-        return $DB->get_recordset_sql($sql, $params + ['studyid' => $studyid]);
+        return $DB->get_recordset_sql($sql, $params + ['studyid' => $studyid, 'clockstudyid' => $studyid,
+            'serverpayload' => '%' . $DB->sql_like_escape(self::SERVER_SOURCE) . '%']);
     }
+
+    /** How the finisher marks the events it writes itself, in server time. */
+    private const SERVER_SOURCE = '"source":"server"';
 
     /** Dataformats a spreadsheet application may open and evaluate. */
     public const SPREADSHEET_FORMATS = ['csv', 'excel', 'ods'];
@@ -129,6 +150,7 @@ final class research_export {
             'finalfraction' => $fraction,
             'maxmark' => $maxmark,
             'finalmark' => $fraction !== null && $maxmark !== null ? round($fraction * $maxmark, 7) : null,
+        ] + self::round_at($record) + [
             'traceid' => $record->traceid,
             'pageid' => $record->pageid,
             'eventseq' => $record->eventseq,
@@ -146,6 +168,116 @@ final class research_export {
             'payload' => $record->payload,
         ];
         return $spreadsheet ? array_map([self::class, 'escape_formula'], array_values($values)) : array_values($values);
+    }
+
+    /**
+     * The steps of each question of the usage being exported, as
+     * round_steps() lists them. The recordset is ordered by usage, so only
+     * the current one is kept.
+     *
+     * @var array
+     */
+    private static $rounds = ['usageid' => null, 'slots' => []];
+
+    /**
+     * The question's state when the event happened: its latest Moodle step
+     * by then, and the raw fraction of the latest Check (or Finish) up to
+     * that step. The event's time is its browser time moved onto the server
+     * clock by its trace's offset. A step is timed in whole seconds: it
+     * counts from the start of its second, except for a submit_triggered,
+     * which always comes just before the step it causes and so sees only
+     * the steps of earlier seconds.
+     */
+    private static function round_at(\stdClass $record): array {
+        $none = ['stepseq' => null, 'stepstate' => null, 'steptriesleft' => null, 'steprawfraction' => null];
+        if ($record->usageid === null || $record->slot === null) {
+            return $none;
+        }
+        $usageid = (int)$record->usageid;
+        $slot = (int)$record->slot;
+        if (self::$rounds['usageid'] !== $usageid) {
+            self::$rounds = ['usageid' => $usageid, 'slots' => []];
+        }
+        if (!array_key_exists($slot, self::$rounds['slots'])) {
+            self::$rounds['slots'][$slot] = self::round_steps($usageid, $slot);
+        }
+        $time = self::event_time($record);
+        $lead = $record->eventtype === 'submit_triggered' ? 1000 : 0;
+        $found = $none;
+        foreach (self::$rounds['slots'][$slot] as $step) {
+            if ($step['timecreated'] * 1000 + $lead > $time) {
+                break;
+            }
+            $found = $step['columns'];
+        }
+        return $found;
+    }
+
+    /** The event's time on the server clock, in milliseconds. */
+    private static function event_time(\stdClass $record): int {
+        $isserver = $record->payload !== null && strpos((string)$record->payload, self::SERVER_SOURCE) !== false;
+        if ($isserver || $record->clockoffset === null) {
+            // Already in server time; or, without any client event to measure the clock by, as received.
+            return $isserver ? (int)$record->clienttime : (int)$record->servertime;
+        }
+        return (int)$record->clienttime + (int)$record->clockoffset;
+    }
+
+    /**
+     * Each Moodle step of one question attempt, with the columns an event
+     * from its time gets. A Check or Finish is graded again on the response
+     * it was given, as the question type grades it, without the behaviour's
+     * penalty; a step that grades nothing keeps the latest grade before it.
+     */
+    private static function round_steps(int $usageid, int $slot): array {
+        try {
+            $quba = \question_engine::load_questions_usage_by_activity($usageid);
+            $qa = $quba->get_question_attempt($slot);
+        } catch (\Throwable $e) {
+            // A deleted preview or attempt: the event stays without steps.
+            return [];
+        }
+        $question = $qa->get_question();
+        $steps = [];
+        $response = [];
+        $triesleft = null;
+        $rawfraction = null;
+        foreach ($qa->get_step_iterator() as $seq => $step) {
+            $data = array_filter($step->get_qt_data(), fn($name) => $name[0] !== '_', ARRAY_FILTER_USE_KEY);
+            if ($data) {
+                $response = $data;
+            }
+            if ($step->has_behaviour_var('_triesleft')) {
+                $triesleft = (int)$step->get_behaviour_var('_triesleft');
+            }
+            if ($step->has_behaviour_var('submit') || $step->has_behaviour_var('finish')) {
+                $rawfraction = self::raw_fraction($question, $response);
+            }
+            $steps[] = [
+                'timecreated' => (int)$step->get_timecreated(),
+                'columns' => [
+                    'stepseq' => (int)$seq,
+                    'stepstate' => (string)$step->get_state(),
+                    'steptriesleft' => $triesleft,
+                    'steprawfraction' => $rawfraction,
+                ],
+            ];
+        }
+        return $steps;
+    }
+
+    /** The raw fraction a response earns, or null when it cannot be graded. */
+    private static function raw_fraction(\question_definition $question, array $response): ?float {
+        if (!$question instanceof \question_automatically_gradable || !$question->is_gradable_response($response)) {
+            return null;
+        }
+        try {
+            [$fraction] = $question->grade_response($response);
+        } catch (\Throwable $e) {
+            // For STACK, Maxima unavailable: leave the round ungraded rather than fail the download.
+            return null;
+        }
+        return $fraction === null ? null : round((float)$fraction, 7);
     }
 
     /** The name fields of the event's user, selected with the u_ prefix. */

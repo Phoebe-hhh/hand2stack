@@ -285,6 +285,10 @@ test('the acceptance scenario can be rebuilt from the event trace alone', async 
     assert.equal(edits[1].modality, 'keyboard');
 
     const revision = tab.sent.find(event => event.type === 'revision_started');
+    const firstFeedback = tab.sent.find(event => event.type === 'feedback_observed');
+    assert.equal(revision.payload.feedbackEventId, firstFeedback.eventid);
+    assert.equal(revision.payload.submissionEventId,
+        tab.sent.find(event => event.type === 'submit_triggered').eventid);
     assert.deepEqual(revision.payload.previousSubmitted, {ans1: 'x^2+5*x+6=0'});
     assert.equal(revision.payload.feedbackState, 'incorrect');
     assert.equal(revision.payload.firstAction, 'edit_committed');
@@ -435,6 +439,57 @@ test('a later Next clears a Check that is still waiting for feedback', () => {
     assert.equal(tab.load().pendingSubmit(box), null);
 });
 
+test('each revision names the feedback and Check it follows, across Try again', async () => {
+    const tab = createTab();
+    const questionLevel = {input: null, modality: null};
+    const box = answerBox('x=3');
+    const check = research => research.log(box, 'submit_triggered',
+        {submitterKind: 'check', answers: {ans1: box.value}}, questionLevel);
+    const feedback = (research, state, tryAgainShown) => {
+        const pending = research.pendingSubmit(box);
+        return research.log(box, 'feedback_observed', {state, tryAgainShown, submissionEventId: pending.eventid},
+            questionLevel);
+    };
+    const revise = (research, value) => {
+        const edits = research.editTracker(box, () => box.value, () => ({target: 'answer'}),
+            {logOptions: () => ({modality: 'keyboard'})});
+        box.value = value;
+        edits.input();
+        edits.commit('blur');
+    };
+
+    let research = tab.load();
+    // A page load after a submit, with this page's events handed over first.
+    const reload = () => {
+        research.flush(true);
+        return tab.load();
+    };
+    const check1 = check(research);
+    research = reload();
+    // Interactive mode: a wrong Check with tries left stays "notyetanswered" and shows Try again.
+    const feedback1 = feedback(research, 'notyetanswered', true);
+    // Try again reloads the page without grading: no feedback is awaited.
+    research.log(box, 'submit_triggered', {submitterKind: 'tryagain', answers: {ans1: box.value}}, questionLevel);
+    research = reload();
+    assert.equal(research.pendingSubmit(box), null);
+    revise(research, 'x=2');
+    const check2 = check(research);
+    research = reload();
+    const feedback2 = feedback(research, 'partiallycorrect', false);
+    research.log(box, 'submit_triggered', {submitterKind: 'tryagain', answers: {ans1: box.value}}, questionLevel);
+    research = reload();
+    revise(research, 'x=-2');
+    research.flush(true);
+    await settle();
+
+    const revisions = tab.sent.filter(event => event.type === 'revision_started');
+    assert.deepEqual(revisions.map(event => [event.payload.feedbackEventId, event.payload.submissionEventId,
+        event.payload.feedbackState, event.payload.tryAgainShown]), [
+        [feedback1.eventid, check1.eventid, 'notyetanswered', true],
+        [feedback2.eventid, check2.eventid, 'partiallycorrect', false]
+    ]);
+});
+
 test('log returns the event it stored, so a later event can name it', () => {
     const research = createTab().load();
     const box = answerBox('');
@@ -450,10 +505,30 @@ test('a question Check button is scoped to its own question', () => {
         return classifySubmitter;
     })()`);
     assert.deepEqual(classifySubmitter('q50:2_-submit'), {kind: 'check', key: '50:2'});
+    // Interactive mode's Try again belongs to its own question too.
+    assert.deepEqual(classifySubmitter('q50:2_-tryagain'), {kind: 'tryagain', key: '50:2'});
+    assert.deepEqual(classifySubmitter('q50:2_-tryagainx'), {kind: 'other', key: null});
     assert.deepEqual(classifySubmitter('next'), {kind: 'next', key: null});
     assert.deepEqual(classifySubmitter('finish'), {kind: 'finish', key: null});
     assert.deepEqual(classifySubmitter('save'), {kind: 'save', key: null});
     assert.deepEqual(classifySubmitter(''), {kind: 'other', key: null});
+});
+
+test('a graded Check with tries left is told apart from an unanswered question by its Try again button', () => {
+    const tryAgainShown = (0, eval)(`(function() {
+        ${extractFunctionSource('tryAgainShown')}
+        return tryAgainShown;
+    })()`);
+    // A .que holding the given button names, answering querySelector as a browser would.
+    const question = names => ({
+        querySelector: selector => names.find(name => selector.includes('[name="' + name + '"]')) || null
+    });
+    assert.equal(tryAgainShown(question(['q223:3_-tryagain']), '223:3'), true);
+    // Before any Check, or once the question is finished, there is no Try again.
+    assert.equal(tryAgainShown(question(['q223:3_-submit']), '223:3'), false);
+    // Another question's button is not this question's.
+    assert.equal(tryAgainShown(question(['q223:4_-tryagain']), '223:3'), false);
+    assert.equal(tryAgainShown(question(['q223:3_-tryagain']), ''), false);
 });
 
 test('Moodle\'s quiz navigation and Finish attempt are told apart from the Next button', () => {
@@ -1193,6 +1268,22 @@ test('a panel restored after a Check keeps the input method its result came from
     // So does a part of a formula selected on it.
     const formulaSelect = fs.readFileSync(path.join(__dirname, '../../amd/src/ui/formula_select.js'), 'utf8');
     assert.match(formulaSelect, /modality: panel\._hand2stackSource \|\| answerBox\._hand2stackModality \|\| null/);
+});
+
+test('events from a recognition result name its recognition_completed, also on a restored panel', () => {
+    const read = file => fs.readFileSync(path.join(__dirname, '../../amd/src', file), 'utf8');
+    const resultView = read('ui/result_view.js');
+    // A new recognition starts without one and records its own once logged.
+    assert.match(resultView, /saveRecognitionResult\([\s\S]*answerBox\._hand2stackRecognitionEventId = null;[\s\S]*const completed = research\.log/);
+    assert.match(resultView, /if \(completed\) answerBox\._hand2stackRecognitionEventId = completed\.eventid;/);
+    assert.match(read('ui/attach_button.js'),
+        /answerBox\._hand2stackRecognitionEventId = savedResult\.recognitionEventId/);
+    // Line edits, line choices and inserts carry it; so does the Free-text working and what it fills in.
+    const linesView = read('modes/lines/view.js');
+    assert.equal((linesView.match(/^\s+recognitionEventId$/gm) || []).length, 3);
+    assert.match(read('modes/freetext/view.js'), /target: 'freetext', recognitionEventId/);
+    assert.match(read('modes/freetext/anchors.js'),
+        /recognitionEventId: sourceBox\._hand2stackRecognitionEventId \|\| null/);
 });
 
 test('the outbox is made when first used, after the page config enabled logging', async () => {
