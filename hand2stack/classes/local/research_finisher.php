@@ -77,41 +77,59 @@ final class research_finisher {
         $slots = $DB->get_fieldset_sql('SELECT DISTINCT slot FROM {' . self::TABLE . '} WHERE usageid = :usageid',
             ['usageid' => $usageid]);
         foreach ($slots as $slot) {
-            $where = ['usageid' => $usageid, 'slot' => (int)$slot];
-            if ($DB->record_exists(self::TABLE, $where + ['eventtype' => 'task_finished'])) {
-                continue;
+            // Under the same lock as a browser task_finished, so the two cannot both end it.
+            $ended = research_logger::with_finish_lock($usageid, (int)$slot,
+                static fn() => self::end_question($usageid, (int)$slot, $finishedms, $reason));
+            if ($ended === null) {
+                // The task is retried later.
+                throw new \moodle_exception('finishlockbusy', 'local_hand2stack');
             }
-            // The trace the learner worked in last.
-            $latest = $DB->get_records(self::TABLE, $where, 'servertime DESC, id DESC', '*', 0, 1);
-            $latest = reset($latest);
-            if (!$latest) {
-                continue;
-            }
-            $lastseq = (int)$DB->get_field_sql('SELECT MAX(eventseq) FROM {' . self::TABLE . '} WHERE traceid = :traceid',
-                ['traceid' => $latest->traceid]);
-
-            $record = clone $latest;
-            unset($record->id);
-            $record->eventid = \core\uuid::generate();
-            $record->pageid = \core\uuid::generate();
-            $record->eventseq = $lastseq + 1;
-            $record->eventtype = 'task_finished';
-            $record->inputname = null;
-            $record->modality = null;
-            $record->pluginversion = research_logger::plugin_version();
-            $record->schemaversion = research_logger::SCHEMA_VERSION;
-            $record->clienttime = $finishedms;
-            $record->elapsedms = null;
-            $record->servertime = (int)round(microtime(true) * 1000);
-            $record->payload = json_encode([
-                'reason' => $reason,
-                'source' => 'server',
-                'moodleState' => self::question_state($usageid, (int)$slot),
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $DB->insert_record(self::TABLE, $record);
-            $added++;
+            $added += (int)$ended;
         }
         return $added;
+    }
+
+    /**
+     * Add a task_finished to the question's latest trace unless it has one.
+     *
+     * @return bool Whether one was added.
+     */
+    private static function end_question(int $usageid, int $slot, int $finishedms, string $reason): bool {
+        global $DB;
+
+        $where = ['usageid' => $usageid, 'slot' => $slot];
+        if ($DB->record_exists(self::TABLE, $where + ['eventtype' => 'task_finished'])) {
+            return false;
+        }
+        // The trace the learner worked in last.
+        $latest = $DB->get_records(self::TABLE, $where, 'servertime DESC, id DESC', '*', 0, 1);
+        $latest = reset($latest);
+        if (!$latest) {
+            return false;
+        }
+        $lastseq = (int)$DB->get_field_sql('SELECT MAX(eventseq) FROM {' . self::TABLE . '} WHERE traceid = :traceid',
+            ['traceid' => $latest->traceid]);
+
+        $record = clone $latest;
+        unset($record->id);
+        $record->eventid = \core\uuid::generate();
+        $record->pageid = \core\uuid::generate();
+        $record->eventseq = $lastseq + 1;
+        $record->eventtype = 'task_finished';
+        $record->inputname = null;
+        $record->modality = null;
+        $record->pluginversion = research_logger::plugin_version();
+        $record->schemaversion = research_logger::SCHEMA_VERSION;
+        $record->clienttime = $finishedms;
+        $record->elapsedms = null;
+        $record->servertime = (int)round(microtime(true) * 1000);
+        $record->payload = json_encode([
+            'reason' => $reason,
+            'source' => 'server',
+            'moodleState' => self::question_state($usageid, $slot),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $DB->insert_record(self::TABLE, $record);
+        return true;
     }
 
     /** Moodle's state of the question after its last step, such as gradedwrong or gaveup. */

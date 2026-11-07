@@ -58,6 +58,33 @@ final class research_logger {
     private const TABLE = 'local_hand2stack_event';
 
     private const UUID_PATTERN = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/';
+    /** Seconds to wait for another request that is ending the same question. */
+    private const FINISH_LOCK_TIMEOUT = 5;
+
+    /**
+     * Run $store while holding the lock for ending a question's trace.
+     *
+     * The browser's task_finished (record_batch) and the server's
+     * (research_finisher) each check for an existing task_finished and then
+     * insert. Both lock the same question, so they cannot both pass the check.
+     *
+     * @param int $usageid Question usage.
+     * @param int $slot Slot in the usage.
+     * @param callable $store Check and insert; its return value is passed on.
+     * @return mixed What $store returned, or null if the lock was not free in time.
+     */
+    public static function with_finish_lock(int $usageid, int $slot, callable $store) {
+        $factory = \core\lock\lock_config::get_lock_factory('local_hand2stack_finish');
+        $lock = $factory->get_lock($usageid . '_' . $slot, self::FINISH_LOCK_TIMEOUT);
+        if (!$lock) {
+            return null;
+        }
+        try {
+            return $store();
+        } finally {
+            $lock->release();
+        }
+    }
 
     /** Create the pseudonymisation secret once; it is never shown in the admin UI. */
     public static function ensure_secret(): void {
@@ -294,17 +321,6 @@ final class research_logger {
                 continue;
             }
 
-            // A trace ends once. The server may have ended it already, for a
-            // task_finished that reached it after the attempt was completed
-            // (research_finisher).
-            if ($DB->record_exists(self::TABLE, ['eventid' => $record->eventid])
-                    || ($record->eventtype === 'task_finished'
-                        && $DB->record_exists(self::TABLE, ['traceid' => $record->traceid, 'eventtype' => 'task_finished']))) {
-                $counts['duplicates']++;
-                $acknowledged[] = $record->eventid;
-                continue;
-            }
-
             $record->studyid = $studyid;
             $record->anonuserid = $anonuserid;
             $record->questionid = (int)$question->questionid;
@@ -316,22 +332,50 @@ final class research_logger {
             $record->pluginversion = $pluginversion;
             $record->servertime = $servertime;
 
-            try {
-                $DB->insert_record(self::TABLE, $record);
-                $counts['accepted']++;
-                $acknowledged[] = $record->eventid;
-            } catch (\dml_write_exception $error) {
-                // A beacon and a fetch can race with the same event id.
-                if ($DB->record_exists(self::TABLE, ['eventid' => $record->eventid])) {
-                    $counts['duplicates']++;
-                    $acknowledged[] = $record->eventid;
-                } else {
-                    throw $error;
-                }
+            if ($record->eventtype === 'task_finished') {
+                $outcome = self::with_finish_lock((int)$record->usageid, (int)$record->slot,
+                    static fn() => self::store_event($record));
+            } else {
+                $outcome = self::store_event($record);
             }
+            if ($outcome === null) {
+                // Busy, not wrong: leave it out of both lists so the page sends it again.
+                $counts['rejected']++;
+                continue;
+            }
+            $counts[$outcome]++;
+            $acknowledged[] = $record->eventid;
         }
 
         return $counts + ['acknowledgedIds' => $acknowledged, 'rejectedIds' => $rejected];
+    }
+
+    /**
+     * Insert one checked event unless it is already stored.
+     *
+     * @return string 'accepted' or 'duplicates'.
+     */
+    private static function store_event(\stdClass $record): string {
+        global $DB;
+
+        // A trace ends once. The server may have ended it already, for a
+        // task_finished that reached it after the attempt was completed
+        // (research_finisher). For task_finished the caller holds the finish lock.
+        if ($DB->record_exists(self::TABLE, ['eventid' => $record->eventid])
+                || ($record->eventtype === 'task_finished'
+                    && $DB->record_exists(self::TABLE, ['traceid' => $record->traceid, 'eventtype' => 'task_finished']))) {
+            return 'duplicates';
+        }
+        try {
+            $DB->insert_record(self::TABLE, $record);
+            return 'accepted';
+        } catch (\dml_write_exception $error) {
+            // A beacon and a fetch can race with the same event id.
+            if ($DB->record_exists(self::TABLE, ['eventid' => $record->eventid])) {
+                return 'duplicates';
+            }
+            throw $error;
+        }
     }
 
     /**

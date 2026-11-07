@@ -143,6 +143,7 @@ $string['privacy:metadata:session:sessionid'] = 'The random ID that links the QR
 $string['privacy:metadata:session:status'] = 'Whether the session is waiting for an upload or holds a result.';
 $string['privacy:metadata:session:rawtext'] = 'The complete document text returned by Mathpix, including prose.';
 $string['invalidevents'] = 'The research event batch is invalid.';
+$string['finishlockbusy'] = 'Another request is ending the same question. The task will try again later.';
 $string['hand2stack:researchparticipant'] = 'Take part in Hand2STACK research logging';
 $string['hand2stack:exportlogs'] = 'Download the Hand2STACK research log';
 $string['hand2stack:use'] = 'Use Hand2STACK handwriting and image input';

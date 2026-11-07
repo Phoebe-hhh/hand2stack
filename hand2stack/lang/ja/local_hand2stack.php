@@ -136,6 +136,7 @@ $string['privacy:metadata:session:sessionid'] = 'QR コードとこのセッシ�
 $string['privacy:metadata:session:status'] = 'セッションがアップロード待ちか、結果を保持しているかを示します。';
 $string['privacy:metadata:session:rawtext'] = 'Mathpix が返した文章を含む文書全体のテキストです。';
 $string['invalidevents'] = '研究イベントのデータが不正です。';
+$string['finishlockbusy'] = '同じ問題の終了処理が別のリクエストで実行中です。タスクは後で再試行されます。';
 $string['hand2stack:researchparticipant'] = 'Hand2STACK の研究ログ記録に参加する';
 $string['hand2stack:exportlogs'] = 'Hand2STACK 研究ログをダウンロードする';
 $string['hand2stack:use'] = 'Hand2STACK の手書き・画像入力を使う';

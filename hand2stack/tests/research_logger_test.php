@@ -583,6 +583,15 @@ final class research_logger_test extends \advanced_testcase {
         $this->assertSame([$late['eventid']], $counts['acknowledgedIds']);
         $this->assertSame(1, $DB->count_records('local_hand2stack_event', ['traceid' => $trace(2), 'eventtype' => 'task_finished']));
 
+        // Both paths end a question under one lock, and neither leaves it held.
+        $factory = \core\lock\lock_config::get_lock_factory('local_hand2stack_finish');
+        foreach ([1, 2] as $slot) {
+            $lock = $factory->get_lock($usageid . '_' . $slot, 0);
+            $this->assertNotFalse($lock);
+            $lock->release();
+        }
+        $this->assertSame(1, research_logger::with_finish_lock($usageid, 2, fn() => 1));
+
         // The integrity check sees a finished trace, without a duplicate number.
         $summaries = research_integrity::check('pilot2026a', (int)$quiz->cmid);
         $summary = array_values(array_filter($summaries, fn($t) => $t['traceid'] === $trace(2)))[0];
