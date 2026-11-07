@@ -1,0 +1,122 @@
+name: CI
+
+# Every push to main, every pull request, and (through workflow_call) every
+# release tag before it is published.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # A newer push to the same pull request replaces the older run; main and tags run in full.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  javascript:
+    name: JavaScript tests and AMD build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: hand2stack/package-lock.json
+
+      - name: Test, build, and check the committed AMD build is current
+        working-directory: hand2stack
+        run: |
+          npm ci
+          npm run check
+
+  conversion:
+    name: OCR-to-STACK conversion suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: intl, mbstring, fileinfo
+          coverage: none
+
+      - name: Run the standalone suite (no Moodle needed)
+        run: php tests/run.php
+
+  phpunit:
+    name: PHPUnit (Moodle ${{ matrix.moodle-branch }}, PHP ${{ matrix.php }})
+    runs-on: ubuntu-22.04
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # version.php requires Moodle 4.4; the development site runs 4.5.
+          - moodle-branch: MOODLE_404_STABLE
+            php: '8.1'
+          - moodle-branch: MOODLE_405_STABLE
+            php: '8.3'
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pgsql, zip, gd, xmlrpc, soap, intl, mbstring, fileinfo
+          ini-values: max_input_vars=5000
+          coverage: none
+
+      - name: Install moodle-plugin-ci
+        run: |
+          composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^4
+          echo "$(cd ci/bin; pwd)" >> "$GITHUB_PATH"
+          echo "$(cd ci/vendor/bin; pwd)" >> "$GITHUB_PATH"
+          sudo locale-gen en_AU.UTF-8
+          echo "NVM_DIR=$HOME/.nvm" >> "$GITHUB_ENV"
+
+      - name: Install Moodle with the plugin
+        # The plugin lives in hand2stack/ of this repository.
+        run: moodle-plugin-ci install --plugin ./plugin/hand2stack --db-host=127.0.0.1
+        env:
+          DB: pgsql
+          MOODLE_BRANCH: ${{ matrix.moodle-branch }}
+
+      - name: PHP lint
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phplint
+
+      - name: PHPUnit
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phpunit --fail-on-warning
