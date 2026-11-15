@@ -98,7 +98,11 @@ final class research_integrity {
             if ($record->eventtype === 'edit_committed' && isset($payload['burstId'])) {
                 $trace['bursts'][] = (string)$payload['burstId'];
             }
-            if ($record->modality === null && in_array($record->eventtype, self::ACTION_EVENTS, true)) {
+            // STACK filling an input from the working ([[extractor]]) is logged
+            // as answer_inserted with "via": "stack_js": no learner chose an
+            // input method for it, so it has none by design.
+            $bystack = $record->eventtype === 'answer_inserted' && ($payload['via'] ?? null) === 'stack_js';
+            if ($record->modality === null && !$bystack && in_array($record->eventtype, self::ACTION_EVENTS, true)) {
                 $trace['nomodality'][] = $record->eventid;
             }
             switch ($record->eventtype) {

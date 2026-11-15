@@ -742,6 +742,8 @@ final class research_logger_test extends \advanced_testcase {
                 'attempts' => 1]]),
             $at(10, 'edit_committed', ['payload' => ['burstId' => 'b1', 'trigger' => 'blur']]),
             $at(11, 'edit_committed', ['payload' => ['burstId' => 'b1', 'trigger' => 'recovered']]),
+            // STACK filled the answer from the working: no input method, by design.
+            $at(12, 'answer_inserted', ['modality' => null, 'payload' => ['via' => 'stack_js', 'value' => '4']]),
         ], (int)$user->id);
 
         $traces = \local_hand2stack\local\research_integrity::check('pilot2026a', (int)$quiz->cmid);
@@ -750,11 +752,11 @@ final class research_logger_test extends \advanced_testcase {
         $this->assertSame([3], $result['missing']);
         $this->assertSame([['originalseq' => 3, 'originaltype' => 'recognition_started', 'reason' => 'rejected',
             'attempts' => 1]], $result['failed']);
-        $this->assertSame(10, $result['events'], 'delivery_failed is not part of the trace');
+        $this->assertSame(11, $result['events'], 'delivery_failed is not part of the trace');
         $this->assertSame(1, $result['duplicateedits']);
         $this->assertSame(0, $result['siblingtraces']);
         $this->assertCount(1, $result['truncated']);
-        $this->assertCount(1, $result['nomodality']);
+        $this->assertCount(1, $result['nomodality'], 'only the selection; STACK\'s own insert is not a learner action');
         $this->assertSame(50000, $result['activems']);
         $this->assertSame(5 * 60000, $result['wallms']);
         $this->assertSame(1, $result['revisits']);
