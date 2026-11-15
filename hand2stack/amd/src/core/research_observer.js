@@ -205,7 +205,23 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
                 }, {input: null, modality: null});
             }
             if (!pending) return;
-            const flatten = node => String((node && node.textContent) || '').replace(/\s+/g, ' ').trim();
+            // "Finish attempt ..." led to the summary page and the learner
+            // came back to go on working: nothing was graded and the task is
+            // not over. The logger forgets the submit, so it is confirmed once.
+            if (pending.kind === 'finish' && document.body.id === 'page-mod-quiz-attempt') {
+                research.log(box, 'submit_confirmed', {
+                    submissionEventId: pending.eventid || null,
+                    submitterKind: pending.kind,
+                    submittedAt: pending.at,
+                    roundTripMs: Math.max(0, Date.now() - pending.at),
+                    submittedAnswers: pending.answers || {},
+                    answers: questionAnswers(box),
+                    truncatedAnswers: truncatedAnswers(box),
+                    returnedToAttempt: true
+                }, {input: null, modality: null});
+                return;
+            }
+            const flatten =node => String((node && node.textContent) || '').replace(/\s+/g, ' ').trim();
             const outcome = question.querySelector('.outcome');
             const prtFeedback = Array.from(question.querySelectorAll('.stackprtfeedback')).map(node => ({
                 text: research.clip(flatten(node), 1000),
@@ -258,24 +274,16 @@ define(['local_hand2stack/core/stack_inputs', 'local_hand2stack/core/research'],
                 if (box.form !== form || (classified.key && classified.key !== key)) return;
                 const answers = questionAnswers(box);
                 const truncated = truncatedAnswers(box);
-                const submitted = research.log(box, 'submit_triggered', {
+                // "Finish attempt ..." only goes to the summary page, from
+                // which the learner may return and go on working, so it does
+                // not end the task. The review page after the real submission
+                // does (quiz_finished), or else the server (research_finisher).
+                research.log(box, 'submit_triggered', {
                     submitter,
                     submitterKind: classified.kind,
                     answers,
                     truncatedAnswers: truncated
                 }, {input: null, modality: null});
-                // Moodle's Finish attempt normally goes to a summary page
-                // with no question inputs, so record the learner's task-end
-                // action here. A later confirmed completion is de-duplicated.
-                if (classified.kind === 'finish') {
-                    research.log(box, 'task_finished', {
-                        reason: 'quiz_finish_triggered',
-                        submissionEventId: submitted ? submitted.eventid : null,
-                        state: questionState(box.closest('.que')),
-                        answers,
-                        truncatedAnswers: truncated
-                    }, {input: null, modality: null});
-                }
             });
             research.flush(true);
         }));

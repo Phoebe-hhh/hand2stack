@@ -56,6 +56,13 @@ define(['local_hand2stack/config', 'local_hand2stack/core/stack_inputs'], functi
         }));
     };
 
+    // The page the request comes from, so the server can refuse recognition
+    // for a quiz whose input mode does not offer it.
+    const appendPage = formData => {
+        const contextId = window.M && M.cfg && M.cfg.contextid;
+        if (contextId) formData.append('contextid', contextId);
+    };
+
     const postImage = async (url, file, extra = {}) => {
         if (!url) {
             throw new Error('Recognition endpoint is not configured.');
@@ -64,6 +71,7 @@ define(['local_hand2stack/config', 'local_hand2stack/core/stack_inputs'], functi
         const formData = new FormData();
         formData.append('image', file);
         formData.append('sesskey', config.sesskey);
+        appendPage(formData);
         Object.keys(extra).forEach(key => formData.append(key, extra[key]));
 
         const response = await fetch(url, {
@@ -126,6 +134,7 @@ define(['local_hand2stack/config', 'local_hand2stack/core/stack_inputs'], functi
         const formData = new FormData();
         formData.append('strokes', JSON.stringify(strokes));
         formData.append('sesskey', config.sesskey);
+        appendPage(formData);
         const response = await fetch(config.strokesUrl, {
             method: 'POST',
             body: formData,
@@ -155,6 +164,7 @@ define(['local_hand2stack/config', 'local_hand2stack/core/stack_inputs'], functi
     const createMobileSession = async () => {
         const formData = new FormData();
         formData.append('sesskey', config.sesskey);
+        appendPage(formData);
 
         const response = await fetch(config.sessionCreateUrl, {
             method: 'POST',

@@ -125,7 +125,7 @@ final class research_finisher {
         $record->servertime = (int)round(microtime(true) * 1000);
         $record->payload = json_encode([
             'reason' => $reason,
-            'source' => 'server',
+            'source' => research_logger::SERVER_SOURCE,
             'moodleState' => self::question_state($usageid, $slot),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $DB->insert_record(self::TABLE, $record);

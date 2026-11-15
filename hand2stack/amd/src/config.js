@@ -77,6 +77,7 @@ define([], function() {
         rawlatex: 'Raw LaTeX',
         recognizedformat: 'Recognized format:',
         asciimath: 'ASCII',
+        asciiunavailable: 'ASCII was not returned for this image.',
         lineprefix: 'Line',
         creatingmobilesession: 'Creating mobile upload session...',
         waitingmobileupload: 'Waiting for mobile upload...',
@@ -111,6 +112,19 @@ define([], function() {
         nostrokes: 'Write an expression first.'
     };
 
+    // The interface strings among the defaults, which main.js replaces with
+    // the site's language through core/str: config key => language string.
+    const notStrings = [
+        'recognizeUrl', 'strokesUrl', 'convertUrl', 'anchorsUrl', 'sessionCreateUrl', 'sessionResultUrl',
+        'eventUrl', 'inputMode', 'sesskey'
+    ];
+    const stringKeys = {};
+    Object.keys(defaultConfig).forEach(key => {
+        if (typeof defaultConfig[key] === 'string' && !notStrings.includes(key)) {
+            stringKeys[key] = key === 'mobilebtn' ? 'mobileuploadbtn' : key;
+        }
+    });
+
     // One object shared by every module; init() fills it in place.
     const config = {};
 
@@ -121,5 +135,5 @@ define([], function() {
         || /Android|Mobile|Tablet/i.test(navigator.userAgent)
         || Boolean(navigator.userAgentData && navigator.userAgentData.mobile);
 
-    return {pluginUrl, replaceLegacyNodeUrl, defaultConfig, config, isIPadWebKit, isMobileOrTablet};
+    return {pluginUrl, replaceLegacyNodeUrl, defaultConfig, stringKeys, config, isIPadWebKit, isMobileOrTablet};
 });

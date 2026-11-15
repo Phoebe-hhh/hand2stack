@@ -28,6 +28,8 @@ try {
         throw new moodle_exception('pluginnotenabled', 'local_hand2stack');
     }
 
+    \local_hand2stack\local\input_mode::require_recognition_allowed();
+
     \local_hand2stack\local\request_limiter::enforce();
 
     $json = required_param('strokes', PARAM_RAW);

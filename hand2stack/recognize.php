@@ -28,6 +28,8 @@ try {
         throw new moodle_exception('pluginnotenabled', 'local_hand2stack');
     }
 
+    \local_hand2stack\local\input_mode::require_recognition_allowed();
+
     \local_hand2stack\local\request_limiter::enforce();
 
     $upload = \local_hand2stack\local\image_upload_validator::validate($_FILES['image'] ?? []);

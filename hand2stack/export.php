@@ -54,6 +54,9 @@ if ($dataformat !== '' && $studyid !== '') {
     $filename = clean_filename(implode('-', array_filter([
         'hand2stack-log', $studyid, $cmid ? 'quiz' . $cmid : ($courseid ? 'course' . $courseid : ''), date('Ymd'),
     ])));
+    // Each Check is graded again for steprawfraction, which for STACK asks Maxima.
+    \core_php_time_limit::raise();
+    raise_memory_limit(MEMORY_EXTRA);
     $records = research_export::recordset($studyid, $cmid ?: null, $courseid ?: null);
     $spreadsheet = in_array($dataformat, research_export::SPREADSHEET_FORMATS, true);
     \core\dataformat::download_data($filename, $dataformat, research_export::COLUMNS, $records,
@@ -95,6 +98,7 @@ if (!$cmid) {
 $count = research_export::count($studyid, $cmid ?: null, $courseid ?: null);
 echo html_writer::tag('p', get_string('exporteventcount', 'local_hand2stack', $count));
 if ($count) {
+    echo html_writer::tag('p', get_string('exportformathint', 'local_hand2stack'));
     echo $OUTPUT->download_dataformat_selector(get_string('exportdownload', 'local_hand2stack'),
         new moodle_url('/local/hand2stack/export.php'), 'dataformat', $baseparams);
 }

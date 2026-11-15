@@ -117,6 +117,21 @@ final class input_mode {
     }
 
     /**
+     * Refuse a recognition request sent from a quiz that does not offer
+     * recognition: "off", or "logonly", a study's keyboard condition. The
+     * page names itself with its context id (core/api.js). A request made
+     * by hand can leave that out, so this keeps the page's own controls
+     * honest; what bounds the cost of recognition is request_limiter.
+     */
+    public static function require_recognition_allowed(): void {
+        $contextid = optional_param('contextid', 0, PARAM_INT);
+        $context = $contextid > 0 ? \context::instance_by_id($contextid, IGNORE_MISSING) : null;
+        if ($context && self::for_context($context) !== self::NORMAL) {
+            throw new \moodle_exception('pluginnotenabled', 'local_hand2stack');
+        }
+    }
+
+    /**
      * Whether learners have attempted the quiz. The mode and identified
      * logging are then locked so one quiz never holds attempts made under two
      * conditions, or learners logged both ways. Teacher previews do not count.

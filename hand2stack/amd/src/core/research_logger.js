@@ -198,11 +198,16 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             };
         };
 
+        // Bytes as sent (UTF-8): a beacon's limit is in bytes, and Japanese
+        // text takes three per character.
+        const encoder = typeof TextEncoder === 'function' ? new TextEncoder() : null;
+        const byteLength = text => (encoder ? encoder.encode(text).length : text.length * 3);
+
         const takeBatch = maxBytes => {
             const batch = [];
             let bytes = 2;
             while (queue.length && batch.length < 100) {
-                const size = JSON.stringify(queue[0]).length + 1;
+                const size = byteLength(JSON.stringify(queue[0])) + 1;
                 if (batch.length && bytes + size > maxBytes) break;
                 bytes += size;
                 batch.push(queue.shift());
@@ -256,12 +261,15 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
             report('did not fit the send queue and wait in the browser outbox', Math.max(0, batch.length - room));
         };
 
+        // The server says logging is off: stop sending from this page. What
+        // is unsent stays in the outbox, since a switch turned off by mistake
+        // or for a moment must not cost the events made meanwhile; a later
+        // page sends them once logging is on again, or they expire there.
         const stop = () => {
             disabled = true;
             queue.length = 0;
             known.clear();
             inflight.clear();
-            outbox.clear().catch(warnLater);
         };
 
         // An event the server will not have: kept as a dead letter, and
@@ -660,6 +668,9 @@ define(['local_hand2stack/core/stack_inputs'], function(StackInputs) {
                     answers: state.pendingSubmit ? state.pendingSubmit.answers : {},
                     at: env.now()
                 };
+                state.pendingSubmit = null;
+            } else if (type === 'submit_confirmed' && payload && payload.returnedToAttempt) {
+                // Back from the quiz summary page: no feedback will follow.
                 state.pendingSubmit = null;
             }
             saveTrace(ctx.key, state);

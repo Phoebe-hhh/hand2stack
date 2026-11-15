@@ -83,7 +83,9 @@ final class research_export {
         // soonest. A batch is stamped once when it arrives, so servertime
         // alone would date a late batch's older events to its arrival. The
         // finisher's own events are already in server time.
-        $notserver = $DB->sql_like('c.payload', ':serverpayload', true, true, true);
+        // Only a task_finished can be the server's, so only those are searched.
+        $notserver = "(c.eventtype <> 'task_finished' OR c.payload IS NULL OR "
+            . $DB->sql_like('c.payload', ':serverpayload', true, true, true) . ')';
         $sql = "SELECT e.id, e.studyid, e.anonuserid, e.identified, e.userid, u.username, u.idnumber $namefields,
                        e.usageid, e.slot, e.traceid, e.pageid, e.eventseq,
                        e.eventtype, e.inputname, e.modality, e.studycondition, e.questionid, e.qbankentryid,
@@ -111,8 +113,8 @@ final class research_export {
             'serverpayload' => '%' . $DB->sql_like_escape(self::SERVER_SOURCE) . '%']);
     }
 
-    /** How the finisher marks the events it writes itself, in server time. */
-    private const SERVER_SOURCE = '"source":"server"';
+    /** How the finisher's own events, in server time, look in the stored payload. */
+    private const SERVER_SOURCE = '"source":"' . research_logger::SERVER_SOURCE . '"';
 
     /** Dataformats a spreadsheet application may open and evaluate. */
     public const SPREADSHEET_FORMATS = ['csv', 'excel', 'ods'];
@@ -215,7 +217,7 @@ final class research_export {
 
     /** The event's time on the server clock, in milliseconds. */
     private static function event_time(\stdClass $record): int {
-        $isserver = $record->payload !== null && strpos((string)$record->payload, self::SERVER_SOURCE) !== false;
+        $isserver = research_logger::is_server_event($record);
         if ($isserver || $record->clockoffset === null) {
             // Already in server time; or, without any client event to measure the clock by, as received.
             return $isserver ? (int)$record->clienttime : (int)$record->servertime;

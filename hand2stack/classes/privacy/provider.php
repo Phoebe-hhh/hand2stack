@@ -62,6 +62,11 @@ class provider implements
             'questionid' => 'privacy:metadata:event:questionid',
             'elapsedms' => 'privacy:metadata:event:elapsedms',
             'servertime' => 'privacy:metadata:event:servertime',
+            'eventid' => 'privacy:metadata:event:eventid',
+            'qbankentryid' => 'privacy:metadata:event:qbankentryid',
+            'questionversion' => 'privacy:metadata:event:questionversion',
+            'pluginversion' => 'privacy:metadata:event:pluginversion',
+            'schemaversion' => 'privacy:metadata:event:schemaversion',
         ], 'privacy:metadata:event');
 
         return $collection;

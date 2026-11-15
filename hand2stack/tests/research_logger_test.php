@@ -576,12 +576,36 @@ final class research_logger_test extends \advanced_testcase {
         $this->assertSame('server', $payload['source']);
         $this->assertSame('gaveup', $payload['moodleState']);
 
-        // The browser's own task_finished arriving late is acknowledged, not stored twice.
-        $late = $this->event($usageid, 2, ['traceid' => $trace(2), 'type' => 'task_finished', 'eventseq' => 3]);
+        // The browser's own task_finished arriving late takes the server's place:
+        // it has the active time and the final answers, and keeps what the server saw.
+        $late = $this->event($usageid, 2, ['traceid' => $trace(2), 'type' => 'task_finished', 'eventseq' => 3,
+            'payload' => ['reason' => 'quiz_finished', 'activeTimeMs' => 42000]]);
         $counts = research_logger::record_batch([$late], (int)$user->id);
-        $this->assertSame(1, $counts['duplicates']);
+        $this->assertSame(1, $counts['accepted']);
         $this->assertSame([$late['eventid']], $counts['acknowledgedIds']);
+        $finished = $DB->get_records('local_hand2stack_event', ['traceid' => $trace(2), 'eventtype' => 'task_finished']);
+        $this->assertCount(1, $finished);
+        $finished = reset($finished);
+        $this->assertSame($late['eventid'], $finished->eventid);
+        $this->assertFalse(research_logger::is_server_event($finished));
+        $payload = json_decode($finished->payload, true);
+        $this->assertSame(42000, $payload['activeTimeMs']);
+        $this->assertSame(['reason' => research_finisher::REASON_SUBMITTED, 'moodleState' => 'gaveup'],
+            $payload['serverFinish']);
+
+        // A second task_finished from a browser is still only a duplicate, and the server adds none.
+        $again = $this->event($usageid, 2, ['traceid' => $trace(2), 'type' => 'task_finished', 'eventseq' => 4]);
+        $counts = research_logger::record_batch([$again], (int)$user->id);
+        $this->assertSame(1, $counts['duplicates']);
+        $this->assertSame([$again['eventid']], $counts['acknowledgedIds']);
         $this->assertSame(1, $DB->count_records('local_hand2stack_event', ['traceid' => $trace(2), 'eventtype' => 'task_finished']));
+        $this->assertSame(0, research_finisher::complete_attempt((int)$attempt->id, research_finisher::REASON_SUBMITTED));
+
+        // A browser cannot pass its own event off as the server's.
+        $forged = $this->event($usageid, 1, ['traceid' => $trace(1), 'payload' => ['source' => 'server']]);
+        $counts = research_logger::record_batch([$forged], (int)$user->id);
+        $this->assertSame(1, $counts['rejected']);
+        $this->assertSame([$forged['eventid']], $counts['rejectedIds']);
 
         // Both paths end a question under one lock, and neither leaves it held.
         $factory = \core\lock\lock_config::get_lock_factory('local_hand2stack_finish');

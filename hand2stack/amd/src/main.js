@@ -26,7 +26,7 @@ define([
 ], function(
     Config, StackInputs, ResearchObserver, Api, AttachButton, Working, Anchors, LockedAnswer
 ) {
-    const {pluginUrl, replaceLegacyNodeUrl, defaultConfig, config} = Config;
+    const {pluginUrl, replaceLegacyNodeUrl, defaultConfig, stringKeys, config} = Config;
     const {
         prepareProcessInputs, findAnswerBoxes, findResearchBoxes, findLockedFreeTextBoxes, isFreeTextInput,
         captureAnswerAnchor, findSiblingAnswerBoxes
@@ -40,18 +40,18 @@ define([
 
     const run = async () => {
         prepareProcessInputs();
+        const lockedBoxes = findLockedFreeTextBoxes();
+        const boxes = findAnswerBoxes();
+        // A quiz page without STACK answers is left exactly as Moodle made it.
         const mainContent = document.querySelector('.main-inner');
-        if (mainContent && (document.body.id === 'page-mod-quiz-attempt'
+        if (mainContent && (boxes.length || lockedBoxes.length) && (document.body.id === 'page-mod-quiz-attempt'
                 || document.body.id === 'page-question-bank-previewquestion-preview')) {
             mainContent.style.maxWidth = '1200px';
         }
-        const lockedBoxes = findLockedFreeTextBoxes();
         lockedBoxes.forEach(showSavedSourceImage);
-        const boxes = findAnswerBoxes();
         if (!boxes.length) {
             // A review page, or a question locked after Check, has only locked answers.
             startResearch(findResearchBoxes(), false);
-            if (!lockedBoxes.length) window.console.warn(config.nofieldfound || 'No visible STACK input found');
             return;
         }
         // The keyboard condition of a study: no Hand2STACK controls, but the
@@ -80,6 +80,26 @@ define([
         candidates.forEach(box => (box.dataset.hand2stackAnchor ? setupTargetBox(box) : attachButton(box)));
     };
 
+    // The interface strings in the site's language. The page preloaded them
+    // (strings_for_js), so core/str answers without a request; if it cannot,
+    // the English defaults stay. core/str is Moodle's module, loaded here
+    // rather than as a dependency so this file also loads outside Moodle.
+    const loadStrings = () => new Promise(resolve => {
+        if (typeof require !== 'function') {
+            resolve();
+            return;
+        }
+        const keys = Object.keys(stringKeys);
+        require(['core/str'], Str => {
+            Promise.resolve(Str.get_strings(keys.map(key => ({key: stringKeys[key], component: 'local_hand2stack'}))))
+                .then(values => keys.forEach((key, index) => {
+                    if (typeof values[index] === 'string' && values[index] !== '') config[key] = values[index];
+                }))
+                .catch(error => window.console.warn('[hand2stack] could not load interface strings:', error))
+                .then(resolve);
+        }, resolve);
+    });
+
     const init = suppliedConfig => {
         Object.assign(config, defaultConfig, suppliedConfig || {});
         config.recognizeUrl = replaceLegacyNodeUrl(config.recognizeUrl || config.apiurl, pluginUrl('recognize.php'));
@@ -93,7 +113,7 @@ define([
             pluginUrl('session_result.php')
         );
         config.sesskey = config.sesskey || (window.M && M.cfg && M.cfg.sesskey) || '';
-        run();
+        loadStrings().then(run);
     };
 
     return {init};

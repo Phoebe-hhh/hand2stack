@@ -87,7 +87,7 @@ final class research_integrity {
             $trace['events']++;
             // The server's task_finished (research_finisher) follows the
             // browser's last event; a later page may reuse its number.
-            if (($payload['source'] ?? null) !== 'server') {
+            if (!research_logger::is_server_event($record)) {
                 $trace['seqs'][] = (int)$record->eventseq;
             }
 

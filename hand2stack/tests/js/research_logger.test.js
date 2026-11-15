@@ -911,13 +911,76 @@ test('dead letters are removed a month after they were reported', async () => {
     assert.equal(tab.outboxRows.size, 0);
 });
 
-test('a server that turns logging off also clears the outbox', async () => {
-    const tab = createTab({response: {success: true, accepted: 0, disabled: true}});
-    const research = tab.load();
+test('a server that turns logging off keeps the unsent events in the outbox', async () => {
+    const batches = [];
+    let off = true;
+    const tab = createTab({response: batch => {
+        batches.push(batch);
+        return off
+            ? {success: true, accepted: 0, disabled: true}
+            : {success: true, acknowledgedIds: batch.map(event => event.eventid), rejectedIds: []};
+    }});
+    let research = tab.load();
     research.log(answerBox(''), 'recognition_started', {});
     research.flush();
     await settleAll();
+    assert.equal(research.enabled(), false);
+    const kept = tab.outboxRows.size;
+    assert.ok(kept > 0, 'a switch turned off for a moment costs no events');
+
+    // Logging is on again: the next page sends what was kept.
+    off = false;
+    research = tab.load();
+    research.restore();
+    await settleAll();
     assert.equal(tab.outboxRows.size, 0);
+    assert.equal(batches[batches.length - 1].length, kept);
+});
+
+test('a batch for a beacon is measured in bytes, not characters', async () => {
+    const batches = [];
+    const tab = createTab({response: batch => {
+        batches.push(batch);
+        return {beacon: true};
+    }});
+    const research = tab.load();
+    const box = answerBox('');
+    // 3000 Japanese characters are 9000 bytes: twenty such events fit a
+    // 60000-character limit, but not a beacon's 64 KiB.
+    for (let i = 0; i < 20; i++) {
+        research.log(box, 'answer_inserted', {value: '\u89e3'.repeat(3000)}, {modality: 'image'});
+    }
+    research.flush(true);
+    await settleAll();
+    assert.ok(batches.length > 1);
+    batches.forEach(batch => {
+        assert.ok(new TextEncoder().encode(JSON.stringify(batch)).length <= 60000 + batch.length + 2);
+    });
+});
+
+test('returning from the quiz summary page confirms the Finish once and awaits no feedback', () => {
+    const tab = createTab();
+    const questionLevel = {input: null, modality: null};
+    const box = answerBox('x=3');
+    let research = tab.load();
+    research.log(box, 'submit_triggered', {submitterKind: 'finish', answers: {ans1: 'x=3'}}, questionLevel);
+    research = tab.load();
+    const pending = research.pendingSubmit(box);
+    assert.equal(pending.kind, 'finish');
+    research.log(box, 'submit_confirmed', {submissionEventId: pending.eventid, returnedToAttempt: true}, questionLevel);
+    research = tab.load();
+    assert.equal(research.pendingSubmit(box), null);
+    // The task goes on: nothing ended it, and an edit is no revision.
+    assert.equal(tab.sent.concat(research._queue).some(event => event.type === 'task_finished'), false);
+    research.log(box, 'recognition_started', {}, {modality: 'image'});
+    assert.equal(research._queue.some(event => event.type === 'revision_started'), false);
+});
+
+test('Finish attempt does not end the task in the browser', () => {
+    const observer = fs.readFileSync(path.resolve(__dirname, '../../amd/src/core/research_observer.js'), 'utf8');
+    assert.doesNotMatch(observer, /quiz_finish_triggered'/);
+    assert.match(observer, /pending\.kind === 'finish' && document\.body\.id === 'page-mod-quiz-attempt'/);
+    assert.match(observer, /returnedToAttempt: true/);
 });
 
 test('a hidden tab commits the edit in progress before sending', async () => {

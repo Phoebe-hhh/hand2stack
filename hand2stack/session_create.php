@@ -34,6 +34,8 @@ try {
         throw new moodle_exception('mobilenotenabled', 'local_hand2stack');
     }
 
+    \local_hand2stack\local\input_mode::require_recognition_allowed();
+
     // Each session is a database row; a counter of its own keeps this from
     // using up the learner's recognition requests.
     \local_hand2stack\local\request_limiter::enforce('mobilesession');

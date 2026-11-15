@@ -13,6 +13,8 @@ const moduleSource = name => fs.readFileSync(path.join(pluginRoot, 'amd/src', na
 const freeTextView = moduleSource('modes/freetext/view');
 const linesView = moduleSource('modes/lines/view');
 const hook = fs.readFileSync(path.join(pluginRoot, 'classes/local/hook_callbacks.php'), 'utf8');
+// A language string the page preloads for the browser (strings_for_js).
+const hookString = key => new RegExp(`strings_for_js\\(\\[[^\\]]*'${key}'`);
 const endpoints = [
     'recognize.php', 'strokes.php', 'convert.php',
     'session_create.php', 'session_result.php', 'mobile_upload.php'
@@ -116,7 +118,7 @@ test('the review panel and its source image survive the reload after a submit', 
 
 test('fixed interface text comes from the language pack', () => {
     for (const key of ['textline', 'mobilescantip', 'mobilesessionnotcreated']) {
-        assert.match(hook, new RegExp(`'${key}' => get_string\\('${key}'`));
+        assert.match(hook, hookString(key));
     }
     assert.match(source, /\? \(config\.textline \|\| 'text'\)/);
     assert.match(source, /tip\.textContent = config\.mobilescantip \|\|/);
@@ -135,15 +137,15 @@ test('a locked Free-text answer shows only its original image', () => {
     assert.match(source, /isFreeTextInput\(input\) && !isEditableAnswerBox\(input\)/);
     assert.match(source, /lockedBoxes\.forEach\(showSavedSourceImage\);/);
     // A page with only locked answers is expected, not worth a warning.
-    assert.match(source, /if \(!lockedBoxes\.length\) window\.console\.warn/);
+    assert.doesNotMatch(moduleSource('main'), /console\.warn\(config\.nofieldfound/);
 });
 
 test('free-text mode is configured with localized review labels', () => {
-    assert.match(hook, /'recognizedworking' => get_string\('recognizedworking'/);
-    assert.match(hook, /'freetextpreview' => get_string\('freetextpreview'/);
-    assert.match(hook, /'originalwork' => get_string\('originalwork'/);
-    assert.match(hook, /'zoomin' => get_string\('zoomin'/);
-    assert.match(hook, /'zoomout' => get_string\('zoomout'/);
+    assert.match(hook, hookString('recognizedworking'));
+    assert.match(hook, hookString('freetextpreview'));
+    assert.match(hook, hookString('originalwork'));
+    assert.match(hook, hookString('zoomin'));
+    assert.match(hook, hookString('zoomout'));
     assert.match(source, /answerBox\.style\.display = 'none'/);
     assert.match(freeTextView, /panel\._actionButtons\.style\.display = 'none'/);
     assert.match(linesView, /panel\._actionButtons\.style\.display = 'flex'/);
@@ -185,7 +187,7 @@ test('conversion review distinguishes editable OCR from read-only STACK output',
     assert.match(source, /let defaultIndex = Math\.max\(0, resultLines\.length - 1\)/);
     assert.match(source, /index === defaultIndex && resultLines\.length > 1/);
     assert.match(source, /stack\.replace\(\/\\b\(\[A-Za-z\]\)\\\(\/g, '\$1\*\('/);
-    assert.match(hook, /'convertedstack' => get_string\('convertedstack'/);
+    assert.match(hook, hookString('convertedstack'));
 });
 
 test('free-text review does not show a redundant candidate summary', () => {
@@ -258,7 +260,7 @@ test('algebraic edits use the same blue edit cue and suggested wording', () => {
     assert.match(source, /fieldHighlighter\.compare\(/);
     assert.match(source, /setProperty\('background-color', 'transparent', 'important'\)/);
     assert.match(source, /edited = editedMask\(originalValue, previousValue\)/);
-    assert.match(hook, /'recommendedanswer' => get_string\('recommendedanswer'/);
+    assert.match(hook, hookString('recommendedanswer'));
 });
 
 test('algebraic editing synchronizes the formula without changing OCR prose styling', () => {
@@ -442,7 +444,7 @@ test('handwriting canvas has a touch-friendly vertical resize handle', () => {
     assert.match(source, /Math\.max\(260, Math\.min\(1200,/);
     assert.match(source, /resizeStartWidth \+ event\.clientX - resizeStartX/);
     assert.match(source, /panel\.style\.width = Math\.round\(nextWidth\) \+ 'px'/);
-    assert.match(hook, /'resizehandwriting' => get_string\('resizehandwriting'/);
+    assert.match(hook, hookString('resizehandwriting'));
 });
 
 test('resizing expands the canvas backing store instead of stretching handwriting', () => {
@@ -479,6 +481,12 @@ test('an eraser miss does not consume an undo step', () => {
 
 test('plugin is loaded through the Moodle AMD API without inline configuration', () => {
     assert.match(hook, /js_call_amd\('local_hand2stack\/main', 'init'/);
+    // Interface strings and endpoint URLs stay out of the js_call_amd arguments,
+    // which Moodle warns about beyond 1024 characters.
+    assert.match(hook, /strings_for_js\(\[/);
+    assert.doesNotMatch(hook, /=> get_string\(/);
+    assert.doesNotMatch(hook, /Url' =>/);
+    assert.match(moduleSource('main'), /require\(\['core\/str'\]/);
     assert.doesNotMatch(hook, /<script|console\.log/);
 });
 

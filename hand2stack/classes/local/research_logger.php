@@ -358,13 +358,32 @@ final class research_logger {
     private static function store_event(\stdClass $record): string {
         global $DB;
 
-        // A trace ends once. The server may have ended it already, for a
-        // task_finished that reached it after the attempt was completed
-        // (research_finisher). For task_finished the caller holds the finish lock.
-        if ($DB->record_exists(self::TABLE, ['eventid' => $record->eventid])
-                || ($record->eventtype === 'task_finished'
-                    && $DB->record_exists(self::TABLE, ['traceid' => $record->traceid, 'eventtype' => 'task_finished']))) {
+        if ($DB->record_exists(self::TABLE, ['eventid' => $record->eventid])) {
             return 'duplicates';
+        }
+        // A trace ends once. For task_finished the caller holds the finish lock.
+        if ($record->eventtype === 'task_finished') {
+            $existing = $DB->get_records(self::TABLE,
+                ['traceid' => $record->traceid, 'eventtype' => 'task_finished'], 'id', 'id, eventtype, payload');
+            foreach ($existing as $row) {
+                if (!self::is_server_event($row)) {
+                    return 'duplicates';
+                }
+            }
+            if ($existing) {
+                // The server ended it (research_finisher) before the browser's
+                // own task_finished arrived. The browser's carries the active
+                // time and the final answers, so it takes the server's place
+                // and keeps what the server saw.
+                $server = json_decode((string)reset($existing)->payload, true) ?: [];
+                $payload = json_decode((string)($record->payload ?? ''), true) ?: [];
+                $payload['serverFinish'] = [
+                    'reason' => $server['reason'] ?? null,
+                    'moodleState' => $server['moodleState'] ?? null,
+                ];
+                $record->payload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $DB->delete_records_list(self::TABLE, 'id', array_keys($existing));
+            }
         }
         try {
             $DB->insert_record(self::TABLE, $record);
@@ -376,6 +395,24 @@ final class research_logger {
             }
             throw $error;
         }
+    }
+
+    /** How research_finisher marks the task_finished it writes itself. */
+    public const SERVER_SOURCE = 'server';
+
+    /**
+     * Whether an event was written by the server (research_finisher) rather
+     * than sent by a browser. Only a task_finished can be, and a browser's
+     * event claiming this source is rejected by normalise_event().
+     *
+     * @param \stdClass $record With eventtype and payload.
+     */
+    public static function is_server_event(\stdClass $record): bool {
+        if ($record->eventtype !== 'task_finished' || $record->payload === null) {
+            return false;
+        }
+        $payload = json_decode((string)$record->payload, true);
+        return is_array($payload) && ($payload['source'] ?? null) === self::SERVER_SOURCE;
     }
 
     /**
@@ -427,6 +464,10 @@ final class research_logger {
         if ($payload === null) {
             $record->payload = null;
         } else if (is_array($payload)) {
+            // Only the server may mark an event as its own.
+            if (($payload['source'] ?? null) === self::SERVER_SOURCE) {
+                return null;
+            }
             // A decoded "{}" is an empty PHP array; keep it an object.
             $record->payload = $payload === []
                 ? '{}'
