@@ -1,6 +1,7 @@
 {
   "name": "moodle-local-hand2stack",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "version": "0.6.2-alpha",
   "scripts": {
     "build": "node scripts/build-amd.js",

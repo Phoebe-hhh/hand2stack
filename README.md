@@ -116,3 +116,7 @@ See the [plugin README](hand2stack/README.md) for development details, configura
 ## Status
 
 Version `0.6.2-alpha` is intended for controlled pilot testing. Algebraic input shows Mathpix's original AsciiMath in its ASCII tab and validates it in the background so the STACK preview matches Insert. Implicit products such as `2x(x+4)` become `2*x*(x+4)` only for genuine Mathpix ASCII; LaTeX fallbacks preserve ambiguous notation such as `p(x)`, and mismatched LaTeX/ASCII row counts fall back safely instead of pairing the wrong rows. This release also adds AsciiMath Free-text working, complete multiline operator conversion, Mathpix logarithm-base conversion, and the iPad image fix. The research log retains events across connection loss and records each question's active time; `cli/check_research_log.php` reports gaps, failed deliveries and split traces before analysis. Run the Moodle upgrade after installing it, and do not purge caches or upgrade while a study is running. The automated suite covers algebraic candidate selection and editing, free-text document preservation, process-data synchronization, guarded sibling-answer matching, STACK-validated insertion, research event logging and its privacy provider, responsive handwriting geometry, request ordering, rate limiting, mobile behavior, endpoint safety, and session cleanup.
+
+## License
+
+Hand2STACK is licensed under the GNU General Public License v3 or later, the same license as Moodle and STACK. See [COPYING.txt](COPYING.txt).
