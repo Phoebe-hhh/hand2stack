@@ -5,6 +5,8 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 
 ## Unreleased
 
+## 0.6.3-alpha - 2026-11-20
+
 - Research log: **Finish attempt…** no longer ends a question's trace. It only opens the quiz summary page, from which a learner can return and go on working; the trace was ended at the click (`task_finished`, `quiz_finish_triggered`), so work after returning counted no active time, was marked `revisit`, and the real submission added no `task_finished`. The click is still a `submit_triggered` with `submitterKind: "finish"`. A learner who returns gets one `submit_confirmed` with `returnedToAttempt: true` and no `feedback_observed`, so the next edit is not a `revision_started`. The task ends on the review page after the real submission (`quiz_finished`) or, failing that, by the server five minutes after it. `quiz_finish_triggered` is no longer written; earlier logs keep it.
 - Research log: a browser's `task_finished` that arrives after the server has ended the trace replaces the server's event and keeps its `reason` and `moodleState` as `serverFinish`. It was acknowledged as a duplicate and dropped, with its `activeTimeMs` and final answers.
 - Research log: an event whose payload claims `"source": "server"` is rejected; only the server's own `task_finished` carries it. The export looks for it only among `task_finished` events rather than in every payload of the study.
@@ -26,6 +28,7 @@ use the Moodle component name `local_hand2stack` and install in `local/hand2stac
 - Research log: deleting a quiz attempt also deletes its research events. Without the attempt there is no mark, step or saved response to read them with, a quiz export cannot place them, and a privacy request cannot find whose they are. Moodle does not notify plugins when it removes previews or deletes a course, so the hourly cleanup task also deletes the events of any question usage that no longer exists. Deleted events cannot be recovered: export the study before deleting attempts or resetting a course.
 - Research log: a trace can no longer end twice. The browser's `task_finished` and the server's (added after an attempt is finished) each checked for an existing one and then inserted, so two requests at the same moment could both pass the check. Both now hold the same Moodle lock for the question while they check and insert. A browser event that cannot get the lock within five seconds is neither acknowledged nor rejected, so the page sends it again; the server task fails and Moodle retries it.
 - CI runs on every push to main and every pull request, not only on release tags: the JavaScript tests and AMD build check, and the plugin's PHPUnit tests on Moodle 4.4 (PHP 8.1) and 4.5 (PHP 8.3) through `moodle-plugin-ci`. A release tag is published only after the same checks pass.
+- The repository carries the GPLv3 text as `COPYING.txt`, the same file STACK uses, so GitHub shows the license; every PHP file has the GPL header and `package.json` declares `GPL-3.0-or-later`.
 
 ## 0.6.2-alpha - 2026-10-30
 
